@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "4.20";
+const APP_VERSION = "4.21";
 const APP_BUILD_DATE = "15/09/2026";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -2848,6 +2848,9 @@ function renderUpdateBanner(worker, newVersion) {
     btn.textContent = "Aggiornamento...";
     btn.disabled = true;
     if (worker) worker.postMessage({ type: "SKIP_WAITING" });
+    // Ricarica comunque entro pochi secondi, anche se per qualche motivo
+    // il nuovo service worker non prende il controllo subito.
+    setTimeout(() => window.location.reload(), 2500);
   });
 }
 
