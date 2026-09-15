@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Gestione Gruppo</title>
+<meta name="theme-color" content="#346b4b">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="stylesheet" href="styles.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-storage-compat.js"></script>
+<script src="firebase-config.js"></script>
+</head>
+<body>
+
+<div id="topbar">
+  <img id="app-logo" src="icon-192.png" alt="logo">
+  <div id="app-title-wrap">
+    <span id="app-title">Gestione Gruppo</span>
+    <span id="app-version">v1.00</span>
+    <span id="app-build-date"></span>
+  </div>
+  <button id="settings-btn" class="icon-btn" aria-label="Impostazioni">⚙️</button>
+</div>
+
+<main id="app-content"></main>
+
+<nav id="navbar">
+  <button class="nav-btn" data-section="home">🏠<span>Home</span></button>
+  <button class="nav-btn" data-section="anagrafica">👤<span>Anagrafica</span></button>
+  <button class="nav-btn" data-section="conv-consiglio">📋<span>Consiglio</span></button>
+  <button class="nav-btn" data-section="bollino">🎫<span>Bollino</span></button>
+  <button class="nav-btn" data-section="bollino-amici">🤝<span>Bollino Amici</span></button>
+  <button class="nav-btn" data-section="ringraziamenti">🙏<span>Ringraziamenti</span></button>
+  <button class="nav-btn" data-section="sponsor">💼<span>Sponsor</span></button>
+  <button class="nav-btn" data-section="iniziative">🎉<span>Iniziative</span></button>
+  <button class="nav-btn" data-section="ore-alpine">⏱️<span>Ore Alpine</span></button>
+  <button class="nav-btn" data-section="report">📊<span>Report 1</span></button>
+  <button class="nav-btn" data-section="report2">📊<span>Report 2</span></button>
+  <button class="nav-btn" data-section="conv-primavera">🌸<span>Conv. Primavera</span></button>
+  <button class="nav-btn" data-section="conv-alpina">⛰️<span>Conv. Alpina</span></button>
+  <button class="nav-btn" data-section="conv-casoncellata">🥟<span>Conv. Casoncellata</span></button>
+  <button class="nav-btn" data-section="presenza-adunata">🎖️<span>Adunata</span></button>
+  <button class="nav-btn" data-section="cassa">💰<span>Cassa</span></button>
+</nav>
+
+<div id="modal-overlay" class="hidden">
+  <div id="modal-box"></div>
+</div>
+
+<div id="print-area"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
