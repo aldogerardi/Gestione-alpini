@@ -1,6 +1,6 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "4.18";
-const APP_BUILD_DATE = "13/09/2026";
+const APP_VERSION = "4.19";
+const APP_BUILD_DATE = "15/09/2026";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
 const FIRESTORE_COLLECTION = "gestioneGruppo";
@@ -1372,13 +1372,15 @@ function renderOreAlpine() {
   return `
     <div class="section-title">⏱️ Ore Alpine</div>
 
-    <div class="card color-blue" style="text-align:center;">
-      <div style="font-weight:700; font-size:0.85rem; color:#555;">Totale ore volontariato</div>
-      <div style="font-weight:900; font-size:2.2rem;">${totaleGenerale}</div>
-      <div style="display:flex; justify-content:center; gap:16px; margin-top:8px; flex-wrap:wrap;">
-        <div><div style="font-size:0.72rem; color:#777;">🏛️ Istituzionali</div><div style="font-weight:800;">${r1}</div></div>
-        <div><div style="font-size:0.72rem; color:#777;">🎉 Feste</div><div style="font-weight:800;">${r2}</div></div>
-        <div><div style="font-size:0.72rem; color:#777;">🤝 Volontariato</div><div style="font-weight:800;">${r3}</div></div>
+    <div class="card color-blue" style="display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap;">
+      <div>
+        <div style="font-weight:700; font-size:0.78rem; color:#555;">Totale ore volontariato</div>
+        <div style="font-weight:900; font-size:2rem; line-height:1.15; white-space:nowrap;">${totaleGenerale}</div>
+      </div>
+      <div style="display:flex; gap:14px; flex-wrap:wrap;">
+        <div style="text-align:center;"><div style="font-size:0.68rem; color:#777;">🏛️ Istituz.</div><div style="font-weight:800; font-size:0.95rem;">${r1}</div></div>
+        <div style="text-align:center;"><div style="font-size:0.68rem; color:#777;">🎉 Feste</div><div style="font-weight:800; font-size:0.95rem;">${r2}</div></div>
+        <div style="text-align:center;"><div style="font-size:0.68rem; color:#777;">🤝 Volont.</div><div style="font-weight:800; font-size:0.95rem;">${r3}</div></div>
       </div>
     </div>
 
