@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "4.22";
+const APP_VERSION = "4.23";
 const APP_BUILD_DATE = "15/09/2026";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -2847,11 +2847,23 @@ function renderUpdateBanner(worker, newVersion) {
     const btn = document.getElementById("update-now-btn");
     btn.textContent = "Aggiornamento...";
     btn.disabled = true;
-    if (worker) worker.postMessage({ type: "SKIP_WAITING" });
-    // Ricarica comunque entro pochi secondi, anche se per qualche motivo
-    // il nuovo service worker non prende il controllo subito.
-    setTimeout(() => window.location.reload(), 2500);
+    forceHardReload();
   });
+}
+
+function forceHardReload() {
+  let done = false;
+  const goReload = () => {
+    if (done) return;
+    done = true;
+    window.location.reload();
+  };
+  Promise.all([
+    ("caches" in window) ? caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k)))) : Promise.resolve(),
+    ("serviceWorker" in navigator) ? navigator.serviceWorker.getRegistrations().then(regs => Promise.all(regs.map(r => r.unregister()))) : Promise.resolve()
+  ]).then(goReload).catch(goReload);
+  // Rete di sicurezza: ricarica comunque entro pochi secondi anche se qualcosa si blocca.
+  setTimeout(goReload, 3000);
 }
 
 document.addEventListener("DOMContentLoaded", init);
