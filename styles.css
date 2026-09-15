@@ -115,6 +115,7 @@ body {
 }
 .badge.whatsapp { background: #dcf8c6; color: #075e34; }
 .badge.whatsapp svg { width: 12px; height: 12px; fill: #25D366; flex-shrink: 0; }
+.btn svg { width: 15px; height: 15px; fill: #fff; vertical-align: -3px; flex-shrink: 0; }
 .badge-icon { padding: 3px 8px; font-size: 0.82rem; }
 .badge-warning { background: #f8d7da; color: #842029; border-color: #b3261e; }
 .card-actions { display: flex; gap: 8px; flex-shrink: 0; }
