@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "4.19";
+const APP_VERSION = "4.20";
 const APP_BUILD_DATE = "15/09/2026";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -1159,11 +1159,11 @@ function renderIniziative() {
         <input type="file" id="iniz-file">
       </div>
 
-      <button type="button" class="btn secondary block" id="iniz-save-btn" style="margin-top:6px;">💾 Salva Iniziativa</button>
-      <button type="button" class="btn block" id="iniz-share-btn" style="margin-top:8px;">📤 Condividi (con file, scegli l'app)</button>
-      <div class="modal-actions" style="margin-top:12px;">
-        <button type="button" class="btn" id="iniz-wa-btn" style="background:#25D366; color:#fff;">${WA_ICON} WhatsApp</button>
-        <button type="button" class="btn" id="iniz-email-btn" style="background:#2c5a7a; color:#fff;">✉️ Email</button>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;">
+        <button type="button" class="btn secondary" id="iniz-save-btn" style="font-size:0.85rem; padding:9px 6px;">💾 Salva</button>
+        <button type="button" class="btn" id="iniz-share-btn" style="font-size:0.85rem; padding:9px 6px;">📤 Condividi</button>
+        <button type="button" class="btn" id="iniz-wa-btn" style="background:#25D366; color:#fff; font-size:0.85rem; padding:9px 6px;">${WA_ICON} WhatsApp</button>
+        <button type="button" class="btn" id="iniz-email-btn" style="background:#2c5a7a; color:#fff; font-size:0.85rem; padding:9px 6px;">✉️ Email</button>
       </div>
       <div class="card-sub" style="margin-top:10px;">"Condividi" apre la scelta app del telefono e include anche il file selezionato. Email va automaticamente a tutti gli indirizzi disponibili tra Anagrafica, Ringraziamenti e Sponsor. WhatsApp apre l'app: scegli tu i destinatari.</div>
     </div>
