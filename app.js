@@ -1,6 +1,6 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "4.25";
-const APP_BUILD_DATE = "15/09/2026";
+const APP_VERSION = "4.26";
+const APP_BUILD_DATE = "17/09/2026";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
 const FIRESTORE_COLLECTION = "gestioneGruppo";
@@ -99,8 +99,6 @@ const WA_ICON = `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><pa
 const RUOLI_CONSIGLIO = ["Capogruppo","Vice Capogruppo","Tesoriere","Segretario","Consigliere"];
 
 const PLACEHOLDER_SECTIONS = {
-  "conv-primavera": { title: "Conv. Festa Primavera", icon: "🌸", desc: "Convocazioni per la Festa di Primavera." },
-  "conv-alpina": { title: "Conv. Festa Alpina", icon: "⛰️", desc: "Convocazioni per la Festa Alpina." },
   "conv-casoncellata": { title: "Conv. Casoncellata", icon: "🥟", desc: "Convocazioni per la Casoncellata." },
   "presenza-adunata": { title: "Presenza Adunata", icon: "🎖️", desc: "Registro presenze soci alle adunate." },
   "cassa": { title: "Cassa", icon: "💰", desc: "Qui gestirai entrate e uscite del gruppo." }
@@ -2762,7 +2760,7 @@ function setupScrollHide() {
 }
 
 // ---------- Init ----------
-const SECTION_ORDER = ["home","anagrafica","conv-consiglio","bollino","bollino-amici","ringraziamenti","sponsor","iniziative","ore-alpine","report","report2","conv-primavera","conv-alpina","conv-casoncellata","presenza-adunata","cassa"];
+const SECTION_ORDER = ["home","anagrafica","conv-consiglio","bollino","bollino-amici","ringraziamenti","sponsor","iniziative","ore-alpine","report","report2","conv-casoncellata","presenza-adunata","cassa"];
 
 function vaiASezione(section) {
   currentSection = section;
