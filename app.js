@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "4.24";
+const APP_VERSION = "4.25";
 const APP_BUILD_DATE = "15/09/2026";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -1091,10 +1091,33 @@ function getAllEmails() {
   return Array.from(new Set(emails));
 }
 
+function orarieHOptions() {
+  let out = "";
+  for (let h = 0; h < 24; h++) {
+    const v = String(h).padStart(2, "0");
+    out += `<option value="${v}">${v}</option>`;
+  }
+  return out;
+}
+function getIniziativaOra() {
+  const h = document.getElementById("iniz-ora-h").value;
+  const m = document.getElementById("iniz-ora-m").value || "00";
+  return h ? `${h}:${m}` : "";
+}
+function setIniziativaOra(val) {
+  const hSel = document.getElementById("iniz-ora-h");
+  const mSel = document.getElementById("iniz-ora-m");
+  if (!hSel || !mSel) return;
+  const parti = (val || "").split(":");
+  hSel.value = parti[0] || "";
+  const minuti = parseInt(parti[1], 10);
+  mSel.value = (!isNaN(minuti) && minuti >= 15 && minuti < 45) ? "30" : "00";
+}
+
 function buildIniziativaTesto() {
   const nome = document.getElementById("iniz-nome").value.trim();
   const data = document.getElementById("iniz-data").value;
-  const ora = document.getElementById("iniz-ora").value;
+  const ora = getIniziativaOra();
   const luogo = document.getElementById("iniz-luogo").value.trim();
   const descrizione = document.getElementById("iniz-descrizione").value.trim();
   let testo = `🎉 ${nome || "Iniziativa Gruppo"}\n\n`;
@@ -1142,7 +1165,12 @@ function renderIniziative() {
       <div class="form-group"><label>Nome evento *</label><input type="text" id="iniz-nome" placeholder="Es. Festa di Primavera"></div>
       <div class="two-col">
         <div class="form-group"><label>Data</label><input type="date" id="iniz-data"></div>
-        <div class="form-group"><label>Ora</label><input type="time" id="iniz-ora" step="1800"></div>
+        <div class="form-group"><label>Ora</label>
+          <div style="display:flex; gap:6px;">
+            <select id="iniz-ora-h" style="flex:1;"><option value="">--</option>${orarieHOptions()}</select>
+            <select id="iniz-ora-m" style="flex:1;"><option value="00">:00</option><option value="30">:30</option></select>
+          </div>
+        </div>
       </div>
       <div class="form-group"><label>Luogo</label><input type="text" id="iniz-luogo"></div>
       <div class="form-group">
@@ -1176,7 +1204,7 @@ function renderIniziative() {
 function registraStoricoIniziativa(canale) {
   const nome = document.getElementById("iniz-nome").value.trim();
   const data = document.getElementById("iniz-data").value;
-  const ora = document.getElementById("iniz-ora").value;
+  const ora = getIniziativaOra();
   const luogo = document.getElementById("iniz-luogo").value.trim();
   const descrizione = document.getElementById("iniz-descrizione").value.trim();
   const istituzionali = document.getElementById("iniz-istituzionali").checked;
@@ -1246,7 +1274,7 @@ function caricaIniziativaNelForm(r) {
   currentIniziativaId = r.id;
   document.getElementById("iniz-nome").value = r.nome || "";
   document.getElementById("iniz-data").value = r.data || "";
-  document.getElementById("iniz-ora").value = r.ora || "";
+  setIniziativaOra(r.ora || "");
   document.getElementById("iniz-luogo").value = r.luogo || "";
   document.getElementById("iniz-istituzionali").checked = !!r.istituzionali;
   document.getElementById("iniz-feste").checked = !!r.feste;
