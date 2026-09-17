@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "4.23";
+const APP_VERSION = "4.24";
 const APP_BUILD_DATE = "15/09/2026";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -1142,15 +1142,15 @@ function renderIniziative() {
       <div class="form-group"><label>Nome evento *</label><input type="text" id="iniz-nome" placeholder="Es. Festa di Primavera"></div>
       <div class="two-col">
         <div class="form-group"><label>Data</label><input type="date" id="iniz-data"></div>
-        <div class="form-group"><label>Ora</label><input type="time" id="iniz-ora"></div>
+        <div class="form-group"><label>Ora</label><input type="time" id="iniz-ora" step="1800"></div>
       </div>
       <div class="form-group"><label>Luogo</label><input type="text" id="iniz-luogo"></div>
       <div class="form-group">
         <label>Categoria</label>
-        <div class="checkbox-row" style="flex-wrap:wrap; row-gap:6px;">
-          <label><input type="checkbox" id="iniz-istituzionali"> Istituzionali</label>
-          <label><input type="checkbox" id="iniz-feste"> Feste</label>
-          <label><input type="checkbox" id="iniz-volontariato"> Volontariato</label>
+        <div class="checkbox-row" style="gap:10px; flex-wrap:nowrap;">
+          <label style="font-size:0.78rem; white-space:nowrap;"><input type="checkbox" id="iniz-istituzionali" style="width:15px; height:15px;"> Istituz.</label>
+          <label style="font-size:0.78rem; white-space:nowrap;"><input type="checkbox" id="iniz-feste" style="width:15px; height:15px;"> Feste</label>
+          <label style="font-size:0.78rem; white-space:nowrap;"><input type="checkbox" id="iniz-volontariato" style="width:15px; height:15px;"> Volont.</label>
         </div>
       </div>
       <div class="form-group"><label>Descrizione evento</label><textarea id="iniz-descrizione" placeholder="Dettagli dell'iniziativa..."></textarea></div>
