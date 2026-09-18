@@ -1,6 +1,6 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "4.26";
-const APP_BUILD_DATE = "17/09/2026";
+const APP_VERSION = "4.55";
+const APP_BUILD_DATE = "18/09/2026";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
 const FIRESTORE_COLLECTION = "gestioneGruppo";
@@ -51,6 +51,7 @@ function applyStateFields(source) {
   state.sponsor = source.sponsor || [];
   state.ringraziamenti = source.ringraziamenti || [];
   state.oreAlpine = source.oreAlpine || {};
+  state.cene = source.cene || [];
 }
 
 function syncToFirebase() {
@@ -135,6 +136,7 @@ let state = {
   sponsor: [],
   ringraziamenti: [],
   oreAlpine: {},
+  cene: [],
   meta: { ultimaModifica: null, ultimoImport: null }
 };
 let bollinoAnno = new Date().getFullYear();
@@ -247,6 +249,9 @@ function renderSection() {
   } else if (currentSection === "report2") {
     content.innerHTML = renderReport2();
     attachReport2Events();
+  } else if (currentSection === "cena") {
+    content.innerHTML = renderCena();
+    attachCenaEvents();
   } else {
     const s = PLACEHOLDER_SECTIONS[currentSection];
     content.innerHTML = `
@@ -327,6 +332,7 @@ function renderAnagrafica() {
   } else {
     cardsHtml = list.map(s => {
       const badges = [];
+      if (s.andatoAvanti) badges.push(`<span class="badge badge-icon" title="Andato avanti${s.andatoAvantiData ? " - " + esc(s.andatoAvantiData) : ""}" style="background:#ddd; border-color:#999;">💔</span>`);
       if (s.carica) badges.push(`<span class="badge">${esc(s.carica)}</span>`);
       if (state.consiglio.membriIds.includes(s.id)) badges.push(`<span class="badge badge-icon" title="Membro del Consiglio Direttivo" style="background:#dbe9ff; border-color:#8fb4e8;">🏛️</span>`);
       if (s.incaricoFeste) badges.push(`<span class="badge">🎉 ${esc(s.incaricoFeste)}</span>`);
@@ -408,7 +414,7 @@ function openSocioForm(id) {
     cognome:"", nome:"", dataNascita:"", luogoNascita:"", provinciaNascita:"", codiceFiscale:"", matricola:"", indirizzo:"", paese:"", provincia:"", cap:"",
     telefono:"", cellulare:"", sms:false, whatsapp:false, privacy:false, haccp:false, haccpDataCorso:"", haccpDataScadenza:"", email:"",
     dataIscrizione:"", carica:"", grado:"", reparto:"", anniNaja:"", alfiere:false,
-    incaricoFeste:"", note:""
+    incaricoFeste:"", note:"", andatoAvanti:false, andatoAvantiData:""
   };
 
   const cariche_opts = CARICHE.map(c => `<option value="${c}" ${s.carica===c?"selected":""}>${c}</option>`).join("");
@@ -496,6 +502,12 @@ function openSocioForm(id) {
       <div class="form-group"><label>Incarico feste</label>
         <select id="f-incarico">${incarichi_opts}</select>
       </div>
+      <div class="form-group">
+        <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" id="f-andato-avanti" ${s.andatoAvanti ? "checked" : ""}> 💔 Andato avanti</label>
+      </div>
+      <div class="form-group" id="f-andato-avanti-data-wrap" style="${s.andatoAvanti ? "" : "display:none;"}">
+        <label>Data</label><input type="text" id="f-andato-avanti-data" placeholder="gg-mm-aaaa" value="${esc(s.andatoAvantiData)}">
+      </div>
       <div class="form-group"><label>Note</label><textarea id="f-note">${esc(s.note)}</textarea></div>
       ${id ? `
       <details class="bollino-details">
@@ -517,6 +529,9 @@ function openSocioForm(id) {
   pendingHaccpFotoFile = null;
   updateVisibilitaSimpatizzante();
   document.getElementById("f-carica").addEventListener("change", updateVisibilitaSimpatizzante);
+  document.getElementById("f-andato-avanti").addEventListener("change", e => {
+    document.getElementById("f-andato-avanti-data-wrap").style.display = e.target.checked ? "" : "none";
+  });
 
   document.getElementById("privacy-doc-btn").addEventListener("click", () => {
     document.getElementById("f-privacy-foto").click();
@@ -624,6 +639,8 @@ async function saveSocio() {
     reparto: document.getElementById("f-reparto").value.trim(),
     anniNaja: document.getElementById("f-naja").value.trim(),
     incaricoFeste: document.getElementById("f-incarico").value,
+    andatoAvanti: document.getElementById("f-andato-avanti").checked,
+    andatoAvantiData: document.getElementById("f-andato-avanti-data").value.trim(),
     note: document.getElementById("f-note").value.trim(),
   };
   if (!data.cognome || !data.nome) { alert("Cognome e nome sono obbligatori"); return; }
@@ -1986,6 +2003,12 @@ function openSettings() {
       <div style="font-size:0.78rem; color:#666;">Se il socio esiste già (riconosciuto per Codice Fiscale, o per Cognome+Nome), i dati vengono aggiornati invece di creare un doppione. Colonne riconosciute: Cognome, Nome (oppure una colonna unica "Nominativo"/"Nome e Cognome" nel formato Cognome Nome, es. "De Rossi Mario" — viene divisa automaticamente), Data Nascita, Luogo Nascita, Provincia Nascita, Codice Fiscale, Matricola, Indirizzo, Paese, Provincia, CAP, Telefono, Cellulare, Email, Data Iscrizione, Carica, Alfiere (si/no), HACCP (si/no), Grado, Reparto, Anni Naja, Incarico Feste, Note.</div>
     </div>
 
+    <div class="settings-block">
+      <h3>Importazione certificati HACCP da PDF unico</h3>
+      <button type="button" class="btn block" id="import-haccp-pdf-btn">📄 Importa PDF con più certificati</button>
+      <div style="font-size:0.78rem; color:#666; margin-top:6px;">Carica un unico PDF con tutti i certificati HACCP (una pagina per socio): l'app divide le pagine in immagini singole e per ognuna scegli a quale socio assegnarla.</div>
+    </div>
+
 
     <div class="settings-block">
       <h3>Backup e ripristino</h3>
@@ -2017,6 +2040,7 @@ function openSettings() {
   document.getElementById("restore-input").addEventListener("change", handleRestore);
   document.getElementById("reset-bollino-btn").addEventListener("click", resetBollino);
   document.getElementById("import-excel").addEventListener("change", handleExcelImport);
+  document.getElementById("import-haccp-pdf-btn").addEventListener("click", openImportHaccpPdf);
   document.getElementById("change-user-btn").addEventListener("click", () => {
     localStorage.removeItem("gestione_gruppo_user");
     currentUser = null;
@@ -2046,6 +2070,373 @@ async function handleLogoUpload(e) {
     alert("Errore nel caricamento del logo su Firebase.");
   }
 }
+
+function sociosOrdinatiPerSelect() {
+  return [...state.socios].sort((a, b) => {
+    const ca = (a.cognome || "").localeCompare(b.cognome || "");
+    return ca !== 0 ? ca : (a.nome || "").localeCompare(b.nome || "");
+  });
+}
+
+async function openImportHaccpPdf() {
+  if (typeof pdfjsLib === "undefined") {
+    alert("Libreria PDF non disponibile. Controlla la connessione e riprova.");
+    return;
+  }
+  pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = ".pdf,application/pdf";
+  input.addEventListener("change", async () => {
+    const file = input.files[0];
+    if (!file) return;
+    closeModal();
+    toast("Lettura del PDF in corso...");
+    try {
+      const buf = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+      const pagine = [];
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const viewport = page.getViewport({ scale: 1.3 });
+        const canvas = document.createElement("canvas");
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        await page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
+        pagine.push({ numero: i, dataUrl: canvas.toDataURL("image/jpeg", 0.85) });
+      }
+      renderImportHaccpAssegnazione(pagine);
+    } catch (err) {
+      console.error(err);
+      alert("Errore nella lettura del PDF. Verifica che il file non sia protetto o danneggiato.");
+    }
+  });
+  input.click();
+}
+
+function renderImportHaccpAssegnazione(pagine) {
+  const soci = sociosOrdinatiPerSelect();
+  const optionsHtml = `<option value="">-- salta pagina --</option>` + soci.map(s => `<option value="${s.id}">${esc(s.cognome)} ${esc(s.nome)}</option>`).join("");
+  const html = `
+    <div style="font-weight:800; margin-bottom:4px;">Assegna certificati HACCP</div>
+    <div class="card-sub" style="margin-bottom:12px;">${pagine.length} pagine trovate nel PDF. Per ognuna scegli il socio corrispondente (lascia "salta pagina" per quelle da non importare).</div>
+    <div id="haccp-import-list" style="display:flex; flex-direction:column; gap:14px; max-height:55vh; overflow-y:auto;">
+      ${pagine.map(p => `
+        <div style="display:flex; gap:10px; align-items:center; border:1px solid #ddd; border-radius:10px; padding:8px;">
+          <img src="${p.dataUrl}" style="width:70px; height:auto; border-radius:6px; border:1px solid #ccc; flex-shrink:0;">
+          <div style="flex:1;">
+            <div class="card-sub" style="margin-bottom:4px;">Pagina ${p.numero}</div>
+            <select class="haccp-import-select" data-pagina="${p.numero}" style="width:100%;">${optionsHtml}</select>
+          </div>
+        </div>
+      `).join("")}
+    </div>
+    <div class="modal-actions" style="margin-top:14px;">
+      <button type="button" class="btn secondary" id="haccp-import-cancel">Annulla</button>
+      <button type="button" class="btn" id="haccp-import-confirm">Conferma import</button>
+    </div>
+  `;
+  showModal(html);
+  document.getElementById("haccp-import-cancel").addEventListener("click", () => { closeModal(); openSettings(); });
+  document.getElementById("haccp-import-confirm").addEventListener("click", () => eseguiImportHaccp(pagine));
+}
+
+async function eseguiImportHaccp(pagine) {
+  const selects = document.querySelectorAll(".haccp-import-select");
+  const assegnazioni = [];
+  selects.forEach(sel => {
+    if (sel.value) {
+      const pagina = pagine.find(p => p.numero === parseInt(sel.dataset.pagina, 10));
+      if (pagina) assegnazioni.push({ socioId: sel.value, pagina });
+    }
+  });
+  if (assegnazioni.length === 0) {
+    alert("Non hai assegnato nessuna pagina a un socio.");
+    return;
+  }
+  const btn = document.getElementById("haccp-import-confirm");
+  btn.disabled = true;
+  let fatti = 0;
+  for (const a of assegnazioni) {
+    fatti++;
+    btn.textContent = `Caricamento ${fatti}/${assegnazioni.length}...`;
+    try {
+      const blob = await (await fetch(a.pagina.dataUrl)).blob();
+      const socio = state.socios.find(s => s.id === a.socioId);
+      if (!socio) continue;
+      if (window.storage) {
+        const url = await uploadDocumento(blob, `documenti/haccp/${a.socioId}`);
+        socio.haccpFoto = url;
+      } else {
+        socio.haccpFoto = a.pagina.dataUrl;
+      }
+      socio.haccpFotoNome = `haccp_pagina_${a.pagina.numero}.jpg`;
+    } catch (err) {
+      console.error("Errore import HACCP socio " + a.socioId, err);
+    }
+  }
+  saveState();
+  closeModal();
+  renderSection();
+  toast(`Import completato: ${fatti} certificati caricati`);
+}
+
+function renderCena() {
+  const cene = [...state.cene].sort((a, b) => (b.data || "").localeCompare(a.data || ""));
+  const listaHtml = cene.length ? cene.map(c => `
+    <div class="card" data-cena-id="${c.id}">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
+        <div>
+          <div style="font-weight:800;">${esc(c.titolo || "Cena")}</div>
+          <div class="card-sub">${fmtDate(c.data)}${c.ora ? " · " + esc(c.ora) : ""}${c.luogo ? " · " + esc(c.luogo) : ""}</div>
+        </div>
+        <button type="button" class="btn danger" data-elimina-cena="${c.id}" style="padding:5px 10px; font-size:0.8rem;">🗑️</button>
+      </div>
+      <div class="card-sub" data-tally="${c.id}" style="margin-top:8px;">Caricamento risposte...</div>
+      <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
+        <button type="button" class="btn secondary" data-copia-link="${c.id}" style="font-size:0.82rem; padding:7px 10px;">🔗 Copia link</button>
+        <button type="button" class="btn" data-wa-link="${c.id}" style="background:#25D366; color:#fff; font-size:0.82rem; padding:7px 10px;">${WA_ICON} Invia su WhatsApp</button>
+        <button type="button" class="btn secondary" data-report-cena="${c.id}" style="font-size:0.82rem; padding:7px 10px;">📋 Report nomi</button>
+      </div>
+    </div>
+  `).join("") : `<div class="card-sub">Nessuna cena creata finora.</div>`;
+
+  return `
+    <div class="section-title">🍽️ Cena mensile</div>
+    <div class="card-sub" style="margin-bottom:12px;">Crea l'evento, scrivi il tuo messaggio, poi apri WhatsApp: il link per confermare la presenza (nome + quante persone, tipo "presente +3") viene aggiunto in automatico in fondo al testo. Le risposte arrivano qui in tempo reale.</div>
+
+    <div class="card">
+      <div style="font-weight:800; margin-bottom:10px;">Nuova cena</div>
+      <div class="form-group"><label>Titolo</label><input type="text" id="cena-titolo" placeholder="Es. Cena fine mese Settembre"></div>
+      <div class="two-col">
+        <div class="form-group"><label>Data</label><input type="date" id="cena-data"></div>
+        <div class="form-group"><label>Ora</label>
+          <div style="display:flex; gap:6px;">
+            <select id="cena-ora-h" style="flex:1;"><option value="">--</option>${orarieHOptions()}</select>
+            <select id="cena-ora-m" style="flex:1;"><option value="00">:00</option><option value="30">:30</option></select>
+          </div>
+        </div>
+      </div>
+      <div class="form-group"><label>Luogo</label><input type="text" id="cena-luogo" value="Sede Gruppo Alpini Bottonaga"></div>
+      <div class="form-group"><label>Testo del messaggio</label>
+        <textarea id="cena-testo" rows="5" placeholder="Scrivi qui il messaggio da mandare nel gruppo...">Ciao a tutti, ci sarà la solita cena di fine mese.
+Siamo diventati tecnologicamente evoluti quindi cliccate qua sotto per confermare.
+Se vuoi essere dei nostri clicca qua sotto:
+PRESENTE</textarea>
+        <div style="font-size:0.75rem; color:#666; margin-top:4px;">Se l'ultima riga è la parola "PRESENTE", il link viene attaccato proprio lì (es. "PRESENTE 👉 link"). Altrimenti il link viene aggiunto su una riga nuova in fondo al messaggio.</div>
+      </div>
+      <button type="button" class="btn block" id="crea-cena-btn" style="margin-top:6px;">➕ Crea e genera link</button>
+    </div>
+
+    <div class="section-title" style="font-size:1.05rem; margin-top:22px;">🗂️ Cene create</div>
+    <div id="cena-lista">${listaHtml}</div>
+  `;
+}
+
+function linkCena(cenaId) {
+  return `${location.origin}${location.pathname}?cena=${cenaId}`;
+}
+
+function attachCenaEvents() {
+  document.getElementById("crea-cena-btn").addEventListener("click", creaCena);
+  document.querySelectorAll("[data-elimina-cena]").forEach(btn => {
+    btn.addEventListener("click", () => eliminaCena(btn.dataset.eliminaCena));
+  });
+  document.querySelectorAll("[data-copia-link]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const link = linkCena(btn.dataset.copiaLink);
+      navigator.clipboard.writeText(link).then(() => toast("Link copiato!")).catch(() => alert(link));
+    });
+  });
+  document.querySelectorAll("[data-wa-link]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const c = state.cene.find(x => x.id === btn.dataset.waLink);
+      if (!c) return;
+      const link = linkCena(c.id);
+      const baseTesto = c.testo || "Ciao a tutti, ci sarà la cena. Se vuoi essere dei nostri clicca qua sotto:\nPRESENTE";
+      const righe = baseTesto.split("\n");
+      const ultima = righe[righe.length - 1].trim();
+      let corpo;
+      if (/^presente$/i.test(ultima)) {
+        righe[righe.length - 1] = `${ultima.toUpperCase()} 👉 ${link}`;
+        corpo = righe.join("\n");
+      } else {
+        corpo = `${baseTesto}\n${link}`;
+      }
+      const intestazioneRighe = [];
+      if (c.titolo) intestazioneRighe.push(`🍽️ *${c.titolo}*`, "");
+      if (c.data) intestazioneRighe.push(`📅 ${fmtDate(c.data)}`);
+      if (c.ora) intestazioneRighe.push(`🕐 ${c.ora}`);
+      if (c.luogo) intestazioneRighe.push(`📍 ${c.luogo}`);
+      if (intestazioneRighe.length) intestazioneRighe.push("");
+      const testo = intestazioneRighe.join("\n") + corpo;
+      window.open(`https://wa.me/?text=${encodeURIComponent(testo)}`, "_blank");
+    });
+  });
+  document.querySelectorAll("[data-tally]").forEach(el => caricaTallyCena(el.dataset.tally, el));
+  document.querySelectorAll("[data-report-cena]").forEach(btn => {
+    btn.addEventListener("click", () => apriReportCena(btn.dataset.reportCena));
+  });
+}
+
+async function creaCena() {
+  const titolo = document.getElementById("cena-titolo").value.trim();
+  const data = document.getElementById("cena-data").value;
+  const h = document.getElementById("cena-ora-h").value;
+  const m = document.getElementById("cena-ora-m").value || "00";
+  const luogo = document.getElementById("cena-luogo").value.trim();
+  const testo = document.getElementById("cena-testo").value.trim();
+  if (!data) { alert("Inserisci la data della cena"); return; }
+  const id = uid();
+  const ora = h ? `${h}:${m}` : "";
+  const nuova = { id, titolo, data, ora, luogo, testo };
+  state.cene.push(nuova);
+  saveState();
+  if (window.db) {
+    try {
+      await db.collection(FIRESTORE_COLLECTION).doc(`cena_${id}`).set({ titolo, data, ora, luogo, testo, risposte: {} });
+    } catch (err) {
+      console.error(err);
+      alert("La cena è stata creata ma c'è stato un problema nel predisporre il link su Firebase. Riprova a crearla se il link non dovesse funzionare.");
+    }
+  }
+  renderSection();
+  toast("Cena creata! Apri WhatsApp o copia il link.");
+}
+
+async function eliminaCena(cenaId) {
+  if (!confirm("Eliminare questa cena e tutte le risposte ricevute?")) return;
+  state.cene = state.cene.filter(c => c.id !== cenaId);
+  saveState();
+  if (window.db) {
+    db.collection(FIRESTORE_COLLECTION).doc(`cena_${cenaId}`).delete().catch(err => console.error(err));
+  }
+  renderSection();
+}
+
+async function caricaTallyCena(cenaId, el) {
+  if (!window.db) { el.textContent = "Sincronizzazione non disponibile"; return; }
+  try {
+    const doc = await db.collection(FIRESTORE_COLLECTION).doc(`cena_${cenaId}`).get();
+    if (!doc.exists) { el.textContent = "Nessuna conferma ancora"; return; }
+    const risposte = doc.data().risposte || {};
+    const totale = Object.values(risposte).reduce((sum, r) => sum + (r.persone || 1), 0);
+    el.innerHTML = totale > 0 ? `✅ <strong>${totale}</strong> persone confermate` : "Nessuna conferma ancora";
+  } catch (err) {
+    console.error(err);
+    el.textContent = "Errore nel caricamento delle conferme";
+  }
+}
+
+async function apriReportCena(cenaId) {
+  const c = state.cene.find(x => x.id === cenaId);
+  if (!window.db) { alert("Sincronizzazione non disponibile."); return; }
+  showModal(`<div style="text-align:center; padding:30px 0;">Caricamento report...</div>`);
+  try {
+    const doc = await db.collection(FIRESTORE_COLLECTION).doc(`cena_${cenaId}`).get();
+    const risposte = doc.exists ? (doc.data().risposte || {}) : {};
+    const elenco = Object.values(risposte).sort((a, b) => (a.nome || "").localeCompare(b.nome || ""));
+    const totale = elenco.reduce((sum, r) => sum + (r.persone || 1), 0);
+    const righeHtml = elenco.length
+      ? elenco.map(r => `<div style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid #eee;"><span>${esc(r.nome || "Anonimo")}</span><strong>${r.persone || 1}</strong></div>`).join("")
+      : `<div class="card-sub">Nessuna conferma ancora.</div>`;
+    const html = `
+      <div style="font-weight:800; margin-bottom:2px;">📋 Report presenze</div>
+      <div class="card-sub" style="margin-bottom:14px;">${esc(c ? (c.titolo || "Cena") : "Cena")}</div>
+      <div style="font-weight:800; font-size:1.3rem; color:#1a6b3c; margin-bottom:10px;">Totale: ${totale} persone</div>
+      <div>${righeHtml}</div>
+      <div class="modal-actions" style="margin-top:16px;">
+        <button type="button" class="btn secondary block" id="report-cena-chiudi">Chiudi</button>
+      </div>
+    `;
+    showModal(html);
+    document.getElementById("report-cena-chiudi").addEventListener("click", closeModal);
+  } catch (err) {
+    console.error(err);
+    showModal(`<div style="text-align:center; padding:20px 0;">Errore nel caricamento del report.</div><div class="modal-actions"><button type="button" class="btn secondary block" onclick="closeModal()">Chiudi</button></div>`);
+  }
+}
+
+// ---------- Pagina pubblica di conferma Cena (nome + numero persone, senza login) ----------
+function getRespIdDispositivo() {
+  let id = localStorage.getItem("gestione_gruppo_resp_id");
+  if (!id) {
+    id = uid();
+    localStorage.setItem("gestione_gruppo_resp_id", id);
+  }
+  return id;
+}
+
+async function renderCenaRisposta(cenaId) {
+  document.body.innerHTML = `<div id="cena-risposta-root" style="max-width:420px; margin:0 auto; padding:24px 16px; font-family:inherit; text-align:center;"></div>`;
+  const root = document.getElementById("cena-risposta-root");
+  root.innerHTML = `<div style="padding-top:40px;">Caricamento...</div>`;
+
+  if (!window.db) {
+    root.innerHTML = `<div style="padding-top:40px;">⚠️ Impossibile collegarsi, controlla la connessione e riapri il link.</div>`;
+    return;
+  }
+  let cenaDoc;
+  try {
+    cenaDoc = await db.collection(FIRESTORE_COLLECTION).doc(`cena_${cenaId}`).get();
+  } catch (err) {
+    root.innerHTML = `<div style="padding-top:40px;">⚠️ Errore di connessione. Riprova.</div>`;
+    return;
+  }
+  if (!cenaDoc.exists) {
+    root.innerHTML = `<div style="padding-top:40px;">Questo invito non è più valido.</div>`;
+    return;
+  }
+  const c = cenaDoc.data();
+  const intestazione = `
+    <div style="margin-bottom:18px;">
+      <div style="font-weight:900; font-size:1.3rem; color:#1a6b3c;">🍽️ ${esc(c.titolo || "Cena")}</div>
+      ${(c.data || c.ora || c.luogo) ? `<div style="color:#555; margin-top:4px;">${c.data ? fmtDate(c.data) : ""}${c.ora ? " ore " + esc(c.ora) : ""}${c.luogo ? " - " + esc(c.luogo) : ""}</div>` : ""}
+      ${c.testo ? `<div style="color:#333; margin-top:10px; white-space:pre-wrap; text-align:left; background:#f5f5f0; border-radius:8px; padding:10px;">${esc(c.testo)}</div>` : ""}
+    </div>`;
+
+  const respId = getRespIdDispositivo();
+  const precedente = (c.risposte || {})[respId];
+
+  const disegnaForm = (nomeIniziale, valoreIniziale) => {
+    root.innerHTML = `
+      ${intestazione}
+      ${precedente ? `<div style="color:#1a6b3c; font-weight:700; margin-bottom:14px;">Avevi confermato: ${esc(precedente.nome)}, in totale ${precedente.persone}. Puoi correggere qui sotto.</div>` : ""}
+      <div class="form-group" style="text-align:left;"><label>Il tuo nome</label><input type="text" id="cr-nome" placeholder="Nome e cognome" value="${esc(nomeIniziale)}" style="width:100%; padding:10px; font-size:1rem;"></div>
+      <div style="margin:14px 0 2px; color:#555;">In quanti sarete in totale (te compreso)?</div>
+      <div style="font-size:0.75rem; color:#888; margin-bottom:8px;">Es. tu + 3 familiari = imposta 4</div>
+      <div style="display:flex; align-items:center; justify-content:center; gap:16px;">
+        <button type="button" id="cr-meno" style="width:52px; height:52px; font-size:1.6rem; font-weight:800; border-radius:50%; border:none; background:#eee;">−</button>
+        <div id="cr-numero" style="font-size:2.2rem; font-weight:900; min-width:50px;">${valoreIniziale}</div>
+        <button type="button" id="cr-piu" style="width:52px; height:52px; font-size:1.6rem; font-weight:800; border-radius:50%; border:none; background:#eee;">+</button>
+      </div>
+      <button type="button" id="cr-conferma" style="width:100%; margin-top:22px; padding:16px; font-size:1.1rem; font-weight:800; background:#1a6b3c; color:#fff; border:none; border-radius:12px;">✅ Conferma presenza</button>
+      <div id="cr-msg" style="margin-top:14px; font-weight:700;"></div>
+    `;
+    let n = valoreIniziale;
+    const num = document.getElementById("cr-numero");
+    document.getElementById("cr-meno").addEventListener("click", () => { if (n > 1) { n--; num.textContent = n; } });
+    document.getElementById("cr-piu").addEventListener("click", () => { if (n < 20) { n++; num.textContent = n; } });
+    document.getElementById("cr-conferma").addEventListener("click", async () => {
+      const nome = document.getElementById("cr-nome").value.trim();
+      if (!nome) { document.getElementById("cr-msg").textContent = "Inserisci il tuo nome."; return; }
+      document.getElementById("cr-msg").textContent = "Invio in corso...";
+      try {
+        await db.collection(FIRESTORE_COLLECTION).doc(`cena_${cenaId}`).update({
+          [`risposte.${respId}`]: { nome, persone: n, ts: new Date().toISOString() }
+        });
+        root.innerHTML = `${intestazione}<div style="font-size:1.1rem; font-weight:700; color:#1a6b3c; padding-top:10px;">✅ Grazie ${esc(nome)}! Confermate ${n} ${n === 1 ? "persona" : "persone"}.</div><button type="button" id="cr-modifica" style="margin-top:16px; background:none; border:none; text-decoration:underline; color:#555;">Modifica</button>`;
+        document.getElementById("cr-modifica").addEventListener("click", () => disegnaForm(nome, n));
+      } catch (err) {
+        console.error(err);
+        document.getElementById("cr-msg").textContent = "Errore nell'invio, riprova.";
+      }
+    });
+  };
+  disegnaForm(precedente ? precedente.nome : "", precedente ? precedente.persone : 1);
+}
+
 
 function saveSettings() {
   state.settings.appName = document.getElementById("set-appname").value.trim() || "Gestione Gruppo";
@@ -2592,6 +2983,8 @@ const REPORT1_COLONNE = [
   { id: "sms", label: "SMS", get: s => s.sms ? "Sì" : "No" },
   { id: "whatsapp", label: "WhatsApp", get: s => s.whatsapp ? "Sì" : "No" },
   { id: "note", label: "Note", get: s => s.note || "" },
+  { id: "andatoAvanti", label: "Andato avanti", get: s => s.andatoAvanti ? "Sì" : "No" },
+  { id: "andatoAvantiData", label: "Data (Andato avanti)", get: s => s.andatoAvantiData || "" },
 ];
 const REPORT1_DEFAULT = ["cognome", "nome", "matricola", "telefono", "cellulare"];
 
@@ -2627,9 +3020,9 @@ function renderReport1() {
         <div class="form-group"><label>Provincia</label><select id="rep1-provincia"><option value="">Tutte</option>${provinciaOpts}</select></div>
         <div class="form-group"><label>Privacy</label><select id="rep1-privacy"><option value="">Tutti</option><option value="si">Sì</option><option value="no">No</option></select></div>
       </div>
-      <div class="form-group">
-        <label>HACCP</label>
-        <select id="rep1-haccp"><option value="">Tutti</option><option value="si">Sì</option><option value="no">No</option></select>
+      <div class="two-col">
+        <div class="form-group"><label>HACCP</label><select id="rep1-haccp"><option value="">Tutti</option><option value="si">Sì</option><option value="no">No</option></select></div>
+        <div class="form-group"><label>Andato avanti</label><select id="rep1-andato-avanti"><option value="">Tutti</option><option value="no" selected>Escludi (solo attivi)</option><option value="si">Solo andati avanti</option></select></div>
       </div>
       <div class="form-group">
         <label>Colonne da includere</label>
@@ -2667,6 +3060,7 @@ function attachReport1Events() {
     const provincia = document.getElementById("rep1-provincia").value;
     const privacyFiltro = document.getElementById("rep1-privacy").value;
     const haccpFiltro = document.getElementById("rep1-haccp").value;
+    const andatoAvantiFiltro = document.getElementById("rep1-andato-avanti").value;
     const colonneIds = Array.from(document.querySelectorAll(".rep1-col:checked")).map(el => el.value);
     if (colonneIds.length === 0) { alert("Seleziona almeno una colonna."); return; }
     if (caricheSelezionate.length === 0) { alert("Seleziona almeno una categoria."); return; }
@@ -2678,6 +3072,8 @@ function attachReport1Events() {
     if (privacyFiltro === "no") list = list.filter(s => !s.privacy);
     if (haccpFiltro === "si") list = list.filter(s => s.haccp);
     if (haccpFiltro === "no") list = list.filter(s => !s.haccp);
+    if (andatoAvantiFiltro === "si") list = list.filter(s => s.andatoAvanti);
+    if (andatoAvantiFiltro === "no") list = list.filter(s => !s.andatoAvanti);
     list.sort((a, b) => (a.cognome + a.nome).localeCompare(b.cognome + b.nome));
     const colonne = REPORT1_COLONNE.filter(c => colonneIds.includes(c.id));
     const headers = colonne.map(c => c.label);
@@ -2760,7 +3156,7 @@ function setupScrollHide() {
 }
 
 // ---------- Init ----------
-const SECTION_ORDER = ["home","anagrafica","conv-consiglio","bollino","bollino-amici","ringraziamenti","sponsor","iniziative","ore-alpine","report","report2","conv-casoncellata","presenza-adunata","cassa"];
+const SECTION_ORDER = ["home","anagrafica","conv-consiglio","bollino","bollino-amici","ringraziamenti","sponsor","cena","iniziative","ore-alpine","report","report2","conv-casoncellata","presenza-adunata","cassa"];
 
 function vaiASezione(section) {
   currentSection = section;
@@ -2792,6 +3188,11 @@ function setupSwipeNav() {
 }
 
 function init() {
+  const cenaId = new URLSearchParams(location.search).get("cena");
+  if (cenaId) {
+    renderCenaRisposta(cenaId);
+    return;
+  }
   loadState();
   if (!currentUser) {
     showLoginScreen(startApp);
