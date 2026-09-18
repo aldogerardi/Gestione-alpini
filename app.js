@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "4.55";
+const APP_VERSION = "4.56";
 const APP_BUILD_DATE = "18/09/2026";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -332,7 +332,6 @@ function renderAnagrafica() {
   } else {
     cardsHtml = list.map(s => {
       const badges = [];
-      if (s.andatoAvanti) badges.push(`<span class="badge badge-icon" title="Andato avanti${s.andatoAvantiData ? " - " + esc(s.andatoAvantiData) : ""}" style="background:#ddd; border-color:#999;">💔</span>`);
       if (s.carica) badges.push(`<span class="badge">${esc(s.carica)}</span>`);
       if (state.consiglio.membriIds.includes(s.id)) badges.push(`<span class="badge badge-icon" title="Membro del Consiglio Direttivo" style="background:#dbe9ff; border-color:#8fb4e8;">🏛️</span>`);
       if (s.incaricoFeste) badges.push(`<span class="badge">🎉 ${esc(s.incaricoFeste)}</span>`);
@@ -349,7 +348,7 @@ function renderAnagrafica() {
         <div class="card color-green">
           <div class="card-row">
             <div class="card-info-col">
-              <div class="card-name">${esc(s.cognome)} ${esc(s.nome)}</div>
+              <div class="card-name">${esc(s.cognome)} ${esc(s.nome)}${s.andatoAvanti ? ` <span title="Andato avanti${s.andatoAvantiData ? " - " + esc(s.andatoAvantiData) : ""}">💔</span>` : ""}</div>
               <div class="card-sub">${esc(s.cellulare || "")}${s.cellulare && s.telefono ? " · " : ""}${esc(s.telefono || "")}${s.dataIscrizione ? " · dal " + fmtDate(s.dataIscrizione) : ""}</div>
             </div>
             <div class="card-actions">
