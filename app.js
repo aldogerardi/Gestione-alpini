@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "4.56";
+const APP_VERSION = "4.57";
 const APP_BUILD_DATE = "18/09/2026";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -343,7 +343,7 @@ function renderAnagrafica() {
       if (s.email && s.email.trim()) badges.push(`<span class="badge badge-icon" title="Email presente">@</span>`);
       const annoCorrente = new Date().getFullYear();
       const bollinoOk = state.pagamentiBollino.find(r => r.socioId === s.id && r.anno === annoCorrente && r.pagato);
-      if (!bollinoOk) badges.push(`<span class="badge badge-icon badge-warning" title="Bollino ${annoCorrente} non pagato">🎫❗</span>`);
+      if (!bollinoOk && !s.andatoAvanti) badges.push(`<span class="badge badge-icon badge-warning" title="Bollino ${annoCorrente} non pagato">🎫❗</span>`);
       return `
         <div class="card color-green">
           <div class="card-row">
@@ -1504,7 +1504,7 @@ function renderBollino() {
   for (let y = 2020; y <= 2030; y++) anni.push(y);
   const anniOpts = anni.map(y => `<option value="${y}" ${y===bollinoAnno?"selected":""}>${y}</option>`).join("");
 
-  const sociosSorted = state.socios.filter(s => s.carica !== "Simpatizzante" && s.carica !== "Amici").slice().sort((a,b) => (a.cognome+a.nome).localeCompare(b.cognome+b.nome));
+  const sociosSorted = state.socios.filter(s => s.carica !== "Simpatizzante" && s.carica !== "Amici" && !s.andatoAvanti).slice().sort((a,b) => (a.cognome+a.nome).localeCompare(b.cognome+b.nome));
   const socioOpts = sociosSorted.map(s => `<option value="${s.id}" ${editingBollinoRecord && editingBollinoRecord.socioId===s.id?"selected":""}>${esc(s.cognome)} ${esc(s.nome)}</option>`).join("");
 
   const rec = editingBollinoRecord;
@@ -1629,7 +1629,7 @@ function renderBollinoAmici() {
   for (let y = 2020; y <= 2030; y++) anni.push(y);
   const anniOpts = anni.map(y => `<option value="${y}" ${y===bollinoAmiciAnno?"selected":""}>${y}</option>`).join("");
 
-  const sociosSorted = state.socios.filter(s => s.carica === "Simpatizzante").slice().sort((a,b) => (a.cognome+a.nome).localeCompare(b.cognome+b.nome));
+  const sociosSorted = state.socios.filter(s => s.carica === "Simpatizzante" && !s.andatoAvanti).slice().sort((a,b) => (a.cognome+a.nome).localeCompare(b.cognome+b.nome));
   const socioOpts = sociosSorted.map(s => `<option value="${s.id}" ${editingBollinoAmiciRecord && editingBollinoAmiciRecord.socioId===s.id?"selected":""}>${esc(s.cognome)} ${esc(s.nome)}</option>`).join("");
 
   const rec = editingBollinoAmiciRecord;
