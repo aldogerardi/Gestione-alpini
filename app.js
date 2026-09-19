@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "4.58";
+const APP_VERSION = "4.59";
 const APP_BUILD_DATE = "19/09/2026";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -2358,15 +2358,6 @@ async function apriReportCena(cenaId) {
 }
 
 // ---------- Pagina pubblica di conferma Cena (nome + numero persone, senza login) ----------
-function getRespIdDispositivo() {
-  let id = localStorage.getItem("gestione_gruppo_resp_id");
-  if (!id) {
-    id = uid();
-    localStorage.setItem("gestione_gruppo_resp_id", id);
-  }
-  return id;
-}
-
 async function renderCenaRisposta(cenaId) {
   document.body.innerHTML = `<div id="cena-risposta-root" style="max-width:420px; margin:0 auto; padding:24px 16px; font-family:inherit; text-align:center;"></div>`;
   const root = document.getElementById("cena-risposta-root");
@@ -2395,45 +2386,48 @@ async function renderCenaRisposta(cenaId) {
       ${c.testo ? `<div style="color:#333; margin-top:10px; white-space:pre-wrap; text-align:left; background:#f5f5f0; border-radius:8px; padding:10px;">${esc(c.testo)}</div>` : ""}
     </div>`;
 
-  const respId = getRespIdDispositivo();
-  const precedente = (c.risposte || {})[respId];
-
-  const disegnaForm = (nomeIniziale, valoreIniziale) => {
+  // Ogni conferma è una voce a sé (id nuovo ogni volta): così, se dallo stesso
+  // telefono si conferma per più persone (es. un familiare aiuta un anziano
+  // del gruppo), la seconda risposta si aggiunge senza cancellare la prima.
+  const disegnaForm = () => {
     root.innerHTML = `
       ${intestazione}
-      ${precedente ? `<div style="color:#1a6b3c; font-weight:700; margin-bottom:14px;">Avevi confermato: ${esc(precedente.nome)}, in totale ${precedente.persone}. Puoi correggere qui sotto.</div>` : ""}
-      <div class="form-group" style="text-align:left;"><label>Il tuo nome</label><input type="text" id="cr-nome" placeholder="Nome e cognome" value="${esc(nomeIniziale)}" style="width:100%; padding:10px; font-size:1rem;"></div>
-      <div style="margin:14px 0 2px; color:#555;">In quanti sarete in totale (te compreso)?</div>
-      <div style="font-size:0.75rem; color:#888; margin-bottom:8px;">Es. tu + 3 familiari = imposta 4</div>
+      <div class="form-group" style="text-align:left;"><label>Nome della persona</label><input type="text" id="cr-nome" placeholder="Nome e cognome" style="width:100%; padding:10px; font-size:1rem;"></div>
+      <div style="margin:14px 0 2px; color:#555;">In quanti sarete in totale (questa persona compresa)?</div>
+      <div style="font-size:0.75rem; color:#888; margin-bottom:8px;">Es. lei/lui + 3 familiari = imposta 4</div>
       <div style="display:flex; align-items:center; justify-content:center; gap:16px;">
         <button type="button" id="cr-meno" style="width:52px; height:52px; font-size:1.6rem; font-weight:800; border-radius:50%; border:none; background:#eee;">−</button>
-        <div id="cr-numero" style="font-size:2.2rem; font-weight:900; min-width:50px;">${valoreIniziale}</div>
+        <div id="cr-numero" style="font-size:2.2rem; font-weight:900; min-width:50px;">1</div>
         <button type="button" id="cr-piu" style="width:52px; height:52px; font-size:1.6rem; font-weight:800; border-radius:50%; border:none; background:#eee;">+</button>
       </div>
       <button type="button" id="cr-conferma" style="width:100%; margin-top:22px; padding:16px; font-size:1.1rem; font-weight:800; background:#1a6b3c; color:#fff; border:none; border-radius:12px;">✅ Conferma presenza</button>
       <div id="cr-msg" style="margin-top:14px; font-weight:700;"></div>
     `;
-    let n = valoreIniziale;
+    let n = 1;
     const num = document.getElementById("cr-numero");
     document.getElementById("cr-meno").addEventListener("click", () => { if (n > 1) { n--; num.textContent = n; } });
     document.getElementById("cr-piu").addEventListener("click", () => { if (n < 20) { n++; num.textContent = n; } });
     document.getElementById("cr-conferma").addEventListener("click", async () => {
       const nome = document.getElementById("cr-nome").value.trim();
-      if (!nome) { document.getElementById("cr-msg").textContent = "Inserisci il tuo nome."; return; }
+      if (!nome) { document.getElementById("cr-msg").textContent = "Inserisci il nome."; return; }
+      const btn = document.getElementById("cr-conferma");
+      btn.disabled = true;
       document.getElementById("cr-msg").textContent = "Invio in corso...";
       try {
+        const entryId = uid();
         await db.collection(FIRESTORE_COLLECTION).doc(`cena_${cenaId}`).update({
-          [`risposte.${respId}`]: { nome, persone: n, ts: new Date().toISOString() }
+          [`risposte.${entryId}`]: { nome, persone: n, ts: new Date().toISOString() }
         });
-        root.innerHTML = `${intestazione}<div style="font-size:1.1rem; font-weight:700; color:#1a6b3c; padding-top:10px;">✅ Grazie ${esc(nome)}! Confermate ${n} ${n === 1 ? "persona" : "persone"}.</div><button type="button" id="cr-modifica" style="margin-top:16px; background:none; border:none; text-decoration:underline; color:#555;">Modifica</button>`;
-        document.getElementById("cr-modifica").addEventListener("click", () => disegnaForm(nome, n));
+        root.innerHTML = `${intestazione}<div style="font-size:1.1rem; font-weight:700; color:#1a6b3c; padding-top:10px;">✅ Grazie! Confermate ${n} ${n === 1 ? "persona" : "persone"} per ${esc(nome)}.</div><button type="button" id="cr-altra" style="width:100%; margin-top:18px; padding:14px; font-size:1rem; font-weight:700; background:#eee; border:none; border-radius:12px;">➕ Conferma un'altra persona</button>`;
+        document.getElementById("cr-altra").addEventListener("click", disegnaForm);
       } catch (err) {
         console.error(err);
+        btn.disabled = false;
         document.getElementById("cr-msg").textContent = "Errore nell'invio, riprova.";
       }
     });
   };
-  disegnaForm(precedente ? precedente.nome : "", precedente ? precedente.persone : 1);
+  disegnaForm();
 }
 
 
