@@ -1,6 +1,6 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "4.57";
-const APP_BUILD_DATE = "18/09/2026";
+const APP_VERSION = "4.58";
+const APP_BUILD_DATE = "19/09/2026";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
 const FIRESTORE_COLLECTION = "gestioneGruppo";
@@ -501,11 +501,11 @@ function openSocioForm(id) {
       <div class="form-group"><label>Incarico feste</label>
         <select id="f-incarico">${incarichi_opts}</select>
       </div>
-      <div class="form-group">
-        <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" id="f-andato-avanti" ${s.andatoAvanti ? "checked" : ""}> 💔 Andato avanti</label>
-      </div>
-      <div class="form-group" id="f-andato-avanti-data-wrap" style="${s.andatoAvanti ? "" : "display:none;"}">
-        <label>Data</label><input type="text" id="f-andato-avanti-data" placeholder="gg-mm-aaaa" value="${esc(s.andatoAvantiData)}">
+      <div class="form-group" style="display:flex; align-items:center; gap:14px;">
+        <label style="display:flex; align-items:center; gap:6px; white-space:nowrap;"><input type="checkbox" id="f-andato-avanti" ${s.andatoAvanti ? "checked" : ""}> 💔 Andato avanti</label>
+        <div id="f-andato-avanti-data-wrap" style="flex:1; ${s.andatoAvanti ? "" : "display:none;"}">
+          <input type="text" id="f-andato-avanti-data" placeholder="Data gg-mm-aaaa" value="${esc(s.andatoAvantiData)}" style="width:100%;">
+        </div>
       </div>
       <div class="form-group"><label>Note</label><textarea id="f-note">${esc(s.note)}</textarea></div>
       ${id ? `
