@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "4.59";
+const APP_VERSION = "4.60";
 const APP_BUILD_DATE = "19/09/2026";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -2384,7 +2384,27 @@ async function renderCenaRisposta(cenaId) {
       <div style="font-weight:900; font-size:1.3rem; color:#1a6b3c;">🍽️ ${esc(c.titolo || "Cena")}</div>
       ${(c.data || c.ora || c.luogo) ? `<div style="color:#555; margin-top:4px;">${c.data ? fmtDate(c.data) : ""}${c.ora ? " ore " + esc(c.ora) : ""}${c.luogo ? " - " + esc(c.luogo) : ""}</div>` : ""}
       ${c.testo ? `<div style="color:#333; margin-top:10px; white-space:pre-wrap; text-align:left; background:#f5f5f0; border-radius:8px; padding:10px;">${esc(c.testo)}</div>` : ""}
-    </div>`;
+    </div>
+    <div id="cr-elenco" style="text-align:left; background:#fff; border:1px solid #ddd; border-radius:10px; padding:10px; margin-bottom:18px;"></div>`;
+
+  function renderElenco(risposte) {
+    const elenco = Object.values(risposte || {}).sort((a, b) => (a.nome || "").localeCompare(b.nome || ""));
+    const totale = elenco.reduce((sum, r) => sum + (r.persone || 1), 0);
+    const el = document.getElementById("cr-elenco");
+    if (!el) return;
+    if (elenco.length === 0) {
+      el.innerHTML = `<div class="card-sub">Nessuno si è ancora prenotato. Sii il primo! 🎉</div>`;
+      return;
+    }
+    el.innerHTML = `
+      <div style="font-weight:800; margin-bottom:6px;">✅ Già prenotati: ${totale} ${totale === 1 ? "persona" : "persone"}</div>
+      ${elenco.map(r => `<div style="display:flex; justify-content:space-between; padding:3px 0; font-size:0.9rem;"><span>${esc(r.nome || "Anonimo")}</span><span>${r.persone || 1}</span></div>`).join("")}
+    `;
+  }
+  renderElenco(c.risposte);
+  db.collection(FIRESTORE_COLLECTION).doc(`cena_${cenaId}`).onSnapshot(snap => {
+    if (snap.exists) renderElenco(snap.data().risposte);
+  }, err => console.error(err));
 
   // Ogni conferma è una voce a sé (id nuovo ogni volta): così, se dallo stesso
   // telefono si conferma per più persone (es. un familiare aiuta un anziano
