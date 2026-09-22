@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "4.60";
+const APP_VERSION = "4.64";
 const APP_BUILD_DATE = "19/09/2026";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -338,7 +338,13 @@ function renderAnagrafica() {
       if (s.sms) badges.push(`<span class="badge badge-icon" title="SMS">📩</span>`);
       if (s.whatsapp) badges.push(`<span class="badge whatsapp badge-icon" title="WhatsApp">${WA_ICON}</span>`);
       if (!s.privacy) badges.push(`<span class="badge badge-icon badge-warning" title="Privacy non firmata">🔒❗</span>`);
-      if (s.haccp) badges.push(`<span class="badge badge-icon" title="Certificazione HACCP">🍽️</span>`);
+      if (s.haccp) {
+        if (s.haccpFoto) {
+          badges.push(`<span class="badge badge-icon" data-view-haccp="${esc(s.haccpFoto)}" title="Certificazione HACCP - attestato caricato, tocca per vederlo" style="background:#d7f0dd; border-color:#7ec98f; cursor:pointer;">📎✅</span>`);
+        } else {
+          badges.push(`<span class="badge badge-icon badge-warning" title="Certificazione HACCP - attestato NON caricato">📎❗</span>`);
+        }
+      }
       if (s.alfiere) badges.push(`<span class="badge badge-icon" title="Alfiere">🏅</span>`);
       if (s.email && s.email.trim()) badges.push(`<span class="badge badge-icon" title="Email presente">@</span>`);
       const annoCorrente = new Date().getFullYear();
@@ -387,6 +393,10 @@ function attachAnagraficaEvents() {
   document.getElementById("add-socio-btn").addEventListener("click", () => openSocioForm(null));
   document.querySelectorAll("[data-edit]").forEach(b => b.addEventListener("click", () => openSocioForm(b.dataset.edit)));
   document.querySelectorAll("[data-del]").forEach(b => b.addEventListener("click", () => deleteSocio(b.dataset.del)));
+  document.querySelectorAll("[data-view-haccp]").forEach(b => b.addEventListener("click", e => {
+    e.stopPropagation();
+    window.open(b.dataset.viewHaccp, "_blank");
+  }));
 }
 
 function deleteSocio(id) {
@@ -454,26 +464,20 @@ function openSocioForm(id) {
         <label><input type="checkbox" id="f-sms" ${s.sms?"checked":""}> SMS</label>
         <label><input type="checkbox" id="f-whatsapp" ${s.whatsapp?"checked":""}> WhatsApp</label>
       </div>
-      <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:12px;">
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px; flex-wrap:wrap;">
         <label style="display:flex; align-items:center; gap:6px; white-space:nowrap;"><input type="checkbox" id="f-privacy" ${s.privacy?"checked":""}> 🔒 Privacy</label>
-        <div style="text-align:right;">
-          <div id="privacy-doc-chip" style="margin-bottom:2px;">${renderPrivacyChip(s.privacyFoto, s.privacyFotoNome)}</div>
-          <div style="display:flex; align-items:center; gap:6px; justify-content:flex-end;">
-            <span style="font-size:0.78rem; color:#666;">Doc.</span>
-            <input type="file" id="f-privacy-foto" accept="image/*,application/pdf" style="display:none;">
-            <button type="button" class="btn secondary" id="privacy-doc-btn" style="padding:6px 14px; font-size:0.78rem;">📎 Allega</button>
-          </div>
+        <div id="privacy-doc-chip">${renderPrivacyChip(s.privacyFoto, s.privacyFotoNome)}</div>
+        <div style="margin-left:auto; display:flex; align-items:center; gap:6px;">
+          <input type="file" id="f-privacy-foto" accept="image/*,application/pdf" style="display:none;">
+          <button type="button" class="btn secondary" id="privacy-doc-btn" style="padding:6px 14px; font-size:0.78rem;">📎 Allega</button>
         </div>
       </div>
-      <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:14px;">
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px; flex-wrap:wrap;">
         <label style="display:flex; align-items:center; gap:6px; white-space:nowrap;"><input type="checkbox" id="f-haccp" ${s.haccp?"checked":""}> 🍽️ HACCP</label>
-        <div style="text-align:right;">
-          <div id="haccp-doc-chip" style="margin-bottom:2px;">${renderPrivacyChip(s.haccpFoto, s.haccpFotoNome)}</div>
-          <div style="display:flex; align-items:center; gap:6px; justify-content:flex-end;">
-            <span style="font-size:0.78rem; color:#666;">Doc.</span>
-            <input type="file" id="f-haccp-foto" accept="image/*,application/pdf" style="display:none;">
-            <button type="button" class="btn secondary" id="haccp-doc-btn" style="padding:6px 14px; font-size:0.78rem;">📎 Allega</button>
-          </div>
+        <div id="haccp-doc-chip">${renderPrivacyChip(s.haccpFoto, s.haccpFotoNome)}</div>
+        <div style="margin-left:auto; display:flex; align-items:center; gap:6px;">
+          <input type="file" id="f-haccp-foto" accept="image/*,application/pdf" style="display:none;">
+          <button type="button" class="btn secondary" id="haccp-doc-btn" style="padding:6px 14px; font-size:0.78rem;">📎 Allega</button>
         </div>
       </div>
       <div class="two-col" style="margin-bottom:24px;">
@@ -2008,6 +2012,12 @@ function openSettings() {
       <div style="font-size:0.78rem; color:#666; margin-top:6px;">Carica un unico PDF con tutti i certificati HACCP (una pagina per socio): l'app divide le pagine in immagini singole e per ognuna scegli a quale socio assegnarla.</div>
     </div>
 
+    <div class="settings-block">
+      <h3>Importazione nominativi "Andati avanti" da TXT</h3>
+      <button type="button" class="btn block" id="import-andati-avanti-txt-btn">📥 Importa elenco da file TXT</button>
+      <div style="font-size:0.78rem; color:#666; margin-top:6px;">Un nome per riga nel file (es. "Rossi Mario"). Vengono creati come nuovi soci con Privacy e Andato avanti già spuntati; gli altri campi restano vuoti e li completi tu dopo, se serve.</div>
+    </div>
+
 
     <div class="settings-block">
       <h3>Backup e ripristino</h3>
@@ -2040,6 +2050,7 @@ function openSettings() {
   document.getElementById("reset-bollino-btn").addEventListener("click", resetBollino);
   document.getElementById("import-excel").addEventListener("change", handleExcelImport);
   document.getElementById("import-haccp-pdf-btn").addEventListener("click", openImportHaccpPdf);
+  document.getElementById("import-andati-avanti-txt-btn").addEventListener("click", openImportAndatiAvantiTxt);
   document.getElementById("change-user-btn").addEventListener("click", () => {
     localStorage.removeItem("gestione_gruppo_user");
     currentUser = null;
@@ -2077,6 +2088,94 @@ function sociosOrdinatiPerSelect() {
   });
 }
 
+function separaNomeCognome(riga) {
+  const parti = riga.trim().replace(/\s+/g, " ").split(" ");
+  if (parti.length === 1) return { cognome: parti[0], nome: "" };
+  const nome = parti[parti.length - 1];
+  const cognome = parti.slice(0, -1).join(" ");
+  return { cognome, nome };
+}
+
+function openImportAndatiAvantiTxt() {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = ".txt,text/plain";
+  input.addEventListener("change", () => {
+    const file = input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      const righe = e.target.result.split(/\r?\n/).map(r => r.trim()).filter(Boolean);
+      if (righe.length === 0) { alert("Il file è vuoto."); return; }
+      const persone = righe.map(separaNomeCognome);
+      renderImportAndatiAvantiPreview(persone);
+    };
+    reader.readAsText(file, "UTF-8");
+  });
+  input.click();
+}
+
+function renderImportAndatiAvantiPreview(persone) {
+  const html = `
+    <div style="font-weight:800; margin-bottom:4px;">Importa nominativi "Andati avanti"</div>
+    <div class="card-sub" style="margin-bottom:12px;">${persone.length} nominativi trovati. Verranno creati come nuovi soci con Privacy e Andato avanti già spuntati.</div>
+    <div style="max-height:50vh; overflow-y:auto; border:1px solid #ddd; border-radius:10px; padding:8px;">
+      ${persone.map(p => `<div style="padding:4px 0; border-bottom:1px solid #eee;">${esc(p.cognome)} ${esc(p.nome)}</div>`).join("")}
+    </div>
+    <div class="modal-actions" style="margin-top:14px;">
+      <button type="button" class="btn secondary" id="import-aa-annulla">Annulla</button>
+      <button type="button" class="btn" id="import-aa-conferma">Importa tutti</button>
+    </div>
+  `;
+  showModal(html);
+  document.getElementById("import-aa-annulla").addEventListener("click", () => { closeModal(); openSettings(); });
+  document.getElementById("import-aa-conferma").addEventListener("click", () => {
+    persone.forEach(p => {
+      state.socios.push({
+        id: uid(), cognome: p.cognome, nome: p.nome, dataNascita:"", luogoNascita:"", provinciaNascita:"", codiceFiscale:"", matricola:"",
+        indirizzo:"", paese:"", provincia:"", cap:"", telefono:"", cellulare:"", sms:false, whatsapp:false,
+        privacy: true, haccp:false, haccpDataCorso:"", haccpDataScadenza:"", email:"", dataIscrizione:"", carica:"", grado:"", reparto:"",
+        anniNaja:"", alfiere:false, incaricoFeste:"", note:"", andatoAvanti: true, andatoAvantiData:""
+      });
+    });
+    saveState();
+    closeModal();
+    renderSection();
+    toast(`Importati ${persone.length} nominativi`);
+  });
+}
+
+function normalizzaNome(s) {
+  return (s || "")
+    .toUpperCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Z\s]/g, " ")
+    .split(/\s+/).filter(Boolean).sort().join(" ");
+}
+
+function ricostruisciTestoImpaginato(contenuto) {
+  const righe = {};
+  contenuto.items.forEach(it => {
+    if (!it.str || !it.str.trim()) return;
+    const y = Math.round(it.transform[5] / 3) * 3; // tolleranza per piccoli scostamenti verticali
+    if (!righe[y]) righe[y] = [];
+    righe[y].push({ x: it.transform[4], str: it.str });
+  });
+  const ys = Object.keys(righe).map(Number).sort((a, b) => b - a);
+  return ys.map(y => righe[y].sort((a, b) => a.x - b.x).map(o => o.str).join(" ")).join("\n");
+}
+
+function estraiNomeDaTesto(testoImpaginato) {
+  for (const riga of testoImpaginato.split("\n")) {
+    const m = riga.match(/Si attesta che il Sig\.?\s*(.+)/i);
+    if (m) {
+      // Se sulla stessa riga c'è anche "Codice Fiscale" o "Nato a" (es. sono affiancati), tagliamo lì.
+      return m[1].split(/\s*(?:Codice Fiscale|Nato a)\b.*/i)[0].replace(/\s+/g, " ").trim();
+    }
+  }
+  return null;
+}
+
 async function openImportHaccpPdf() {
   if (typeof pdfjsLib === "undefined") {
     alert("Libreria PDF non disponibile. Controlla la connessione e riprova.");
@@ -2095,15 +2194,27 @@ async function openImportHaccpPdf() {
     try {
       const buf = await file.arrayBuffer();
       const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+      const soci = sociosOrdinatiPerSelect();
       const pagine = [];
       for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
+        const contenuto = await page.getTextContent();
+        const testoImpaginato = ricostruisciTestoImpaginato(contenuto);
+        const nomeEstratto = estraiNomeDaTesto(testoImpaginato);
+
         const viewport = page.getViewport({ scale: 1.3 });
         const canvas = document.createElement("canvas");
         canvas.width = viewport.width;
         canvas.height = viewport.height;
         await page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
-        pagine.push({ numero: i, dataUrl: canvas.toDataURL("image/jpeg", 0.85) });
+
+        let socioSuggeritoId = null;
+        if (nomeEstratto) {
+          const sigCercata = normalizzaNome(nomeEstratto);
+          const corrispondenze = soci.filter(s => normalizzaNome(`${s.cognome} ${s.nome}`) === sigCercata);
+          if (corrispondenze.length === 1) socioSuggeritoId = corrispondenze[0].id;
+        }
+        pagine.push({ numero: i, dataUrl: canvas.toDataURL("image/jpeg", 0.85), nomeEstratto, socioSuggeritoId });
       }
       renderImportHaccpAssegnazione(pagine);
     } catch (err) {
@@ -2116,17 +2227,19 @@ async function openImportHaccpPdf() {
 
 function renderImportHaccpAssegnazione(pagine) {
   const soci = sociosOrdinatiPerSelect();
-  const optionsHtml = `<option value="">-- salta pagina --</option>` + soci.map(s => `<option value="${s.id}">${esc(s.cognome)} ${esc(s.nome)}</option>`).join("");
+  const optionsHtml = (selezionatoId) => `<option value="">-- salta --</option>` + soci.map(s => `<option value="${s.id}" ${s.id === selezionatoId ? "selected" : ""}>${esc(s.cognome)} ${esc(s.nome)}</option>`).join("");
+  const nSuggeriti = pagine.filter(p => p.socioSuggeritoId).length;
+  const nSenzaNome = pagine.filter(p => !p.nomeEstratto).length;
   const html = `
     <div style="font-weight:800; margin-bottom:4px;">Assegna certificati HACCP</div>
-    <div class="card-sub" style="margin-bottom:12px;">${pagine.length} pagine trovate nel PDF. Per ognuna scegli il socio corrispondente (lascia "salta pagina" per quelle da non importare).</div>
+    <div class="card-sub" style="margin-bottom:12px;">${pagine.length} pagine trovate. ${nSuggeriti} abbinate automaticamente per nome (controllale). ${nSenzaNome ? nSenzaNome + " pagine senza un nome riconoscibile (es. i retro): lasciale su \"salta\" o assegnale a mano." : ""}</div>
     <div id="haccp-import-list" style="display:flex; flex-direction:column; gap:14px; max-height:55vh; overflow-y:auto;">
       ${pagine.map(p => `
-        <div style="display:flex; gap:10px; align-items:center; border:1px solid #ddd; border-radius:10px; padding:8px;">
+        <div style="display:flex; gap:10px; align-items:center; border:1px solid ${p.socioSuggeritoId ? "#ddd" : (p.nomeEstratto ? "#e8c34a" : "#ddd")}; background:${p.socioSuggeritoId ? "transparent" : (p.nomeEstratto ? "#fff8e1" : "#f5f5f0")}; border-radius:10px; padding:8px;">
           <img src="${p.dataUrl}" style="width:70px; height:auto; border-radius:6px; border:1px solid #ccc; flex-shrink:0;">
           <div style="flex:1;">
-            <div class="card-sub" style="margin-bottom:4px;">Pagina ${p.numero}</div>
-            <select class="haccp-import-select" data-pagina="${p.numero}" style="width:100%;">${optionsHtml}</select>
+            <div class="card-sub" style="margin-bottom:4px;">Pagina ${p.numero}${p.nomeEstratto ? ` · sul certificato: <strong>${esc(p.nomeEstratto)}</strong>` : " · nessun nome riconosciuto"}</div>
+            <select class="haccp-import-select" data-pagina="${p.numero}" style="width:100%;">${optionsHtml(p.socioSuggeritoId)}</select>
           </div>
         </div>
       `).join("")}
