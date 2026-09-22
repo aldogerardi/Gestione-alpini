@@ -1,6 +1,6 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "4.64";
-const APP_BUILD_DATE = "19/09/2026";
+const APP_VERSION = "5.04";
+const APP_BUILD_DATE = "22/09/2026";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
 const FIRESTORE_COLLECTION = "gestioneGruppo";
@@ -124,6 +124,8 @@ let state = {
     logo: "icon-192.png",
     quotaBollino: 15,
     quotaNazionale: 19,
+    testoPreghiera: "",
+    testoCanto: "",
   },
   consiglio: {
     membriIds: [],
@@ -252,6 +254,8 @@ function renderSection() {
   } else if (currentSection === "cena") {
     content.innerHTML = renderCena();
     attachCenaEvents();
+  } else if (currentSection === "libretto") {
+    content.innerHTML = renderLibretto();
   } else {
     const s = PLACEHOLDER_SECTIONS[currentSection];
     content.innerHTML = `
@@ -2018,6 +2022,12 @@ function openSettings() {
       <div style="font-size:0.78rem; color:#666; margin-top:6px;">Un nome per riga nel file (es. "Rossi Mario"). Vengono creati come nuovi soci con Privacy e Andato avanti già spuntati; gli altri campi restano vuoti e li completi tu dopo, se serve.</div>
     </div>
 
+    <div class="settings-block">
+      <h3>📖 Preghiera e Canto</h3>
+      <div class="form-group"><label>Testo Preghiera dell'Alpino</label><textarea id="set-testo-preghiera" rows="6" placeholder="Incolla qui il testo...">${esc(state.settings.testoPreghiera)}</textarea></div>
+      <div class="form-group"><label>Testo Signore delle Cime</label><textarea id="set-testo-canto" rows="6" placeholder="Incolla qui il testo...">${esc(state.settings.testoCanto)}</textarea></div>
+    </div>
+
 
     <div class="settings-block">
       <h3>Backup e ripristino</h3>
@@ -2564,10 +2574,32 @@ async function renderCenaRisposta(cenaId) {
 }
 
 
+function renderLibretto() {
+  const preghiera = (state.settings.testoPreghiera || "").trim();
+  const canto = (state.settings.testoCanto || "").trim();
+  return `
+    <div class="section-title">📖 Preghiera e Canto</div>
+    <div class="card">
+      <div style="font-weight:800; margin-bottom:8px;">🙏 Preghiera dell'Alpino</div>
+      ${preghiera
+        ? `<div style="white-space:pre-wrap; line-height:1.6;">${esc(preghiera)}</div>`
+        : `<div class="card-sub">Testo non ancora inserito. Vai in Impostazioni per aggiungerlo.</div>`}
+    </div>
+    <div class="card" style="margin-top:14px;">
+      <div style="font-weight:800; margin-bottom:8px;">🎵 Signore delle Cime</div>
+      ${canto
+        ? `<div style="white-space:pre-wrap; line-height:1.6;">${esc(canto)}</div>`
+        : `<div class="card-sub">Testo non ancora inserito. Vai in Impostazioni per aggiungerlo.</div>`}
+    </div>
+  `;
+}
+
 function saveSettings() {
   state.settings.appName = document.getElementById("set-appname").value.trim() || "Gestione Gruppo";
   state.settings.quotaBollino = parseFloat(document.getElementById("set-quota").value) || 0;
   state.settings.quotaNazionale = parseFloat(document.getElementById("set-quota-nazionale").value) || 0;
+  state.settings.testoPreghiera = document.getElementById("set-testo-preghiera").value.trim();
+  state.settings.testoCanto = document.getElementById("set-testo-canto").value.trim();
   saveState();
   updateTopbar();
   closeModal();
@@ -3282,7 +3314,7 @@ function setupScrollHide() {
 }
 
 // ---------- Init ----------
-const SECTION_ORDER = ["home","anagrafica","conv-consiglio","bollino","bollino-amici","ringraziamenti","sponsor","cena","iniziative","ore-alpine","report","report2","conv-casoncellata","presenza-adunata","cassa"];
+const SECTION_ORDER = ["home","anagrafica","conv-consiglio","bollino","bollino-amici","ringraziamenti","sponsor","cena","iniziative","ore-alpine","report","report2","conv-casoncellata","presenza-adunata","cassa","libretto"];
 
 function vaiASezione(section) {
   currentSection = section;
