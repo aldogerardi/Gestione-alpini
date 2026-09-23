@@ -1,6 +1,6 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "5.04";
-const APP_BUILD_DATE = "22/09/2026";
+const APP_VERSION = "5.09";
+const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
 const FIRESTORE_COLLECTION = "gestioneGruppo";
@@ -126,6 +126,7 @@ let state = {
     quotaNazionale: 19,
     testoPreghiera: "",
     testoCanto: "",
+    testoAuguriCompleanno: "Tanti auguri di buon compleanno da tutto il Gruppo Alpini! 🎂🥂",
   },
   consiglio: {
     membriIds: [],
@@ -204,7 +205,7 @@ function updateTopbar() {
   document.getElementById("app-title").textContent = state.settings.appName;
   document.getElementById("app-logo").src = state.settings.logo;
   document.getElementById("app-version").textContent = "v" + APP_VERSION;
-  document.getElementById("app-build-date").textContent = "Agg. " + APP_BUILD_DATE;
+  document.getElementById("app-build-date").textContent = APP_CREDIT;
 }
 
 function setActiveNav() {
@@ -270,6 +271,45 @@ function renderSection() {
 }
 
 // ---------- Anagrafica ----------
+function estraiGiornoMese(str) {
+  const m = (str || "").match(/(\d{1,2})[\/\-\.\s](\d{1,2})[\/\-\.\s](\d{2,4})/);
+  if (!m) return null;
+  return { giorno: parseInt(m[1], 10), mese: parseInt(m[2], 10) };
+}
+
+function renderNotizieDelGiorno() {
+  const oggi = new Date();
+  const g = oggi.getDate(), m = oggi.getMonth() + 1;
+
+  const compleanni = state.socios.filter(s => {
+    if (s.andatoAvanti) return false;
+    const d = estraiGiornoMese(s.dataNascita);
+    return d && d.giorno === g && d.mese === m;
+  });
+  const anniversari = state.socios.filter(s => {
+    if (!s.andatoAvanti) return false;
+    const d = estraiGiornoMese(s.andatoAvantiData);
+    return d && d.giorno === g && d.mese === m;
+  });
+
+  if (compleanni.length === 0 && anniversari.length === 0) return "";
+
+  const nomiCompleanni = compleanni.map(s => `
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; padding:3px 0;">
+      <span>${esc(s.cognome)} ${esc(s.nome)}</span>
+      <button type="button" class="btn" data-wa-auguri="${s.id}" style="background:#25D366; color:#fff; padding:4px 10px; font-size:0.78rem; flex-shrink:0;">${WA_ICON}</button>
+    </div>`).join("");
+  const nomiAnniversari = anniversari.map(s => `${esc(s.cognome)} ${esc(s.nome)}`).join(", ");
+
+  return `
+    <div class="card color-green" style="margin-bottom:14px;">
+      <div style="font-weight:800; margin-bottom:8px;">📅 Oggi</div>
+      ${compleanni.length ? `<div style="padding:2px 0;">🎂 <strong>Compleanno:</strong></div>${nomiCompleanni}` : ""}
+      ${anniversari.length ? `<div style="padding:4px 0;">💔 <strong>Anniversario:</strong> ${nomiAnniversari}</div>` : ""}
+    </div>
+  `;
+}
+
 function renderHome() {
   const g = state.gruppoInfo || {};
   const capogruppo = state.socios.find(s => s.carica === "Capogruppo");
@@ -277,6 +317,7 @@ function renderHome() {
 
   return `
     <div class="section-title">🏠 Home</div>
+    ${renderNotizieDelGiorno()}
     <div class="card color-green">
       <div style="font-weight:800; margin-bottom:10px;">Dati del Gruppo</div>
       <div class="form-group"><label>Denominazione</label><input type="text" id="home-denominazione" value="${esc(g.denominazione)}" placeholder="Es. Gruppo Alpini Bottonaga"></div>
@@ -317,6 +358,29 @@ function attachHomeEvents() {
     saveState();
     toast("Dati del gruppo salvati");
   });
+  document.querySelectorAll("[data-wa-auguri]").forEach(btn => {
+    btn.addEventListener("click", () => inviaAuguriWhatsapp(btn.dataset.waAuguri));
+  });
+}
+
+function pulisciNumeroWhatsapp(numero) {
+  let cifre = (numero || "").replace(/\D/g, "");
+  if (!cifre) return null;
+  if (cifre.startsWith("39")) return cifre;
+  if (cifre.startsWith("0039")) return cifre.slice(2);
+  return "39" + cifre;
+}
+
+function inviaAuguriWhatsapp(socioId) {
+  const s = state.socios.find(x => x.id === socioId);
+  if (!s) return;
+  const template = state.settings.testoAuguriCompleanno || "Tanti auguri di buon compleanno! 🎂";
+  const testo = template.replace(/\{nome\}/gi, `${s.cognome} ${s.nome}`.trim());
+  const numero = pulisciNumeroWhatsapp(s.cellulare);
+  const url = numero
+    ? `https://wa.me/${numero}?text=${encodeURIComponent(testo)}`
+    : `https://wa.me/?text=${encodeURIComponent(testo)}`;
+  window.open(url, "_blank");
 }
 
 function renderAnagrafica() {
@@ -366,7 +430,7 @@ function renderAnagrafica() {
               <button data-del="${s.id}">🗑️</button>
             </div>
           </div>
-          <div class="badge-row badge-row-nowrap">${badges.join("")}</div>
+          <div class="badge-row">${badges.join("")}</div>
         </div>`;
     }).join("");
   }
@@ -2028,6 +2092,12 @@ function openSettings() {
       <div class="form-group"><label>Testo Signore delle Cime</label><textarea id="set-testo-canto" rows="6" placeholder="Incolla qui il testo...">${esc(state.settings.testoCanto)}</textarea></div>
     </div>
 
+    <div class="settings-block">
+      <h3>🎂 Messaggio auguri compleanno</h3>
+      <div class="form-group"><textarea id="set-testo-auguri" rows="3">${esc(state.settings.testoAuguriCompleanno)}</textarea></div>
+      <div style="font-size:0.78rem; color:#666;">Puoi usare {nome} per inserire automaticamente il nome del socio. Il tasto WhatsApp nel riquadro "Oggi" apre la chat diretta col socio se ha un cellulare salvato in Anagrafica, altrimenti apre la scelta del destinatario.</div>
+    </div>
+
 
     <div class="settings-block">
       <h3>Backup e ripristino</h3>
@@ -2600,6 +2670,7 @@ function saveSettings() {
   state.settings.quotaNazionale = parseFloat(document.getElementById("set-quota-nazionale").value) || 0;
   state.settings.testoPreghiera = document.getElementById("set-testo-preghiera").value.trim();
   state.settings.testoCanto = document.getElementById("set-testo-canto").value.trim();
+  state.settings.testoAuguriCompleanno = document.getElementById("set-testo-auguri").value.trim();
   saveState();
   updateTopbar();
   closeModal();
@@ -3317,11 +3388,31 @@ function setupScrollHide() {
 const SECTION_ORDER = ["home","anagrafica","conv-consiglio","bollino","bollino-amici","ringraziamenti","sponsor","cena","iniziative","ore-alpine","report","report2","conv-casoncellata","presenza-adunata","cassa","libretto"];
 
 function vaiASezione(section) {
-  currentSection = section;
-  searchTerm = ""; filterCarica = "";
-  lastScroll = 0;
-  window.scrollTo(0, 0);
-  renderSection();
+  const content = document.getElementById("app-content");
+  const oldIdx = SECTION_ORDER.indexOf(currentSection);
+  const newIdx = SECTION_ORDER.indexOf(section);
+  const direzione = (oldIdx !== -1 && newIdx !== -1 && newIdx !== oldIdx) ? (newIdx > oldIdx ? "avanti" : "indietro") : null;
+
+  const eseguiCambio = () => {
+    currentSection = section;
+    searchTerm = ""; filterCarica = "";
+    lastScroll = 0;
+    window.scrollTo(0, 0);
+    renderSection();
+    if (direzione) {
+      content.classList.add(direzione === "avanti" ? "slide-in-right" : "slide-in-left");
+      content.addEventListener("animationend", () => {
+        content.classList.remove("slide-in-right", "slide-in-left");
+      }, { once: true });
+    }
+  };
+
+  if (!direzione) { eseguiCambio(); return; }
+  content.classList.add(direzione === "avanti" ? "slide-out-left" : "slide-out-right");
+  content.addEventListener("animationend", () => {
+    content.classList.remove("slide-out-left", "slide-out-right");
+    eseguiCambio();
+  }, { once: true });
 }
 
 let touchStartX = 0, touchStartY = 0;

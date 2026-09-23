@@ -93,6 +93,7 @@ body {
   box-shadow: var(--shadow-off);
   padding: 12px 14px;
   margin-bottom: 12px;
+  overflow: hidden;
 }
 .card.color-green { border-left: 8px solid var(--green); }
 .card.color-gold { border-left: 8px solid var(--gold); }
@@ -104,19 +105,19 @@ body {
 .card-info-col { flex: 1; min-width: 0; }
 .card-name { font-weight: 800; font-size: 1.02rem; }
 .card-sub { font-size: 0.82rem; color: #555; margin-top: 2px; }
-.badge-row { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+.badge-row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
 .badge-row-nowrap { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; padding-bottom: 2px; }
 .badge-row-nowrap::-webkit-scrollbar { display: none; }
 .badge-row-nowrap .badge { flex-shrink: 0; }
 .badge {
-  font-size: 0.68rem; font-weight: 700; padding: 2px 8px;
+  font-size: 0.62rem; font-weight: 700; padding: 2px 6px;
   border-radius: 20px; border: 1.5px solid var(--ink); background: var(--cream);
-  display: inline-flex; align-items: center; gap: 4px;
+  display: inline-flex; align-items: center; gap: 3px;
 }
 .badge.whatsapp { background: #dcf8c6; color: #075e34; }
-.badge.whatsapp svg { width: 12px; height: 12px; fill: #25D366; flex-shrink: 0; }
+.badge.whatsapp svg { width: 11px; height: 11px; fill: #25D366; flex-shrink: 0; }
 .btn svg { width: 15px; height: 15px; fill: #fff; vertical-align: -3px; flex-shrink: 0; }
-.badge-icon { padding: 3px 8px; font-size: 0.82rem; }
+.badge-icon { padding: 3px 7px; font-size: 0.76rem; }
 .badge-warning { background: #f8d7da; color: #842029; border-color: #b3261e; }
 .card-actions { display: flex; gap: 8px; flex-shrink: 0; }
 .card-actions button {
@@ -241,3 +242,13 @@ body {
     color: #000; background: #fff; padding: 20px;
   }
 }
+
+/* Transizione a scorrimento tra sezioni */
+@keyframes slideOutLeft { from { transform: translateX(0); opacity: 1; } to { transform: translateX(-24px); opacity: 0; } }
+@keyframes slideOutRight { from { transform: translateX(0); opacity: 1; } to { transform: translateX(24px); opacity: 0; } }
+@keyframes slideInRight { from { transform: translateX(24px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+@keyframes slideInLeft { from { transform: translateX(-24px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+.slide-out-left { animation: slideOutLeft 0.15s ease forwards; }
+.slide-out-right { animation: slideOutRight 0.15s ease forwards; }
+.slide-in-right { animation: slideInRight 0.18s ease forwards; }
+.slide-in-left { animation: slideInLeft 0.18s ease forwards; }
