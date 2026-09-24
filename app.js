@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "5.34";
+const APP_VERSION = "5.35";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -3449,7 +3449,17 @@ function attachReport1Events() {
     if (haccpFiltro === "no") list = list.filter(s => !s.haccp);
     if (andatoAvantiFiltro === "si") list = list.filter(s => s.andatoAvanti);
     if (andatoAvantiFiltro === "no") list = list.filter(s => !s.andatoAvanti);
-    list.sort((a, b) => (a.cognome + a.nome).localeCompare(b.cognome + b.nome));
+    if (andatoAvantiFiltro === "si") {
+      list.sort((a, b) => {
+        const da = parseDataGGMMAAAA(a.andatoAvantiData), db = parseDataGGMMAAAA(b.andatoAvantiData);
+        if (!da && !db) return 0;
+        if (!da) return 1;
+        if (!db) return -1;
+        return da - db;
+      });
+    } else {
+      list.sort((a, b) => (a.cognome + a.nome).localeCompare(b.cognome + b.nome));
+    }
     const colonne = REPORT1_COLONNE.filter(c => colonneIds.includes(c.id));
     const headers = colonne.map(c => c.label);
     const rows = list.map(s => colonne.map(c => esc(c.get(s))));
@@ -3531,7 +3541,7 @@ function setupScrollHide() {
 }
 
 // ---------- Init ----------
-const SECTION_ORDER = ["home","anagrafica","conv-consiglio","bollino","bollino-amici","ringraziamenti","sponsor","cena","iniziative","ore-alpine","report","report2","conv-casoncellata","presenza-adunata","cassa","libretto","bacheca"];
+const SECTION_ORDER = ["home","anagrafica","conv-consiglio","bollino","bollino-amici","ringraziamenti","sponsor","cena","iniziative","ore-alpine","report","report2","conv-casoncellata","presenza-adunata","cassa","bacheca","libretto"];
 
 function vaiASezione(section) {
   const content = document.getElementById("app-content");
