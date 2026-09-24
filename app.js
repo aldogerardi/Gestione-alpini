@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "5.09";
+const APP_VERSION = "5.10";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -2538,12 +2538,38 @@ async function apriReportCena(cenaId) {
       <div class="card-sub" style="margin-bottom:14px;">${esc(c ? (c.titolo || "Cena") : "Cena")}</div>
       <div style="font-weight:800; font-size:1.3rem; color:#1a6b3c; margin-bottom:10px;">Totale: ${totale} persone</div>
       <div>${righeHtml}</div>
-      <div class="modal-actions" style="margin-top:16px;">
+      <button type="button" class="btn block" id="report-cena-stampa" style="margin-top:14px;">🖨️ Stampa elenco per la spunta</button>
+      <div class="modal-actions" style="margin-top:10px;">
         <button type="button" class="btn secondary block" id="report-cena-chiudi">Chiudi</button>
       </div>
     `;
     showModal(html);
     document.getElementById("report-cena-chiudi").addEventListener("click", closeModal);
+    document.getElementById("report-cena-stampa").addEventListener("click", () => {
+      const area = document.getElementById("print-area");
+      const righeStampa = elenco.length
+        ? elenco.map(r => `
+          <tr>
+            <td style="border:1px solid #000; padding:8px; width:36px; text-align:center;"><span style="display:inline-block; width:20px; height:20px; border:1.5px solid #000;"></span></td>
+            <td style="border:1px solid #000; padding:8px;">${esc(r.nome || "Anonimo")}</td>
+            <td style="border:1px solid #000; padding:8px; text-align:center; width:70px;">${r.persone || 1}</td>
+          </tr>`).join("")
+        : `<tr><td colspan="3" style="border:1px solid #000; padding:8px;">Nessuna conferma</td></tr>`;
+      area.innerHTML = `
+        <h2>${esc(c ? (c.titolo || "Cena") : "Cena")} — ${esc(state.settings.appName)}</h2>
+        <p>${c && c.data ? "Data: " + fmtDate(c.data) : ""}${c && c.ora ? " ore " + esc(c.ora) : ""}${c && c.luogo ? " - " + esc(c.luogo) : ""}</p>
+        <p>Totale confermato: ${totale} persone</p>
+        <table style="width:100%; border-collapse:collapse; margin-top:10px;">
+          <thead><tr>
+            <th style="border:1px solid #000; padding:8px;">Presente</th>
+            <th style="border:1px solid #000; padding:8px; text-align:left;">Nominativo</th>
+            <th style="border:1px solid #000; padding:8px;">N. persone</th>
+          </tr></thead>
+          <tbody>${righeStampa}</tbody>
+        </table>
+      `;
+      window.print();
+    });
   } catch (err) {
     console.error(err);
     showModal(`<div style="text-align:center; padding:20px 0;">Errore nel caricamento del report.</div><div class="modal-actions"><button type="button" class="btn secondary block" onclick="closeModal()">Chiudi</button></div>`);
