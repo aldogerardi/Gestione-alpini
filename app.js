@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "5.10";
+const APP_VERSION = "5.33";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -52,6 +52,7 @@ function applyStateFields(source) {
   state.ringraziamenti = source.ringraziamenti || [];
   state.oreAlpine = source.oreAlpine || {};
   state.cene = source.cene || [];
+  state.bacheca = source.bacheca || [];
 }
 
 function syncToFirebase() {
@@ -140,6 +141,7 @@ let state = {
   ringraziamenti: [],
   oreAlpine: {},
   cene: [],
+  bacheca: [],
   meta: { ultimaModifica: null, ultimoImport: null }
 };
 let bollinoAnno = new Date().getFullYear();
@@ -161,7 +163,7 @@ function renderPrivacyChip(dataUrl, nome) {
   if (!dataUrl) return `<span class="card-sub">Nessuno</span>`;
   const isPdf = (nome || "").toLowerCase().endsWith(".pdf") || dataUrl.startsWith("data:application/pdf");
   const icon = isPdf ? "📄" : "📷";
-  return `<span class="badge" data-view-privacy-doc style="padding:6px 10px; display:inline-flex; align-items:center; gap:6px; font-size:0.82rem; cursor:pointer;">${icon} ${esc(nome || "documento")} <span data-remove-privacy-doc style="cursor:pointer; font-weight:900; margin-left:2px;">✕</span></span>`;
+  return `<span class="badge" data-view-privacy-doc style="padding:6px 8px; display:inline-flex; align-items:center; gap:5px; font-size:0.82rem; cursor:pointer; max-width:110px;"><span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${icon} ${esc(nome || "documento")}</span><span data-remove-privacy-doc style="cursor:pointer; font-weight:900; flex-shrink:0;">✕</span></span>`;
 }
 let searchTerm = "";
 let filterCarica = "";
@@ -257,6 +259,9 @@ function renderSection() {
     attachCenaEvents();
   } else if (currentSection === "libretto") {
     content.innerHTML = renderLibretto();
+  } else if (currentSection === "bacheca") {
+    content.innerHTML = renderBacheca();
+    attachBachecaEvents();
   } else {
     const s = PLACEHOLDER_SECTIONS[currentSection];
     content.innerHTML = `
@@ -405,6 +410,7 @@ function renderAnagrafica() {
       if (s.incaricoFeste) badges.push(`<span class="badge">🎉 ${esc(s.incaricoFeste)}</span>`);
       if (s.sms) badges.push(`<span class="badge badge-icon" title="SMS">📩</span>`);
       if (s.whatsapp) badges.push(`<span class="badge whatsapp badge-icon" title="WhatsApp">${WA_ICON}</span>`);
+      if (s.chiaviSede) badges.push(`<span class="badge badge-icon" title="Ha le chiavi della sede">🔑</span>`);
       if (!s.privacy) badges.push(`<span class="badge badge-icon badge-warning" title="Privacy non firmata">🔒❗</span>`);
       if (s.haccp) {
         if (s.haccpFoto) {
@@ -489,7 +495,7 @@ function openSocioForm(id) {
   editingId = id;
   const s = id ? state.socios.find(x => x.id === id) : {
     cognome:"", nome:"", dataNascita:"", luogoNascita:"", provinciaNascita:"", codiceFiscale:"", matricola:"", indirizzo:"", paese:"", provincia:"", cap:"",
-    telefono:"", cellulare:"", sms:false, whatsapp:false, privacy:false, haccp:false, haccpDataCorso:"", haccpDataScadenza:"", email:"",
+    telefono:"", cellulare:"", sms:false, whatsapp:false, chiaviSede:false, privacy:false, haccp:false, haccpDataCorso:"", haccpDataScadenza:"", email:"",
     dataIscrizione:"", carica:"", grado:"", reparto:"", anniNaja:"", alfiere:false,
     incaricoFeste:"", note:"", andatoAvanti:false, andatoAvantiData:""
   };
@@ -531,6 +537,7 @@ function openSocioForm(id) {
       <div class="checkbox-row" style="margin-bottom:14px;">
         <label><input type="checkbox" id="f-sms" ${s.sms?"checked":""}> SMS</label>
         <label><input type="checkbox" id="f-whatsapp" ${s.whatsapp?"checked":""}> WhatsApp</label>
+        <label><input type="checkbox" id="f-chiavi-sede" ${s.chiaviSede?"checked":""}> 🔑 Chiavi sede</label>
       </div>
       <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px; flex-wrap:wrap;">
         <label style="display:flex; align-items:center; gap:6px; white-space:nowrap;"><input type="checkbox" id="f-privacy" ${s.privacy?"checked":""}> 🔒 Privacy</label>
@@ -698,6 +705,7 @@ async function saveSocio() {
     cellulare: document.getElementById("f-cellulare").value.trim(),
     sms: document.getElementById("f-sms").checked,
     whatsapp: document.getElementById("f-whatsapp").checked,
+    chiaviSede: document.getElementById("f-chiavi-sede").checked,
     privacy: document.getElementById("f-privacy").checked,
     haccp: document.getElementById("f-haccp").checked,
     haccpDataCorso: document.getElementById("f-haccp-data-corso").value.trim(),
@@ -2690,6 +2698,93 @@ function renderLibretto() {
   `;
 }
 
+function renderBacheca() {
+  const avvisi = [...state.bacheca].sort((a, b) => (b.creato || "").localeCompare(a.creato || ""));
+  const listaHtml = avvisi.length ? avvisi.map(a => {
+    const isPdf = (a.allegatoNome || "").toLowerCase().endsWith(".pdf");
+    let allegatoHtml = "";
+    if (a.allegatoUrl) {
+      allegatoHtml = isPdf
+        ? `<a href="${esc(a.allegatoUrl)}" target="_blank" class="btn secondary" style="display:inline-block; margin-top:8px; font-size:0.82rem; padding:7px 12px;">📄 Apri ${esc(a.allegatoNome || "PDF")}</a>`
+        : `<img src="${esc(a.allegatoUrl)}" style="max-width:100%; border-radius:8px; margin-top:8px; border:1px solid #ccc; cursor:pointer;" data-view-img="${esc(a.allegatoUrl)}">`;
+    }
+    return `
+      <div class="card" data-avviso-id="${a.id}">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
+          <div>
+            <div style="font-weight:800;">${esc(a.titolo || "Avviso")}</div>
+            <div class="card-sub">${fmtDateTime(a.creato)}</div>
+          </div>
+          <button type="button" class="btn danger" data-elimina-avviso="${a.id}" style="padding:5px 10px; font-size:0.8rem;">🗑️</button>
+        </div>
+        ${a.testo ? `<div style="white-space:pre-wrap; margin-top:8px;">${esc(a.testo)}</div>` : ""}
+        ${allegatoHtml}
+      </div>`;
+  }).join("") : `<div class="card-sub">Nessun avviso in bacheca.</div>`;
+
+  return `
+    <div class="section-title">📌 Bacheca</div>
+    <div class="card-sub" style="margin-bottom:12px;">Avvisi semplici o con un allegato (PDF/foto di una locandina) per informare il gruppo.</div>
+
+    <div class="card">
+      <div style="font-weight:800; margin-bottom:10px;">Nuovo avviso</div>
+      <div class="form-group"><label>Titolo</label><input type="text" id="avviso-titolo" placeholder="Es. Raduno Adunata Nazionale"></div>
+      <div class="form-group"><label>Testo (opzionale)</label><textarea id="avviso-testo" rows="3" placeholder="Dettagli dell'avviso..."></textarea></div>
+      <div class="form-group"><label>Allegato PDF o foto (opzionale)</label><input type="file" id="avviso-file" accept=".pdf,image/*"></div>
+      <button type="button" class="btn block" id="crea-avviso-btn" style="margin-top:6px;">➕ Pubblica avviso</button>
+    </div>
+
+    <div class="section-title" style="font-size:1.05rem; margin-top:22px;">🗂️ Avvisi pubblicati</div>
+    <div id="bacheca-lista">${listaHtml}</div>
+  `;
+}
+
+function attachBachecaEvents() {
+  document.getElementById("crea-avviso-btn").addEventListener("click", creaAvviso);
+  document.querySelectorAll("[data-elimina-avviso]").forEach(btn => {
+    btn.addEventListener("click", () => eliminaAvviso(btn.dataset.eliminaAvviso));
+  });
+  document.querySelectorAll("[data-view-img]").forEach(img => {
+    img.addEventListener("click", () => window.open(img.dataset.viewImg, "_blank"));
+  });
+}
+
+async function creaAvviso() {
+  const titolo = document.getElementById("avviso-titolo").value.trim();
+  const testo = document.getElementById("avviso-testo").value.trim();
+  const file = document.getElementById("avviso-file").files[0];
+  if (!titolo) { alert("Inserisci un titolo per l'avviso"); return; }
+  const id = uid();
+  const nuovo = { id, titolo, testo, creato: new Date().toISOString(), allegatoUrl: "", allegatoNome: "" };
+
+  if (file) {
+    if (window.storage) {
+      try {
+        toast("Caricamento allegato...");
+        nuovo.allegatoUrl = await uploadDocumento(file, `bacheca/${id}`);
+        nuovo.allegatoNome = file.name;
+      } catch (err) {
+        console.error(err);
+        alert("Errore nel caricamento dell'allegato. L'avviso viene comunque pubblicato senza allegato.");
+      }
+    } else {
+      alert("Firebase non configurato: l'allegato non può essere caricato su questo dispositivo.");
+    }
+  }
+
+  state.bacheca.push(nuovo);
+  saveState();
+  renderSection();
+  toast("Avviso pubblicato");
+}
+
+function eliminaAvviso(avvisoId) {
+  if (!confirm("Eliminare questo avviso?")) return;
+  state.bacheca = state.bacheca.filter(a => a.id !== avvisoId);
+  saveState();
+  renderSection();
+}
+
 function saveSettings() {
   state.settings.appName = document.getElementById("set-appname").value.trim() || "Gestione Gruppo";
   state.settings.quotaBollino = parseFloat(document.getElementById("set-quota").value) || 0;
@@ -3237,11 +3332,35 @@ const REPORT1_COLONNE = [
   { id: "haccp", label: "HACCP", get: s => s.haccp ? "Sì" : "No" },
   { id: "sms", label: "SMS", get: s => s.sms ? "Sì" : "No" },
   { id: "whatsapp", label: "WhatsApp", get: s => s.whatsapp ? "Sì" : "No" },
+  { id: "chiaviSede", label: "Chiavi sede", get: s => s.chiaviSede ? "Sì" : "No" },
   { id: "note", label: "Note", get: s => s.note || "" },
   { id: "andatoAvanti", label: "Andato avanti", get: s => s.andatoAvanti ? "Sì" : "No" },
   { id: "andatoAvantiData", label: "Data (Andato avanti)", get: s => s.andatoAvantiData || "" },
 ];
 const REPORT1_DEFAULT = ["cognome", "nome", "matricola", "telefono", "cellulare"];
+
+function parseDataGGMMAAAA(str) {
+  const m = (str || "").match(/(\d{1,2})[\/\-\.\s](\d{1,2})[\/\-\.\s](\d{2,4})/);
+  if (!m) return null;
+  let anno = parseInt(m[3], 10);
+  if (anno < 100) anno += anno < 30 ? 2000 : 1900;
+  const d = new Date(anno, parseInt(m[2], 10) - 1, parseInt(m[1], 10));
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function apriReportAndatiAvanti() {
+  const elenco = state.socios
+    .filter(s => s.andatoAvanti)
+    .map(s => ({ s, data: parseDataGGMMAAAA(s.andatoAvantiData) }))
+    .sort((a, b) => {
+      if (!a.data && !b.data) return 0;
+      if (!a.data) return 1;
+      if (!b.data) return -1;
+      return a.data - b.data;
+    });
+  const rows = elenco.map(({ s }) => [esc(s.cognome), esc(s.nome), esc(s.andatoAvantiData || "-")]);
+  apriAnteprimaReportGenerico("Andati avanti", ["Cognome", "Nome", "Data"], rows);
+}
 
 function renderReport1() {
   const socios = state.socios.slice().sort((a, b) => (a.cognome + a.nome).localeCompare(b.cognome + b.nome));
@@ -3258,6 +3377,7 @@ function renderReport1() {
     </label>`).join("");
   return `
     <div class="section-title">📊 Report 1 – Soci</div>
+    <button type="button" class="btn block" id="rep1-andati-avanti-btn" style="margin-bottom:14px; background:#666; color:#fff;">💔 Report Andati avanti (stampa su carta intestata)</button>
     <div class="card" style="margin-bottom:16px;">
       <div class="form-group">
         <label>Socio</label>
@@ -3293,6 +3413,7 @@ function renderReport1() {
 }
 
 function attachReport1Events() {
+  document.getElementById("rep1-andati-avanti-btn").addEventListener("click", apriReportAndatiAvanti);
   document.getElementById("rep1-col-tutte").addEventListener("click", e => {
     e.preventDefault();
     document.querySelectorAll(".rep1-col").forEach(el => el.checked = true);
@@ -3411,7 +3532,7 @@ function setupScrollHide() {
 }
 
 // ---------- Init ----------
-const SECTION_ORDER = ["home","anagrafica","conv-consiglio","bollino","bollino-amici","ringraziamenti","sponsor","cena","iniziative","ore-alpine","report","report2","conv-casoncellata","presenza-adunata","cassa","libretto"];
+const SECTION_ORDER = ["home","anagrafica","conv-consiglio","bollino","bollino-amici","ringraziamenti","sponsor","cena","iniziative","ore-alpine","report","report2","conv-casoncellata","presenza-adunata","cassa","libretto","bacheca"];
 
 function vaiASezione(section) {
   const content = document.getElementById("app-content");
