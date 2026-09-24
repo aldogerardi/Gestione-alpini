@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "5.33";
+const APP_VERSION = "5.34";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -3334,7 +3334,6 @@ const REPORT1_COLONNE = [
   { id: "whatsapp", label: "WhatsApp", get: s => s.whatsapp ? "Sì" : "No" },
   { id: "chiaviSede", label: "Chiavi sede", get: s => s.chiaviSede ? "Sì" : "No" },
   { id: "note", label: "Note", get: s => s.note || "" },
-  { id: "andatoAvanti", label: "Andato avanti", get: s => s.andatoAvanti ? "Sì" : "No" },
   { id: "andatoAvantiData", label: "Data (Andato avanti)", get: s => s.andatoAvantiData || "" },
 ];
 const REPORT1_DEFAULT = ["cognome", "nome", "matricola", "telefono", "cellulare"];
@@ -3377,7 +3376,6 @@ function renderReport1() {
     </label>`).join("");
   return `
     <div class="section-title">📊 Report 1 – Soci</div>
-    <button type="button" class="btn block" id="rep1-andati-avanti-btn" style="margin-bottom:14px; background:#666; color:#fff;">💔 Report Andati avanti (stampa su carta intestata)</button>
     <div class="card" style="margin-bottom:16px;">
       <div class="form-group">
         <label>Socio</label>
@@ -3409,6 +3407,7 @@ function renderReport1() {
       </div>
       <button type="button" class="btn block" id="rep1-genera-btn" style="margin-top:10px;">🔎 Genera report</button>
     </div>
+    <button type="button" class="btn block" id="rep1-andati-avanti-btn" style="background:#666; color:#fff;">💔 Report Andati avanti (stampa su carta intestata)</button>
   `;
 }
 
