@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "5.37";
+const APP_VERSION = "5.38";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -2718,7 +2718,7 @@ function parseDataISO(str) {
 
 function cardAvviso(a) {
   const isPdf = (a.allegatoNome || "").toLowerCase().endsWith(".pdf");
-  const haImmagine = a.allegatoUrl && !isPdf;
+  const thumb = a.allegatoThumbUrl || (isPdf ? "" : a.allegatoUrl);
   return `
     <div class="card" data-avviso-id="${a.id}" data-dettaglio-avviso="${a.id}" style="cursor:pointer;">
       <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
@@ -2728,7 +2728,7 @@ function cardAvviso(a) {
         </div>
         <button type="button" class="btn danger" data-elimina-avviso="${a.id}" style="padding:5px 10px; font-size:0.8rem;">🗑️</button>
       </div>
-      ${haImmagine ? `<img src="${esc(a.allegatoUrl)}" style="max-width:100%; border-radius:8px; margin-top:8px; border:1px solid #ccc;">` : ""}
+      ${thumb ? `<img src="${esc(thumb)}" style="max-width:100%; border-radius:8px; margin-top:8px; border:1px solid #ccc;">` : ""}
     </div>`;
 }
 
@@ -2780,10 +2780,11 @@ function apriDettaglioAvviso(avvisoId) {
   if (!a) return;
   const isPdf = (a.allegatoNome || "").toLowerCase().endsWith(".pdf");
   let allegatoHtml = "";
-  if (a.allegatoUrl) {
-    allegatoHtml = isPdf
-      ? `<a href="${esc(a.allegatoUrl)}" target="_blank" class="btn block" style="margin-top:10px;">📄 Apri ${esc(a.allegatoNome || "PDF")}</a>`
-      : `<img src="${esc(a.allegatoUrl)}" style="max-width:100%; border-radius:8px; margin-top:10px; border:1px solid #ccc;">`;
+  if (a.allegatoThumbUrl) {
+    allegatoHtml += `<img src="${esc(a.allegatoThumbUrl)}" style="max-width:100%; border-radius:8px; margin-top:10px; border:1px solid #ccc;">`;
+  }
+  if (a.allegatoUrl && isPdf) {
+    allegatoHtml += `<a href="${esc(a.allegatoUrl)}" target="_blank" class="btn block" style="margin-top:10px;">📄 Apri ${esc(a.allegatoNome || "PDF")}</a>`;
   }
   const html = `
     <div style="font-weight:900; font-size:1.2rem; margin-bottom:2px;">${esc(a.titolo || "Avviso")}</div>
@@ -2798,6 +2799,20 @@ function apriDettaglioAvviso(avvisoId) {
   document.getElementById("dettaglio-avviso-chiudi").addEventListener("click", closeModal);
 }
 
+async function generaMiniaturaPdf(file) {
+  if (typeof pdfjsLib === "undefined") return null;
+  pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+  const page = await pdf.getPage(1);
+  const viewport = page.getViewport({ scale: 1.5 });
+  const canvas = document.createElement("canvas");
+  canvas.width = viewport.width;
+  canvas.height = viewport.height;
+  await page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
+  return await new Promise(resolve => canvas.toBlob(resolve, "image/jpeg", 0.85));
+}
+
 async function creaAvviso() {
   const titolo = document.getElementById("avviso-titolo").value.trim();
   const data = document.getElementById("avviso-data").value;
@@ -2805,7 +2820,7 @@ async function creaAvviso() {
   const file = document.getElementById("avviso-file").files[0];
   if (!titolo) { alert("Inserisci un titolo per l'avviso"); return; }
   const id = uid();
-  const nuovo = { id, titolo, data, testo, creato: new Date().toISOString(), allegatoUrl: "", allegatoNome: "" };
+  const nuovo = { id, titolo, data, testo, creato: new Date().toISOString(), allegatoUrl: "", allegatoNome: "", allegatoThumbUrl: "" };
 
   if (file) {
     if (window.storage) {
@@ -2813,6 +2828,13 @@ async function creaAvviso() {
         toast("Caricamento allegato...");
         nuovo.allegatoUrl = await uploadDocumento(file, `bacheca/${id}`);
         nuovo.allegatoNome = file.name;
+        if (file.name.toLowerCase().endsWith(".pdf") || file.type === "application/pdf") {
+          toast("Genero l'anteprima della locandina...");
+          const miniatura = await generaMiniaturaPdf(file);
+          if (miniatura) nuovo.allegatoThumbUrl = await uploadDocumento(miniatura, `bacheca/${id}_thumb`);
+        } else {
+          nuovo.allegatoThumbUrl = nuovo.allegatoUrl;
+        }
       } catch (err) {
         console.error(err);
         alert("Errore nel caricamento dell'allegato. L'avviso viene comunque pubblicato senza allegato.");
