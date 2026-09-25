@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "5.35";
+const APP_VERSION = "5.36";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -2698,64 +2698,120 @@ function renderLibretto() {
   `;
 }
 
-function renderBacheca() {
-  const avvisi = [...state.bacheca].sort((a, b) => (b.creato || "").localeCompare(a.creato || ""));
-  const listaHtml = avvisi.length ? avvisi.map(a => {
-    const isPdf = (a.allegatoNome || "").toLowerCase().endsWith(".pdf");
-    let allegatoHtml = "";
-    if (a.allegatoUrl) {
-      allegatoHtml = isPdf
-        ? `<a href="${esc(a.allegatoUrl)}" target="_blank" class="btn secondary" style="display:inline-block; margin-top:8px; font-size:0.82rem; padding:7px 12px;">📄 Apri ${esc(a.allegatoNome || "PDF")}</a>`
-        : `<img src="${esc(a.allegatoUrl)}" style="max-width:100%; border-radius:8px; margin-top:8px; border:1px solid #ccc; cursor:pointer;" data-view-img="${esc(a.allegatoUrl)}">`;
-    }
-    return `
-      <div class="card" data-avviso-id="${a.id}">
-        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
-          <div>
-            <div style="font-weight:800;">${esc(a.titolo || "Avviso")}</div>
-            <div class="card-sub">${fmtDateTime(a.creato)}</div>
-          </div>
-          <button type="button" class="btn danger" data-elimina-avviso="${a.id}" style="padding:5px 10px; font-size:0.8rem;">🗑️</button>
+function pulisciEventiScadutiBacheca() {
+  const oggi = new Date(); oggi.setHours(0, 0, 0, 0);
+  const primaLen = state.bacheca.length;
+  state.bacheca = state.bacheca.filter(a => {
+    if (!a.data) return true; // senza data, non scade da solo
+    const d = parseDataISO(a.data);
+    if (!d) return true;
+    const giorniPassati = Math.floor((oggi - d) / 86400000);
+    return giorniPassati < 2;
+  });
+  if (state.bacheca.length !== primaLen) saveState();
+}
+
+function parseDataISO(str) {
+  const d = new Date((str || "") + "T00:00:00");
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function cardAvviso(a) {
+  const isPdf = (a.allegatoNome || "").toLowerCase().endsWith(".pdf");
+  let anteprimaHtml = "";
+  if (a.allegatoUrl) {
+    anteprimaHtml = isPdf
+      ? `<div style="margin-top:8px; display:flex; align-items:center; gap:8px; background:#f5f5f0; border-radius:8px; padding:10px; cursor:pointer;" data-dettaglio-avviso="${a.id}"><span style="font-size:1.6rem;">📄</span><span style="font-size:0.85rem;">${esc(a.allegatoNome || "Documento PDF")}</span></div>`
+      : `<img src="${esc(a.allegatoUrl)}" style="max-width:100%; border-radius:8px; margin-top:8px; border:1px solid #ccc; cursor:pointer;" data-dettaglio-avviso="${a.id}">`;
+  }
+  return `
+    <div class="card" data-avviso-id="${a.id}">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px; cursor:pointer;" data-dettaglio-avviso="${a.id}">
+        <div>
+          <div style="font-weight:800;">${esc(a.titolo || "Avviso")}</div>
+          <div class="card-sub">${a.data ? "📅 " + fmtDate(a.data) : fmtDateTime(a.creato)}</div>
         </div>
-        ${a.testo ? `<div style="white-space:pre-wrap; margin-top:8px;">${esc(a.testo)}</div>` : ""}
-        ${allegatoHtml}
-      </div>`;
-  }).join("") : `<div class="card-sub">Nessun avviso in bacheca.</div>`;
+        <button type="button" class="btn danger" data-elimina-avviso="${a.id}" style="padding:5px 10px; font-size:0.8rem;">🗑️</button>
+      </div>
+      ${a.testo ? `<div style="white-space:pre-wrap; margin-top:8px; cursor:pointer;" data-dettaglio-avviso="${a.id}">${esc(a.testo)}</div>` : ""}
+      ${anteprimaHtml}
+    </div>`;
+}
+
+function renderBacheca() {
+  pulisciEventiScadutiBacheca();
+  const avvisi = [...state.bacheca].sort((a, b) => {
+    if (a.data && b.data) return a.data.localeCompare(b.data);
+    if (a.data) return -1;
+    if (b.data) return 1;
+    return (b.creato || "").localeCompare(a.creato || "");
+  });
+
+  const prossimo = avvisi.length ? avvisi[0] : null;
+  const altri = avvisi.slice(1);
+  const altriHtml = altri.length ? altri.map(cardAvviso).join("") : (prossimo ? "" : `<div class="card-sub">Nessun avviso in bacheca.</div>`);
 
   return `
     <div class="section-title">📌 Bacheca</div>
-    <div class="card-sub" style="margin-bottom:12px;">Avvisi semplici o con un allegato (PDF/foto di una locandina) per informare il gruppo.</div>
+    <div class="card-sub" style="margin-bottom:12px;">Avvisi semplici o con un allegato (PDF/foto di una locandina) per informare il gruppo. Gli eventi con data vengono rimossi da soli 2 giorni dopo.</div>
+
+    ${prossimo ? `<div class="section-title" style="font-size:1.05rem;">⏭️ Il prossimo</div>${cardAvviso(prossimo)}` : ""}
 
     <div class="card">
       <div style="font-weight:800; margin-bottom:10px;">Nuovo avviso</div>
       <div class="form-group"><label>Titolo</label><input type="text" id="avviso-titolo" placeholder="Es. Raduno Adunata Nazionale"></div>
+      <div class="form-group"><label>Data evento (opzionale)</label><input type="date" id="avviso-data"></div>
       <div class="form-group"><label>Testo (opzionale)</label><textarea id="avviso-testo" rows="3" placeholder="Dettagli dell'avviso..."></textarea></div>
       <div class="form-group"><label>Allegato PDF o foto (opzionale)</label><input type="file" id="avviso-file" accept=".pdf,image/*"></div>
       <button type="button" class="btn block" id="crea-avviso-btn" style="margin-top:6px;">➕ Pubblica avviso</button>
     </div>
 
-    <div class="section-title" style="font-size:1.05rem; margin-top:22px;">🗂️ Avvisi pubblicati</div>
-    <div id="bacheca-lista">${listaHtml}</div>
+    <div class="section-title" style="font-size:1.05rem; margin-top:22px;">🗂️ Altri avvisi</div>
+    <div id="bacheca-lista">${altriHtml}</div>
   `;
 }
 
 function attachBachecaEvents() {
   document.getElementById("crea-avviso-btn").addEventListener("click", creaAvviso);
   document.querySelectorAll("[data-elimina-avviso]").forEach(btn => {
-    btn.addEventListener("click", () => eliminaAvviso(btn.dataset.eliminaAvviso));
+    btn.addEventListener("click", e => { e.stopPropagation(); eliminaAvviso(btn.dataset.eliminaAvviso); });
   });
-  document.querySelectorAll("[data-view-img]").forEach(img => {
-    img.addEventListener("click", () => window.open(img.dataset.viewImg, "_blank"));
+  document.querySelectorAll("[data-dettaglio-avviso]").forEach(el => {
+    el.addEventListener("click", () => apriDettaglioAvviso(el.dataset.dettaglioAvviso));
   });
+}
+
+function apriDettaglioAvviso(avvisoId) {
+  const a = state.bacheca.find(x => x.id === avvisoId);
+  if (!a) return;
+  const isPdf = (a.allegatoNome || "").toLowerCase().endsWith(".pdf");
+  let allegatoHtml = "";
+  if (a.allegatoUrl) {
+    allegatoHtml = isPdf
+      ? `<a href="${esc(a.allegatoUrl)}" target="_blank" class="btn block" style="margin-top:10px;">📄 Apri ${esc(a.allegatoNome || "PDF")}</a>`
+      : `<img src="${esc(a.allegatoUrl)}" style="max-width:100%; border-radius:8px; margin-top:10px; border:1px solid #ccc;">`;
+  }
+  const html = `
+    <div style="font-weight:900; font-size:1.2rem; margin-bottom:2px;">${esc(a.titolo || "Avviso")}</div>
+    <div class="card-sub" style="margin-bottom:10px;">${a.data ? "📅 " + fmtDate(a.data) : fmtDateTime(a.creato)}</div>
+    ${a.testo ? `<div style="white-space:pre-wrap;">${esc(a.testo)}</div>` : ""}
+    ${allegatoHtml}
+    <div class="modal-actions" style="margin-top:16px;">
+      <button type="button" class="btn secondary block" id="dettaglio-avviso-chiudi">Chiudi</button>
+    </div>
+  `;
+  showModal(html);
+  document.getElementById("dettaglio-avviso-chiudi").addEventListener("click", closeModal);
 }
 
 async function creaAvviso() {
   const titolo = document.getElementById("avviso-titolo").value.trim();
+  const data = document.getElementById("avviso-data").value;
   const testo = document.getElementById("avviso-testo").value.trim();
   const file = document.getElementById("avviso-file").files[0];
   if (!titolo) { alert("Inserisci un titolo per l'avviso"); return; }
   const id = uid();
-  const nuovo = { id, titolo, testo, creato: new Date().toISOString(), allegatoUrl: "", allegatoNome: "" };
+  const nuovo = { id, titolo, data, testo, creato: new Date().toISOString(), allegatoUrl: "", allegatoNome: "" };
 
   if (file) {
     if (window.storage) {
