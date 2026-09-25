@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "5.36";
+const APP_VERSION = "5.37";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -2718,23 +2718,17 @@ function parseDataISO(str) {
 
 function cardAvviso(a) {
   const isPdf = (a.allegatoNome || "").toLowerCase().endsWith(".pdf");
-  let anteprimaHtml = "";
-  if (a.allegatoUrl) {
-    anteprimaHtml = isPdf
-      ? `<div style="margin-top:8px; display:flex; align-items:center; gap:8px; background:#f5f5f0; border-radius:8px; padding:10px; cursor:pointer;" data-dettaglio-avviso="${a.id}"><span style="font-size:1.6rem;">📄</span><span style="font-size:0.85rem;">${esc(a.allegatoNome || "Documento PDF")}</span></div>`
-      : `<img src="${esc(a.allegatoUrl)}" style="max-width:100%; border-radius:8px; margin-top:8px; border:1px solid #ccc; cursor:pointer;" data-dettaglio-avviso="${a.id}">`;
-  }
+  const haImmagine = a.allegatoUrl && !isPdf;
   return `
-    <div class="card" data-avviso-id="${a.id}">
-      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px; cursor:pointer;" data-dettaglio-avviso="${a.id}">
+    <div class="card" data-avviso-id="${a.id}" data-dettaglio-avviso="${a.id}" style="cursor:pointer;">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
         <div>
-          <div style="font-weight:800;">${esc(a.titolo || "Avviso")}</div>
+          <div style="font-weight:800;">${esc(a.titolo || "Avviso")}${isPdf ? " 📄" : ""}</div>
           <div class="card-sub">${a.data ? "📅 " + fmtDate(a.data) : fmtDateTime(a.creato)}</div>
         </div>
         <button type="button" class="btn danger" data-elimina-avviso="${a.id}" style="padding:5px 10px; font-size:0.8rem;">🗑️</button>
       </div>
-      ${a.testo ? `<div style="white-space:pre-wrap; margin-top:8px; cursor:pointer;" data-dettaglio-avviso="${a.id}">${esc(a.testo)}</div>` : ""}
-      ${anteprimaHtml}
+      ${haImmagine ? `<img src="${esc(a.allegatoUrl)}" style="max-width:100%; border-radius:8px; margin-top:8px; border:1px solid #ccc;">` : ""}
     </div>`;
 }
 
