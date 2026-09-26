@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "5.38";
+const APP_VERSION = "5.68";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -7,29 +7,83 @@ const FIRESTORE_COLLECTION = "gestioneGruppo";
 const FIRESTORE_DOC = "stato";
 const USERS = ["capogruppo", "pc_capogruppo", "segretario", "pc_segretario", "security", "pc_security"];
 let currentUser = localStorage.getItem("gestione_gruppo_user") || null;
+let currentRole = localStorage.getItem("gestione_gruppo_role") || null;
 let firestoreUnsubscribe = null;
+
+function defaultUtenti() {
+  return USERS.map(u => ({ id: u, label: u, password: "", ruolo: "admin" }))
+    .concat([{ id: "socio", label: "Soci", password: "alpino", ruolo: "socio" }]);
+}
 
 function userLabel(u) {
   if (!u) return "-";
-  return u.startsWith("pc_") ? "💻 " + u.slice(3) : "📱 " + u;
+  const utente = (state.settings.utenti || []).find(x => x.id === u);
+  const nomeVisibile = utente ? utente.label : u;
+  return u.startsWith("pc_") ? "💻 " + nomeVisibile.replace(/^pc_/, "") : "📱 " + nomeVisibile;
 }
 
 function showLoginScreen(onDone) {
+  const utenti = (state.settings.utenti && state.settings.utenti.length) ? state.settings.utenti : defaultUtenti();
   const html = `
     <div id="login-screen" style="position:fixed; inset:0; background:#1a6b3c; z-index:9999; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; padding:20px;">
-      <div style="color:#fff; font-size:1.3rem; font-weight:800; margin-bottom:8px;">Chi sei?</div>
-      <div style="display:flex; flex-direction:column; gap:10px; width:100%; max-width:320px;">
-        ${USERS.map(u => `<button type="button" class="btn block login-btn" data-user="${u}" style="background:#fff; color:#1a6b3c; font-weight:700;">${userLabel(u)}</button>`).join("")}
+      <div id="login-step-scelta">
+        <div style="color:#fff; font-size:1.3rem; font-weight:800; margin-bottom:8px; text-align:center;">Chi sei?</div>
+        <div style="display:flex; flex-direction:column; gap:10px; width:100%; max-width:320px;">
+          ${utenti.map(u => `<button type="button" class="btn block login-btn" data-user="${u.id}" style="background:#fff; color:#1a6b3c; font-weight:700;">${userLabel(u.id)}</button>`).join("")}
+        </div>
+      </div>
+      <div id="login-step-password" style="display:none; width:100%; max-width:320px;">
+        <div id="login-password-label" style="color:#fff; font-size:1.1rem; font-weight:800; margin-bottom:10px; text-align:center;"></div>
+        <input type="password" id="login-password-input" style="width:100%; padding:10px; border-radius:8px; border:none; margin-bottom:10px; box-sizing:border-box;" placeholder="Password">
+        <div id="login-password-error" style="color:#ffdddd; font-size:0.85rem; margin-bottom:8px; text-align:center; min-height:1.1em;"></div>
+        <button type="button" class="btn block" id="login-password-ok" style="background:#fff; color:#1a6b3c; font-weight:700; margin-bottom:8px;">Entra</button>
+        <button type="button" class="btn secondary block" id="login-password-back" style="background:transparent; border:1px solid #fff; color:#fff;">Indietro</button>
       </div>
     </div>`;
   document.body.insertAdjacentHTML("afterbegin", html);
+
+  let utenteScelto = null;
+
+  function entra(u) {
+    currentUser = u.id;
+    currentRole = u.ruolo || "admin";
+    localStorage.setItem("gestione_gruppo_user", currentUser);
+    localStorage.setItem("gestione_gruppo_role", currentRole);
+    document.getElementById("login-screen").remove();
+    onDone();
+  }
+
   document.querySelectorAll(".login-btn").forEach(b => {
     b.addEventListener("click", () => {
-      currentUser = b.dataset.user;
-      localStorage.setItem("gestione_gruppo_user", currentUser);
-      document.getElementById("login-screen").remove();
-      onDone();
+      const u = utenti.find(x => x.id === b.dataset.user);
+      if (!u) return;
+      if (!u.password) { entra(u); return; }
+      utenteScelto = u;
+      document.getElementById("login-step-scelta").style.display = "none";
+      document.getElementById("login-step-password").style.display = "block";
+      document.getElementById("login-password-label").textContent = userLabel(u.id);
+      document.getElementById("login-password-input").value = "";
+      document.getElementById("login-password-error").textContent = "";
+      document.getElementById("login-password-input").focus();
     });
+  });
+
+  document.getElementById("login-password-back").addEventListener("click", () => {
+    document.getElementById("login-step-password").style.display = "none";
+    document.getElementById("login-step-scelta").style.display = "block";
+  });
+
+  const provaPassword = () => {
+    const val = document.getElementById("login-password-input").value;
+    if (utenteScelto && val === utenteScelto.password) {
+      entra(utenteScelto);
+    } else {
+      document.getElementById("login-password-error").textContent = "Password errata";
+    }
+  };
+  document.getElementById("login-password-ok").addEventListener("click", provaPassword);
+  document.getElementById("login-password-input").addEventListener("keydown", e => {
+    if (e.key === "Enter") provaPassword();
   });
 }
 
@@ -128,6 +182,7 @@ let state = {
     testoPreghiera: "",
     testoCanto: "",
     testoAuguriCompleanno: "Tanti auguri di buon compleanno da tutto il Gruppo Alpini! 🎂🥂",
+    utenti: defaultUtenti()
   },
   consiglio: {
     membriIds: [],
@@ -319,6 +374,26 @@ function renderHome() {
   const g = state.gruppoInfo || {};
   const capogruppo = state.socios.find(s => s.carica === "Capogruppo");
   const nomeCapogruppo = capogruppo ? `${capogruppo.cognome} ${capogruppo.nome}` : "Nessun Capogruppo impostato in Anagrafica";
+  const soloLettura = currentRole === "socio";
+
+  if (soloLettura) {
+    return `
+      <div class="section-title">🏠 Home</div>
+      ${renderNotizieDelGiorno()}
+      <div class="card color-green">
+        <div style="font-weight:800; margin-bottom:10px;">Dati del Gruppo</div>
+        <div class="form-group"><label>Denominazione</label><div class="card-sub">${esc(g.denominazione) || "-"}</div></div>
+        <div class="form-group"><label>Via</label><div class="card-sub">${esc(g.via) || "-"}</div></div>
+        <div class="form-group"><label>Città</label><div class="card-sub">${esc(g.citta) || "-"}${g.prov ? " (" + esc(g.prov) + ")" : ""}</div></div>
+        <div class="form-group"><label>Capogruppo</label><div class="card-sub">${esc(nomeCapogruppo)}</div></div>
+        ${(g.instagram || g.facebook) ? `
+        <div style="font-weight:800; margin:16px 0 10px;">Social</div>
+        ${g.instagram ? `<div class="form-group"><label>📷 Instagram</label><div class="card-sub">${esc(g.instagram)}</div></div>` : ""}
+        ${g.facebook ? `<div class="form-group"><label>📘 Facebook</label><div class="card-sub">${esc(g.facebook)}</div></div>` : ""}
+        ` : ""}
+      </div>
+    `;
+  }
 
   return `
     <div class="section-title">🏠 Home</div>
@@ -348,7 +423,9 @@ function renderHome() {
 }
 
 function attachHomeEvents() {
-  document.getElementById("home-save-btn").addEventListener("click", () => {
+  const saveBtn = document.getElementById("home-save-btn");
+  if (!saveBtn) return; // vista sola lettura (socio): niente da agganciare
+  saveBtn.addEventListener("click", () => {
     state.gruppoInfo = {
       denominazione: document.getElementById("home-denominazione").value.trim(),
       matricola: document.getElementById("home-matricola").value.trim(),
@@ -2053,6 +2130,29 @@ function openSettings() {
     </div>
 
     <div class="settings-block">
+      <h3>🔑 Gestione utenti</h3>
+      <div style="font-size:0.78rem; color:#666; margin-bottom:10px;">Ogni utente può avere una password (lasciala vuota per entrare senza password, come oggi). Il ruolo "socio" vede solo Home, Bacheca, Preghiera e Canto, Cena (sola visualizzazione) — usalo per una password unica da dare a tutti i soci.</div>
+      <div id="utenti-lista">
+        ${(state.settings.utenti || []).map((u, idx) => `
+          <div class="card" data-utente-idx="${idx}" style="padding:10px; margin-bottom:8px;">
+            <div class="two-col">
+              <div class="form-group"><label>Nome</label><input type="text" class="ut-label" value="${esc(u.label)}"></div>
+              <div class="form-group"><label>Ruolo</label>
+                <select class="ut-ruolo">
+                  <option value="admin" ${u.ruolo === "admin" ? "selected" : ""}>Admin (accesso completo)</option>
+                  <option value="socio" ${u.ruolo === "socio" ? "selected" : ""}>Socio (accesso limitato)</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group"><label>Password</label><input type="text" class="ut-password" value="${esc(u.password)}" placeholder="vuota = nessuna password"></div>
+            <button type="button" class="btn danger" data-elimina-utente="${idx}" style="padding:4px 10px; font-size:0.78rem; margin-top:4px;">🗑️ Rimuovi utente</button>
+          </div>
+        `).join("")}
+      </div>
+      <button type="button" class="btn secondary block" id="aggiungi-utente-btn" style="margin-top:4px;">➕ Aggiungi utente</button>
+    </div>
+
+    <div class="settings-block">
       <h3>Nome app</h3>
       <div class="form-group"><input type="text" id="set-appname" value="${esc(state.settings.appName)}"></div>
     </div>
@@ -2141,9 +2241,26 @@ function openSettings() {
   document.getElementById("import-andati-avanti-txt-btn").addEventListener("click", openImportAndatiAvantiTxt);
   document.getElementById("change-user-btn").addEventListener("click", () => {
     localStorage.removeItem("gestione_gruppo_user");
+    localStorage.removeItem("gestione_gruppo_role");
     currentUser = null;
+    currentRole = null;
     closeModal();
-    showLoginScreen(() => { updateTopbar(); });
+    showLoginScreen(() => { location.reload(); });
+  });
+  document.getElementById("aggiungi-utente-btn").addEventListener("click", () => {
+    state.settings.utenti = leggiUtentiDalForm();
+    state.settings.utenti.push({ id: uid(), label: "Nuovo utente", ruolo: "socio", password: "" });
+    openSettings();
+  });
+  document.querySelectorAll("[data-elimina-utente]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const idx = parseInt(btn.dataset.eliminaUtente, 10);
+      const utenti = leggiUtentiDalForm();
+      if (utenti.length <= 1) { alert("Deve restare almeno un utente."); return; }
+      utenti.splice(idx, 1);
+      state.settings.utenti = utenti;
+      openSettings();
+    });
   });
 }
 
@@ -2383,6 +2500,7 @@ async function eseguiImportHaccp(pagine) {
 }
 
 function renderCena() {
+  const soloLettura = currentRole === "socio";
   const cene = [...state.cene].sort((a, b) => (b.data || "").localeCompare(a.data || ""));
   const listaHtml = cene.length ? cene.map(c => `
     <div class="card" data-cena-id="${c.id}">
@@ -2391,21 +2509,18 @@ function renderCena() {
           <div style="font-weight:800;">${esc(c.titolo || "Cena")}</div>
           <div class="card-sub">${fmtDate(c.data)}${c.ora ? " · " + esc(c.ora) : ""}${c.luogo ? " · " + esc(c.luogo) : ""}</div>
         </div>
-        <button type="button" class="btn danger" data-elimina-cena="${c.id}" style="padding:5px 10px; font-size:0.8rem;">🗑️</button>
+        ${soloLettura ? "" : `<button type="button" class="btn danger" data-elimina-cena="${c.id}" style="padding:5px 10px; font-size:0.8rem;">🗑️</button>`}
       </div>
       <div class="card-sub" data-tally="${c.id}" style="margin-top:8px;">Caricamento risposte...</div>
       <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
         <button type="button" class="btn secondary" data-copia-link="${c.id}" style="font-size:0.82rem; padding:7px 10px;">🔗 Copia link</button>
-        <button type="button" class="btn" data-wa-link="${c.id}" style="background:#25D366; color:#fff; font-size:0.82rem; padding:7px 10px;">${WA_ICON} Invia su WhatsApp</button>
+        ${soloLettura ? "" : `<button type="button" class="btn" data-wa-link="${c.id}" style="background:#25D366; color:#fff; font-size:0.82rem; padding:7px 10px;">${WA_ICON} Invia su WhatsApp</button>`}
         <button type="button" class="btn secondary" data-report-cena="${c.id}" style="font-size:0.82rem; padding:7px 10px;">📋 Report nomi</button>
       </div>
     </div>
   `).join("") : `<div class="card-sub">Nessuna cena creata finora.</div>`;
 
-  return `
-    <div class="section-title">🍽️ Cena mensile</div>
-    <div class="card-sub" style="margin-bottom:12px;">Crea l'evento, scrivi il tuo messaggio, poi apri WhatsApp: il link per confermare la presenza (nome + quante persone, tipo "presente +3") viene aggiunto in automatico in fondo al testo. Le risposte arrivano qui in tempo reale.</div>
-
+  const formNuovaCena = soloLettura ? "" : `
     <div class="card">
       <div style="font-weight:800; margin-bottom:10px;">Nuova cena</div>
       <div class="form-group"><label>Titolo</label><input type="text" id="cena-titolo" placeholder="Es. Cena fine mese Settembre"></div>
@@ -2427,7 +2542,13 @@ PRESENTE</textarea>
         <div style="font-size:0.75rem; color:#666; margin-top:4px;">Se l'ultima riga è la parola "PRESENTE", il link viene attaccato proprio lì (es. "PRESENTE 👉 link"). Altrimenti il link viene aggiunto su una riga nuova in fondo al messaggio.</div>
       </div>
       <button type="button" class="btn block" id="crea-cena-btn" style="margin-top:6px;">➕ Crea e genera link</button>
-    </div>
+    </div>`;
+
+  return `
+    <div class="section-title">🍽️ Cena mensile</div>
+    <div class="card-sub" style="margin-bottom:12px;">${soloLettura ? "Elenco delle cene in programma." : "Crea l'evento, scrivi il tuo messaggio, poi apri WhatsApp: il link per confermare la presenza (nome + quante persone, tipo \"presente +3\") viene aggiunto in automatico in fondo al testo. Le risposte arrivano qui in tempo reale."}</div>
+
+    ${formNuovaCena}
 
     <div class="section-title" style="font-size:1.05rem; margin-top:22px;">🗂️ Cene create</div>
     <div id="cena-lista">${listaHtml}</div>
@@ -2439,7 +2560,8 @@ function linkCena(cenaId) {
 }
 
 function attachCenaEvents() {
-  document.getElementById("crea-cena-btn").addEventListener("click", creaCena);
+  const creaBtn = document.getElementById("crea-cena-btn");
+  if (creaBtn) creaBtn.addEventListener("click", creaCena);
   document.querySelectorAll("[data-elimina-cena]").forEach(btn => {
     btn.addEventListener("click", () => eliminaCena(btn.dataset.eliminaCena));
   });
@@ -2716,7 +2838,7 @@ function parseDataISO(str) {
   return isNaN(d.getTime()) ? null : d;
 }
 
-function cardAvviso(a) {
+function cardAvviso(a, soloLettura) {
   const isPdf = (a.allegatoNome || "").toLowerCase().endsWith(".pdf");
   const thumb = a.allegatoThumbUrl || (isPdf ? "" : a.allegatoUrl);
   return `
@@ -2726,7 +2848,7 @@ function cardAvviso(a) {
           <div style="font-weight:800;">${esc(a.titolo || "Avviso")}${isPdf ? " 📄" : ""}</div>
           <div class="card-sub">${a.data ? "📅 " + fmtDate(a.data) : fmtDateTime(a.creato)}</div>
         </div>
-        <button type="button" class="btn danger" data-elimina-avviso="${a.id}" style="padding:5px 10px; font-size:0.8rem;">🗑️</button>
+        ${soloLettura ? "" : `<button type="button" class="btn danger" data-elimina-avviso="${a.id}" style="padding:5px 10px; font-size:0.8rem;">🗑️</button>`}
       </div>
       ${thumb ? `<img src="${esc(thumb)}" style="max-width:100%; border-radius:8px; margin-top:8px; border:1px solid #ccc;">` : ""}
     </div>`;
@@ -2734,6 +2856,7 @@ function cardAvviso(a) {
 
 function renderBacheca() {
   pulisciEventiScadutiBacheca();
+  const soloLettura = currentRole === "socio";
   const avvisi = [...state.bacheca].sort((a, b) => {
     if (a.data && b.data) return a.data.localeCompare(b.data);
     if (a.data) return -1;
@@ -2743,14 +2866,9 @@ function renderBacheca() {
 
   const prossimo = avvisi.length ? avvisi[0] : null;
   const altri = avvisi.slice(1);
-  const altriHtml = altri.length ? altri.map(cardAvviso).join("") : (prossimo ? "" : `<div class="card-sub">Nessun avviso in bacheca.</div>`);
+  const altriHtml = altri.length ? altri.map(a => cardAvviso(a, soloLettura)).join("") : (prossimo ? "" : `<div class="card-sub">Nessun avviso in bacheca.</div>`);
 
-  return `
-    <div class="section-title">📌 Bacheca</div>
-    <div class="card-sub" style="margin-bottom:12px;">Avvisi semplici o con un allegato (PDF/foto di una locandina) per informare il gruppo. Gli eventi con data vengono rimossi da soli 2 giorni dopo.</div>
-
-    ${prossimo ? `<div class="section-title" style="font-size:1.05rem;">⏭️ Il prossimo</div>${cardAvviso(prossimo)}` : ""}
-
+  const formNuovoAvviso = soloLettura ? "" : `
     <div class="card">
       <div style="font-weight:800; margin-bottom:10px;">Nuovo avviso</div>
       <div class="form-group"><label>Titolo</label><input type="text" id="avviso-titolo" placeholder="Es. Raduno Adunata Nazionale"></div>
@@ -2758,7 +2876,15 @@ function renderBacheca() {
       <div class="form-group"><label>Testo (opzionale)</label><textarea id="avviso-testo" rows="3" placeholder="Dettagli dell'avviso..."></textarea></div>
       <div class="form-group"><label>Allegato PDF o foto (opzionale)</label><input type="file" id="avviso-file" accept=".pdf,image/*"></div>
       <button type="button" class="btn block" id="crea-avviso-btn" style="margin-top:6px;">➕ Pubblica avviso</button>
-    </div>
+    </div>`;
+
+  return `
+    <div class="section-title">📌 Bacheca</div>
+    <div class="card-sub" style="margin-bottom:12px;">Avvisi semplici o con un allegato (PDF/foto di una locandina) per informare il gruppo. Gli eventi con data vengono rimossi da soli 2 giorni dopo.</div>
+
+    ${prossimo ? `<div class="section-title" style="font-size:1.05rem;">⏭️ Il prossimo</div>${cardAvviso(prossimo, soloLettura)}` : ""}
+
+    ${formNuovoAvviso}
 
     <div class="section-title" style="font-size:1.05rem; margin-top:22px;">🗂️ Altri avvisi</div>
     <div id="bacheca-lista">${altriHtml}</div>
@@ -2766,7 +2892,8 @@ function renderBacheca() {
 }
 
 function attachBachecaEvents() {
-  document.getElementById("crea-avviso-btn").addEventListener("click", creaAvviso);
+  const creaBtn = document.getElementById("crea-avviso-btn");
+  if (creaBtn) creaBtn.addEventListener("click", creaAvviso);
   document.querySelectorAll("[data-elimina-avviso]").forEach(btn => {
     btn.addEventListener("click", e => { e.stopPropagation(); eliminaAvviso(btn.dataset.eliminaAvviso); });
   });
@@ -2857,6 +2984,18 @@ function eliminaAvviso(avvisoId) {
   renderSection();
 }
 
+function leggiUtentiDalForm() {
+  return Array.from(document.querySelectorAll("#utenti-lista [data-utente-idx]")).map((card, i) => {
+    const esistente = state.settings.utenti[i] || {};
+    return {
+      id: esistente.id || uid(),
+      label: card.querySelector(".ut-label").value.trim() || esistente.id || "Utente",
+      ruolo: card.querySelector(".ut-ruolo").value,
+      password: card.querySelector(".ut-password").value
+    };
+  });
+}
+
 function saveSettings() {
   state.settings.appName = document.getElementById("set-appname").value.trim() || "Gestione Gruppo";
   state.settings.quotaBollino = parseFloat(document.getElementById("set-quota").value) || 0;
@@ -2864,6 +3003,7 @@ function saveSettings() {
   state.settings.testoPreghiera = document.getElementById("set-testo-preghiera").value.trim();
   state.settings.testoCanto = document.getElementById("set-testo-canto").value.trim();
   state.settings.testoAuguriCompleanno = document.getElementById("set-testo-auguri").value.trim();
+  state.settings.utenti = leggiUtentiDalForm();
   saveState();
   updateTopbar();
   closeModal();
@@ -3617,8 +3757,9 @@ const SECTION_ORDER = ["home","anagrafica","conv-consiglio","bollino","bollino-a
 
 function vaiASezione(section) {
   const content = document.getElementById("app-content");
-  const oldIdx = SECTION_ORDER.indexOf(currentSection);
-  const newIdx = SECTION_ORDER.indexOf(section);
+  const ordine = sezioniAttive();
+  const oldIdx = ordine.indexOf(currentSection);
+  const newIdx = ordine.indexOf(section);
   const direzione = (oldIdx !== -1 && newIdx !== -1 && newIdx !== oldIdx) ? (newIdx > oldIdx ? "avanti" : "indietro") : null;
 
   const eseguiCambio = () => {
@@ -3654,12 +3795,13 @@ function setupSwipeNav() {
     const dx = e.changedTouches[0].clientX - touchStartX;
     const dy = e.changedTouches[0].clientY - touchStartY;
     if (Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
-    const idx = SECTION_ORDER.indexOf(currentSection);
+    const ordine = sezioniAttive();
+    const idx = ordine.indexOf(currentSection);
     if (idx === -1) return;
-    if (dx < 0 && idx < SECTION_ORDER.length - 1) {
-      vaiASezione(SECTION_ORDER[idx + 1]);
+    if (dx < 0 && idx < ordine.length - 1) {
+      vaiASezione(ordine[idx + 1]);
     } else if (dx > 0 && idx > 0) {
-      vaiASezione(SECTION_ORDER[idx - 1]);
+      vaiASezione(ordine[idx - 1]);
     }
   }, { passive: true });
 }
@@ -3671,11 +3813,51 @@ function init() {
     return;
   }
   loadState();
-  if (!currentUser) {
-    showLoginScreen(startApp);
-  } else {
+  if (currentUser) {
     startApp();
+    return;
   }
+  // Utente non ancora identificato su questo dispositivo: prima di mostrare la
+  // schermata "Chi sei?" proviamo a leggere da Firebase l'elenco utenti/password
+  // aggiornato (potrebbe essere stato modificato da un altro dispositivo).
+  if (window.db) {
+    db.collection(FIRESTORE_COLLECTION).doc(FIRESTORE_DOC).get().then(snap => {
+      if (snap.exists) applyStateFields(snap.data());
+      showLoginScreen(startApp);
+    }).catch(() => showLoginScreen(startApp));
+  } else {
+    showLoginScreen(startApp);
+  }
+}
+
+const SOCIO_SEZIONI = ["home", "bacheca", "libretto", "cena"];
+
+function sezioniAttive() {
+  return currentRole === "socio" ? SECTION_ORDER.filter(s => SOCIO_SEZIONI.includes(s)) : SECTION_ORDER;
+}
+
+function applyRoleRestrictions() {
+  const settingsBtn = document.getElementById("settings-btn");
+  if (currentRole !== "socio") {
+    settingsBtn.textContent = "⚙️";
+    settingsBtn.setAttribute("aria-label", "Impostazioni");
+    return;
+  }
+  document.querySelectorAll(".nav-btn").forEach(b => {
+    if (!SOCIO_SEZIONI.includes(b.dataset.section)) b.style.display = "none";
+  });
+  settingsBtn.textContent = "🔁";
+  settingsBtn.setAttribute("aria-label", "Cambia utente");
+  if (!SOCIO_SEZIONI.includes(currentSection)) currentSection = "home";
+}
+
+function confermaCambiaUtente() {
+  if (!confirm("Vuoi cambiare utente?")) return;
+  localStorage.removeItem("gestione_gruppo_user");
+  localStorage.removeItem("gestione_gruppo_role");
+  currentUser = null;
+  currentRole = null;
+  location.reload();
 }
 
 function startApp() {
@@ -3683,7 +3865,11 @@ function startApp() {
   document.querySelectorAll(".nav-btn").forEach(btn => {
     btn.addEventListener("click", () => vaiASezione(btn.dataset.section));
   });
-  document.getElementById("settings-btn").addEventListener("click", openSettings);
+  applyRoleRestrictions();
+  document.getElementById("settings-btn").addEventListener("click", () => {
+    if (currentRole === "socio") { confermaCambiaUtente(); return; }
+    openSettings();
+  });
   document.getElementById("modal-overlay").addEventListener("click", e => {
     if (e.target.id === "modal-overlay") { closeModal(); currentConvocazioneId = null; renderSection(); }
   });
