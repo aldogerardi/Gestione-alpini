@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "5.71";
+const APP_VERSION = "5.72";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -3028,10 +3028,7 @@ function cardAdunata(a, soloLettura) {
 function renderPresenzaAdunata() {
   const soloLettura = currentRole === "socio";
   const adunate = [...state.adunate].sort((a, b) => chiaveDataAdunata(b.data) - chiaveDataAdunata(a.data));
-
-  const prossima = adunate.length ? adunate[0] : null;
-  const altre = adunate.slice(1);
-  const altreHtml = altre.length ? altre.map(a => cardAdunata(a, soloLettura)).join("") : (prossima ? "" : `<div class="card-sub">Nessuna adunata inserita.</div>`);
+  const listaHtml = adunate.length ? adunate.map(a => cardAdunata(a, soloLettura)).join("") : `<div class="card-sub">Nessuna adunata inserita.</div>`;
 
   const formNuovaAdunata = soloLettura ? "" : `
     <div class="card">
@@ -3046,12 +3043,10 @@ function renderPresenzaAdunata() {
     <div class="section-title">🎖️ Presenza Adunata</div>
     <div class="card-sub" style="margin-bottom:12px;">Elenco delle adunate, con locandina.</div>
 
-    ${prossima ? `<div class="section-title" style="font-size:1.05rem;">⏭️ La prossima</div>${cardAdunata(prossima, soloLettura)}` : ""}
-
     ${formNuovaAdunata}
 
-    <div class="section-title" style="font-size:1.05rem; margin-top:22px;">🗂️ Altre adunate</div>
-    <div id="adunata-lista">${altreHtml}</div>
+    <div class="section-title" style="font-size:1.05rem; margin-top:22px;">🗂️ Adunate</div>
+    <div id="adunata-lista">${listaHtml}</div>
   `;
 }
 
@@ -4094,7 +4089,10 @@ function forceHardReload() {
   const goReload = () => {
     if (done) return;
     done = true;
-    window.location.reload();
+    // Su alcune PWA installate (soprattutto iPhone) un semplice reload() a volte
+    // non basta a far ripartire l'app: forziamo una navigazione vera con un
+    // parametro che spezza qualsiasi cache residua del browser.
+    window.location.href = window.location.pathname + "?v=" + Date.now();
   };
   Promise.all([
     ("caches" in window) ? caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k)))) : Promise.resolve(),
