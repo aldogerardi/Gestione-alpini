@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "5.69";
+const APP_VERSION = "5.70";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -2135,7 +2135,7 @@ function openSettings() {
 
     <div class="settings-block">
       <h3>🔑 Gestione utenti</h3>
-      <div style="font-size:0.78rem; color:#666; margin-bottom:10px;">Ogni utente può avere una password (lasciala vuota per entrare senza password, come oggi). Il ruolo "socio" vede solo Home, Bacheca, Preghiera e Canto, Cena (sola visualizzazione) — usalo per una password unica da dare a tutti i soci.</div>
+      <div style="font-size:0.78rem; color:#666; margin-bottom:10px;">Ogni utente può avere una password (lasciala vuota per entrare senza password, come oggi). Il ruolo "socio" vede solo Home, Bacheca, Preghiera e Canto, Cena e Presenza Adunata (sola visualizzazione, senza box di inserimento) — usalo per una password unica da dare a tutti i soci.</div>
       <div id="utenti-lista">
         ${(state.settings.utenti || []).map((u, idx) => `
           <div class="card" data-utente-idx="${idx}" style="padding:10px; margin-bottom:8px;">
@@ -2989,7 +2989,26 @@ function eliminaAvviso(avvisoId) {
 }
 
 // ---------- Presenza Adunata ----------
-function cardAdunata(a) {
+const MESI_IT = ["gennaio","febbraio","marzo","aprile","maggio","giugno","luglio","agosto","settembre","ottobre","novembre","dicembre"];
+
+function chiaveDataAdunata(str) {
+  const s = (str || "").toLowerCase();
+  const annoMatch = s.match(/\b(20\d{2}|19\d{2})\b/);
+  const anno = annoMatch ? parseInt(annoMatch[1], 10) : 0;
+  let mese = 0;
+  for (let i = 0; i < MESI_IT.length; i++) {
+    if (s.includes(MESI_IT[i])) { mese = i + 1; break; }
+  }
+  if (!mese) {
+    const numMatch = s.match(/\b(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})\b/);
+    if (numMatch) mese = parseInt(numMatch[2], 10);
+  }
+  const giornoMatch = s.match(/\b(\d{1,2})\b/);
+  const giorno = giornoMatch ? parseInt(giornoMatch[1], 10) : 0;
+  return anno * 10000 + mese * 100 + giorno;
+}
+
+function cardAdunata(a, soloLettura) {
   const isPdf = (a.allegatoNome || "").toLowerCase().endsWith(".pdf");
   const thumb = a.allegatoThumbUrl || (isPdf ? "" : a.allegatoUrl);
   return `
@@ -2999,35 +3018,45 @@ function cardAdunata(a) {
           <div style="font-weight:800;">${esc(a.titolo || "Adunata")}${isPdf ? " 📄" : ""}</div>
           <div class="card-sub">${esc(a.data) || ""}</div>
         </div>
-        <button type="button" class="btn danger" data-elimina-adunata="${a.id}" style="padding:5px 10px; font-size:0.8rem;">🗑️</button>
+        ${soloLettura ? "" : `<button type="button" class="btn danger" data-elimina-adunata="${a.id}" style="padding:5px 10px; font-size:0.8rem;">🗑️</button>`}
       </div>
       ${thumb ? `<img src="${esc(thumb)}" style="max-width:100%; border-radius:8px; margin-top:8px; border:1px solid #ccc;">` : ""}
     </div>`;
 }
 
 function renderPresenzaAdunata() {
-  const adunate = [...state.adunate].sort((a, b) => (b.creato || "").localeCompare(a.creato || ""));
-  const listaHtml = adunate.length ? adunate.map(cardAdunata).join("") : `<div class="card-sub">Nessuna adunata inserita.</div>`;
+  const soloLettura = currentRole === "socio";
+  const adunate = [...state.adunate].sort((a, b) => chiaveDataAdunata(b.data) - chiaveDataAdunata(a.data));
 
-  return `
-    <div class="section-title">🎖️ Presenza Adunata</div>
-    <div class="card-sub" style="margin-bottom:12px;">Elenco delle adunate, con locandina.</div>
+  const prossima = adunate.length ? adunate[0] : null;
+  const altre = adunate.slice(1);
+  const altreHtml = altre.length ? altre.map(a => cardAdunata(a, soloLettura)).join("") : (prossima ? "" : `<div class="card-sub">Nessuna adunata inserita.</div>`);
 
+  const formNuovaAdunata = soloLettura ? "" : `
     <div class="card">
       <div style="font-weight:800; margin-bottom:10px;">Nuova adunata</div>
       <div class="form-group"><label>Titolo</label><input type="text" id="adunata-titolo" placeholder="Es. Adunata Nazionale Vicenza"></div>
       <div class="form-group"><label>Data</label><input type="text" id="adunata-data" placeholder="Es. 10-11-12 Maggio 2027"></div>
       <div class="form-group"><label>Locandina (PDF o foto)</label><input type="file" id="adunata-file" accept=".pdf,image/*"></div>
       <button type="button" class="btn block" id="crea-adunata-btn" style="margin-top:6px;">➕ Pubblica adunata</button>
-    </div>
+    </div>`;
 
-    <div class="section-title" style="font-size:1.05rem; margin-top:22px;">🗂️ Adunate</div>
-    <div id="adunata-lista">${listaHtml}</div>
+  return `
+    <div class="section-title">🎖️ Presenza Adunata</div>
+    <div class="card-sub" style="margin-bottom:12px;">Elenco delle adunate, con locandina.</div>
+
+    ${prossima ? `<div class="section-title" style="font-size:1.05rem;">⏭️ La prossima</div>${cardAdunata(prossima, soloLettura)}` : ""}
+
+    ${formNuovaAdunata}
+
+    <div class="section-title" style="font-size:1.05rem; margin-top:22px;">🗂️ Altre adunate</div>
+    <div id="adunata-lista">${altreHtml}</div>
   `;
 }
 
 function attachPresenzaAdunataEvents() {
-  document.getElementById("crea-adunata-btn").addEventListener("click", creaAdunata);
+  const creaBtn = document.getElementById("crea-adunata-btn");
+  if (creaBtn) creaBtn.addEventListener("click", creaAdunata);
   document.querySelectorAll("[data-elimina-adunata]").forEach(btn => {
     btn.addEventListener("click", e => { e.stopPropagation(); eliminaAdunata(btn.dataset.eliminaAdunata); });
   });
@@ -3948,7 +3977,7 @@ function init() {
   }
 }
 
-const SOCIO_SEZIONI = ["home", "bacheca", "libretto", "cena"];
+const SOCIO_SEZIONI = ["home", "bacheca", "libretto", "cena", "presenza-adunata"];
 
 function sezioniAttive() {
   return currentRole === "socio" ? SECTION_ORDER.filter(s => SOCIO_SEZIONI.includes(s)) : SECTION_ORDER;
