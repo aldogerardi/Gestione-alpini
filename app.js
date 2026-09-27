@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "5.70";
+const APP_VERSION = "5.71";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -107,6 +107,7 @@ function applyStateFields(source) {
   state.oreAlpine = source.oreAlpine || {};
   state.cene = source.cene || [];
   state.bacheca = source.bacheca || [];
+  state.adunate = source.adunate || [];
 }
 
 function syncToFirebase() {
