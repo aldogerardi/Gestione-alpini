@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "5.68";
+const APP_VERSION = "5.69";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -197,6 +197,7 @@ let state = {
   oreAlpine: {},
   cene: [],
   bacheca: [],
+  adunate: [],
   meta: { ultimaModifica: null, ultimoImport: null }
 };
 let bollinoAnno = new Date().getFullYear();
@@ -317,6 +318,9 @@ function renderSection() {
   } else if (currentSection === "bacheca") {
     content.innerHTML = renderBacheca();
     attachBachecaEvents();
+  } else if (currentSection === "presenza-adunata") {
+    content.innerHTML = renderPresenzaAdunata();
+    attachPresenzaAdunataEvents();
   } else {
     const s = PLACEHOLDER_SECTIONS[currentSection];
     content.innerHTML = `
@@ -2980,6 +2984,120 @@ async function creaAvviso() {
 function eliminaAvviso(avvisoId) {
   if (!confirm("Eliminare questo avviso?")) return;
   state.bacheca = state.bacheca.filter(a => a.id !== avvisoId);
+  saveState();
+  renderSection();
+}
+
+// ---------- Presenza Adunata ----------
+function cardAdunata(a) {
+  const isPdf = (a.allegatoNome || "").toLowerCase().endsWith(".pdf");
+  const thumb = a.allegatoThumbUrl || (isPdf ? "" : a.allegatoUrl);
+  return `
+    <div class="card" data-adunata-id="${a.id}" data-dettaglio-adunata="${a.id}" style="cursor:pointer;">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
+        <div>
+          <div style="font-weight:800;">${esc(a.titolo || "Adunata")}${isPdf ? " 📄" : ""}</div>
+          <div class="card-sub">${esc(a.data) || ""}</div>
+        </div>
+        <button type="button" class="btn danger" data-elimina-adunata="${a.id}" style="padding:5px 10px; font-size:0.8rem;">🗑️</button>
+      </div>
+      ${thumb ? `<img src="${esc(thumb)}" style="max-width:100%; border-radius:8px; margin-top:8px; border:1px solid #ccc;">` : ""}
+    </div>`;
+}
+
+function renderPresenzaAdunata() {
+  const adunate = [...state.adunate].sort((a, b) => (b.creato || "").localeCompare(a.creato || ""));
+  const listaHtml = adunate.length ? adunate.map(cardAdunata).join("") : `<div class="card-sub">Nessuna adunata inserita.</div>`;
+
+  return `
+    <div class="section-title">🎖️ Presenza Adunata</div>
+    <div class="card-sub" style="margin-bottom:12px;">Elenco delle adunate, con locandina.</div>
+
+    <div class="card">
+      <div style="font-weight:800; margin-bottom:10px;">Nuova adunata</div>
+      <div class="form-group"><label>Titolo</label><input type="text" id="adunata-titolo" placeholder="Es. Adunata Nazionale Vicenza"></div>
+      <div class="form-group"><label>Data</label><input type="text" id="adunata-data" placeholder="Es. 10-11-12 Maggio 2027"></div>
+      <div class="form-group"><label>Locandina (PDF o foto)</label><input type="file" id="adunata-file" accept=".pdf,image/*"></div>
+      <button type="button" class="btn block" id="crea-adunata-btn" style="margin-top:6px;">➕ Pubblica adunata</button>
+    </div>
+
+    <div class="section-title" style="font-size:1.05rem; margin-top:22px;">🗂️ Adunate</div>
+    <div id="adunata-lista">${listaHtml}</div>
+  `;
+}
+
+function attachPresenzaAdunataEvents() {
+  document.getElementById("crea-adunata-btn").addEventListener("click", creaAdunata);
+  document.querySelectorAll("[data-elimina-adunata]").forEach(btn => {
+    btn.addEventListener("click", e => { e.stopPropagation(); eliminaAdunata(btn.dataset.eliminaAdunata); });
+  });
+  document.querySelectorAll("[data-dettaglio-adunata]").forEach(card => {
+    card.addEventListener("click", () => apriDettaglioAdunata(card.dataset.dettaglioAdunata));
+  });
+}
+
+function apriDettaglioAdunata(adunataId) {
+  const a = state.adunate.find(x => x.id === adunataId);
+  if (!a) return;
+  const isPdf = (a.allegatoNome || "").toLowerCase().endsWith(".pdf");
+  let allegatoHtml = "";
+  if (a.allegatoThumbUrl) {
+    allegatoHtml += `<img src="${esc(a.allegatoThumbUrl)}" style="max-width:100%; border-radius:8px; margin-top:10px; border:1px solid #ccc;">`;
+  }
+  if (a.allegatoUrl && isPdf) {
+    allegatoHtml += `<a href="${esc(a.allegatoUrl)}" target="_blank" class="btn block" style="margin-top:10px;">📄 Apri ${esc(a.allegatoNome || "PDF")}</a>`;
+  }
+  const html = `
+    <div style="font-weight:900; font-size:1.2rem; margin-bottom:2px;">${esc(a.titolo || "Adunata")}</div>
+    <div class="card-sub" style="margin-bottom:10px;">${esc(a.data) || ""}</div>
+    ${allegatoHtml}
+    <div class="modal-actions" style="margin-top:16px;">
+      <button type="button" class="btn secondary block" id="dettaglio-adunata-chiudi">Chiudi</button>
+    </div>
+  `;
+  showModal(html);
+  document.getElementById("dettaglio-adunata-chiudi").addEventListener("click", closeModal);
+}
+
+async function creaAdunata() {
+  const titolo = document.getElementById("adunata-titolo").value.trim();
+  const data = document.getElementById("adunata-data").value.trim();
+  const file = document.getElementById("adunata-file").files[0];
+  if (!titolo) { alert("Inserisci un titolo per l'adunata"); return; }
+  const id = uid();
+  const nuovo = { id, titolo, data, creato: new Date().toISOString(), allegatoUrl: "", allegatoNome: "", allegatoThumbUrl: "" };
+
+  if (file) {
+    if (window.storage) {
+      try {
+        toast("Caricamento locandina...");
+        nuovo.allegatoUrl = await uploadDocumento(file, `adunate/${id}`);
+        nuovo.allegatoNome = file.name;
+        if (file.name.toLowerCase().endsWith(".pdf") || file.type === "application/pdf") {
+          toast("Genero l'anteprima della locandina...");
+          const miniatura = await generaMiniaturaPdf(file);
+          if (miniatura) nuovo.allegatoThumbUrl = await uploadDocumento(miniatura, `adunate/${id}_thumb`);
+        } else {
+          nuovo.allegatoThumbUrl = nuovo.allegatoUrl;
+        }
+      } catch (err) {
+        console.error(err);
+        alert("Errore nel caricamento della locandina. L'adunata viene comunque pubblicata senza locandina.");
+      }
+    } else {
+      alert("Firebase non configurato: la locandina non può essere caricata su questo dispositivo.");
+    }
+  }
+
+  state.adunate.push(nuovo);
+  saveState();
+  renderSection();
+  toast("Adunata pubblicata");
+}
+
+function eliminaAdunata(adunataId) {
+  if (!confirm("Eliminare questa adunata?")) return;
+  state.adunate = state.adunate.filter(a => a.id !== adunataId);
   saveState();
   renderSection();
 }
