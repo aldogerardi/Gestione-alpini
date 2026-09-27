@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "5.72";
+const APP_VERSION = "5.73";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -1305,6 +1305,7 @@ function buildIniziativaTesto() {
 }
 
 function renderIniziative() {
+  const soloLettura = currentRole === "socio";
   const storico = (state.iniziativeStorico || []).slice().sort((a,b) => (b.data || "").localeCompare(a.data || ""));
 
   let storicoHtml;
@@ -1313,7 +1314,17 @@ function renderIniziative() {
   } else {
     storicoHtml = storico.map(r => {
       const canali = r.canali || [];
-      const badgesCanali = canali.map(ch => ch === "whatsapp" ? `<span class="badge">${WA_ICON} WhatsApp</span>` : ch === "email" ? `<span class="badge">✉️ Email</span>` : ch === "condivisione" ? `<span class="badge">📤 Condiviso</span>` : `<span class="badge">📩 SMS</span>`).join("");
+      const badgesCanali = canali.map(ch => {
+        const label = ch === "whatsapp" ? `${WA_ICON} WhatsApp` : ch === "email" ? "✉️ Email" : ch === "condivisione" ? "📤 Condiviso" : "📩 SMS";
+        return soloLettura
+          ? `<span class="badge">${label}</span>`
+          : `<span class="badge" data-remove-canale="${r.id}|${ch}" style="cursor:pointer;" title="Rimuovi">${label} ✕</span>`;
+      }).join("");
+      const badgeFile = r.fileNome
+        ? (soloLettura
+            ? `<span class="badge badge-icon" title="${esc(r.fileNome)}">📎</span>`
+            : `<span class="badge badge-icon" data-remove-file="${r.id}" style="cursor:pointer;" title="Rimuovi allegato: ${esc(r.fileNome)}">📎 ✕</span>`)
+        : "";
       return `
       <div class="card color-purple" data-open-iniz="${r.id}" style="cursor:pointer;">
         <div class="card-row">
@@ -1321,20 +1332,19 @@ function renderIniziative() {
             <div class="card-name">${esc(r.nome || "Iniziativa")}</div>
             <div class="card-sub">📅 ${r.data ? fmtDate(r.data) : "Data non indicata"}${r.ora ? " · 🕐 " + esc(r.ora) : ""}</div>
             ${r.luogo ? `<div class="card-sub">📍 ${esc(r.luogo)}</div>` : ""}
-            <div class="badge-row" style="margin-top:6px;">${r.istituzionali ? `<span class="badge">🏛️ Istituzionali</span>` : ""}${r.feste ? `<span class="badge">🎉 Feste</span>` : ""}${r.volontariato ? `<span class="badge">🤝 Volontariato</span>` : ""}${r.fileNome ? `<span class="badge badge-icon" title="${esc(r.fileNome)}">📎</span>` : ""}${badgesCanali}</div>
+            <div class="badge-row" style="margin-top:6px;">${r.istituzionali ? `<span class="badge">🏛️ Istituzionali</span>` : ""}${r.feste ? `<span class="badge">🎉 Feste</span>` : ""}${r.volontariato ? `<span class="badge">🤝 Volontariato</span>` : ""}${badgeFile}${badgesCanali}</div>
           </div>
+          ${soloLettura ? "" : `
           <div class="card-actions">
             <button data-edit-iniz="${r.id}" onclick="event.stopPropagation()">✏️</button>
             <button data-del-iniz="${r.id}" onclick="event.stopPropagation()">🗑️</button>
-          </div>
+          </div>`}
         </div>
       </div>`;
     }).join("");
   }
 
-  return `
-    <div class="section-title">🎉 Iniziative</div>
-
+  const formNuovaIniziativa = soloLettura ? "" : `
     <div class="card color-purple">
       <div style="font-weight:800; margin-bottom:10px;">Nuova Iniziativa</div>
 
@@ -1369,8 +1379,13 @@ function renderIniziative() {
         <button type="button" class="btn" id="iniz-wa-btn" style="background:#25D366; color:#fff; font-size:0.85rem; padding:9px 6px;">${WA_ICON} WhatsApp</button>
         <button type="button" class="btn" id="iniz-email-btn" style="background:#2c5a7a; color:#fff; font-size:0.85rem; padding:9px 6px;">✉️ Email</button>
       </div>
-      <div class="card-sub" style="margin-top:10px;">"Condividi" apre la scelta app del telefono e include anche il file selezionato. Email va automaticamente a tutti gli indirizzi disponibili tra Anagrafica, Ringraziamenti e Sponsor. WhatsApp apre l'app: scegli tu i destinatari.</div>
-    </div>
+      <div class="card-sub" style="margin-top:10px;">"Condividi", "WhatsApp" ed "Email" salvano subito l'iniziativa e ci attaccano il badge del canale usato, anche se poi annulli l'invio: tienilo a mente se stai solo facendo una prova. "Condividi" apre la scelta app del telefono e include anche il file selezionato. Email va automaticamente a tutti gli indirizzi disponibili tra Anagrafica, Ringraziamenti e Sponsor. WhatsApp apre l'app: scegli tu i destinatari.</div>
+    </div>`;
+
+  return `
+    <div class="section-title">🎉 Iniziative</div>
+
+    ${formNuovaIniziativa}
 
     <div class="section-title" style="font-size:1.05rem; margin-top:22px;">🗂️ Elenco Iniziative</div>
     ${storicoHtml}
@@ -1461,15 +1476,44 @@ function caricaIniziativaNelForm(r) {
 
 function attachIniziativeEvents() {
   currentIniziativaId = null;
-  document.getElementById("iniz-save-btn").addEventListener("click", () => {
+  const saveBtn = document.getElementById("iniz-save-btn");
+  if (saveBtn) saveBtn.addEventListener("click", () => {
     if (!document.getElementById("iniz-nome").value.trim()) { alert("Inserisci almeno il nome dell'evento"); return; }
     registraStoricoIniziativa(null);
     renderSection();
     toast("Iniziativa salvata");
   });
-  document.getElementById("iniz-share-btn").addEventListener("click", condividiIniziativa);
-  document.getElementById("iniz-wa-btn").addEventListener("click", () => inviaIniziativaTesto("whatsapp"));
-  document.getElementById("iniz-email-btn").addEventListener("click", () => inviaIniziativaTesto("email"));
+  const shareBtn = document.getElementById("iniz-share-btn");
+  if (shareBtn) shareBtn.addEventListener("click", condividiIniziativa);
+  const waBtn = document.getElementById("iniz-wa-btn");
+  if (waBtn) waBtn.addEventListener("click", () => inviaIniziativaTesto("whatsapp"));
+  const emailBtn = document.getElementById("iniz-email-btn");
+  if (emailBtn) emailBtn.addEventListener("click", () => inviaIniziativaTesto("email"));
+
+  document.querySelectorAll("[data-remove-canale]").forEach(el => {
+    el.addEventListener("click", e => {
+      e.stopPropagation();
+      const [id, canale] = el.dataset.removeCanale.split("|");
+      const r = (state.iniziativeStorico || []).find(x => x.id === id);
+      if (!r) return;
+      r.canali = (r.canali || []).filter(c => c !== canale);
+      saveState();
+      renderSection();
+    });
+  });
+
+  document.querySelectorAll("[data-remove-file]").forEach(el => {
+    el.addEventListener("click", e => {
+      e.stopPropagation();
+      const id = el.dataset.removeFile;
+      const r = (state.iniziativeStorico || []).find(x => x.id === id);
+      if (!r) return;
+      if (!confirm("Rimuovere il riferimento all'allegato da questa iniziativa?")) return;
+      r.fileNome = "";
+      saveState();
+      renderSection();
+    });
+  });
 
   document.querySelectorAll("[data-del-iniz]").forEach(el => {
     el.addEventListener("click", () => {
@@ -2136,7 +2180,7 @@ function openSettings() {
 
     <div class="settings-block">
       <h3>🔑 Gestione utenti</h3>
-      <div style="font-size:0.78rem; color:#666; margin-bottom:10px;">Ogni utente può avere una password (lasciala vuota per entrare senza password, come oggi). Il ruolo "socio" vede solo Home, Bacheca, Preghiera e Canto, Cena e Presenza Adunata (sola visualizzazione, senza box di inserimento) — usalo per una password unica da dare a tutti i soci.</div>
+      <div style="font-size:0.78rem; color:#666; margin-bottom:10px;">Ogni utente può avere una password (lasciala vuota per entrare senza password, come oggi). Il ruolo "socio" vede solo Home, Bacheca, Preghiera e Canto, Cena, Presenza Adunata e Iniziative (sola visualizzazione, senza box di inserimento) — usalo per una password unica da dare a tutti i soci.</div>
       <div id="utenti-lista">
         ${(state.settings.utenti || []).map((u, idx) => `
           <div class="card" data-utente-idx="${idx}" style="padding:10px; margin-bottom:8px;">
@@ -3973,7 +4017,7 @@ function init() {
   }
 }
 
-const SOCIO_SEZIONI = ["home", "bacheca", "libretto", "cena", "presenza-adunata"];
+const SOCIO_SEZIONI = ["home", "bacheca", "libretto", "cena", "presenza-adunata", "iniziative"];
 
 function sezioniAttive() {
   return currentRole === "socio" ? SECTION_ORDER.filter(s => SOCIO_SEZIONI.includes(s)) : SECTION_ORDER;
