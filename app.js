@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "5.73";
+const APP_VERSION = "5.74";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -1320,11 +1320,13 @@ function renderIniziative() {
           ? `<span class="badge">${label}</span>`
           : `<span class="badge" data-remove-canale="${r.id}|${ch}" style="cursor:pointer;" title="Rimuovi">${label} ✕</span>`;
       }).join("");
-      const badgeFile = r.fileNome
+      const badgeFile = r.allegatoUrl
         ? (soloLettura
-            ? `<span class="badge badge-icon" title="${esc(r.fileNome)}">📎</span>`
-            : `<span class="badge badge-icon" data-remove-file="${r.id}" style="cursor:pointer;" title="Rimuovi allegato: ${esc(r.fileNome)}">📎 ✕</span>`)
+            ? `<span class="badge badge-icon" title="${esc(r.allegatoNome)}">📎</span>`
+            : `<span class="badge badge-icon" data-remove-file="${r.id}" style="cursor:pointer;" title="Rimuovi allegato: ${esc(r.allegatoNome)}">📎 ✕</span>`)
         : "";
+      const isPdf = (r.allegatoNome || "").toLowerCase().endsWith(".pdf");
+      const thumb = r.allegatoThumbUrl || (isPdf ? "" : r.allegatoUrl);
       return `
       <div class="card color-purple" data-open-iniz="${r.id}" style="cursor:pointer;">
         <div class="card-row">
@@ -1340,6 +1342,7 @@ function renderIniziative() {
             <button data-del-iniz="${r.id}" onclick="event.stopPropagation()">🗑️</button>
           </div>`}
         </div>
+        ${thumb ? `<img src="${esc(thumb)}" style="max-width:100%; border-radius:8px; margin-top:8px; border:1px solid #ccc;">` : ""}
       </div>`;
     }).join("");
   }
@@ -1392,7 +1395,7 @@ function renderIniziative() {
   `;
 }
 
-function registraStoricoIniziativa(canale) {
+async function registraStoricoIniziativa(canale) {
   const nome = document.getElementById("iniz-nome").value.trim();
   const data = document.getElementById("iniz-data").value;
   const ora = getIniziativaOra();
@@ -1402,19 +1405,40 @@ function registraStoricoIniziativa(canale) {
   const feste = document.getElementById("iniz-feste").checked;
   const volontariato = document.getElementById("iniz-volontariato").checked;
   const fileInput = document.getElementById("iniz-file");
-  const fileNome = fileInput.files[0] ? fileInput.files[0].name : "";
+  const file = fileInput.files[0];
 
   state.iniziativeStorico = state.iniziativeStorico || [];
   let record = currentIniziativaId ? state.iniziativeStorico.find(r => r.id === currentIniziativaId) : null;
   if (!record) {
-    record = { id: uid(), nome, data, ora, luogo, descrizione, istituzionali, feste, volontariato, fileNome, canali: [], creato: new Date().toISOString() };
+    record = { id: uid(), nome, data, ora, luogo, descrizione, istituzionali, feste, volontariato, allegatoUrl: "", allegatoNome: "", allegatoThumbUrl: "", canali: [], creato: new Date().toISOString() };
     state.iniziativeStorico.push(record);
     currentIniziativaId = record.id;
   } else {
     record.nome = nome; record.data = data; record.ora = ora; record.luogo = luogo; record.descrizione = descrizione;
     record.istituzionali = istituzionali; record.feste = feste; record.volontariato = volontariato;
-    if (fileNome) record.fileNome = fileNome;
   }
+
+  if (file) {
+    if (window.storage) {
+      try {
+        toast("Caricamento allegato...");
+        record.allegatoUrl = await uploadDocumento(file, `iniziative/${record.id}`);
+        record.allegatoNome = file.name;
+        if (file.name.toLowerCase().endsWith(".pdf") || file.type === "application/pdf") {
+          const miniatura = await generaMiniaturaPdf(file);
+          if (miniatura) record.allegatoThumbUrl = await uploadDocumento(miniatura, `iniziative/${record.id}_thumb`);
+        } else {
+          record.allegatoThumbUrl = record.allegatoUrl;
+        }
+      } catch (err) {
+        console.error(err);
+        alert("Errore nel caricamento dell'allegato. L'iniziativa viene comunque salvata senza allegato.");
+      }
+    } else {
+      alert("Firebase non configurato: l'allegato non può essere caricato su questo dispositivo.");
+    }
+  }
+
   if (canale && !record.canali.includes(canale)) record.canali.push(canale);
   saveState();
 }
@@ -1434,7 +1458,7 @@ async function condividiIniziativa() {
   if (file && navigator.canShare && !navigator.canShare({ files: [file] })) delete shareData.files;
   try {
     await navigator.share(shareData);
-    registraStoricoIniziativa("condivisione");
+    await registraStoricoIniziativa("condivisione");
     renderSection();
     toast("Condiviso e salvato");
   } catch (err) {
@@ -1442,7 +1466,7 @@ async function condividiIniziativa() {
   }
 }
 
-function inviaIniziativaTesto(canale) {
+async function inviaIniziativaTesto(canale) {
   if (!document.getElementById("iniz-nome").value.trim()) { alert("Inserisci almeno il nome dell'evento"); return; }
   const testo = buildIniziativaTesto();
   const encoded = encodeURIComponent(testo);
@@ -1451,10 +1475,10 @@ function inviaIniziativaTesto(canale) {
     const emails = getAllEmails();
     if (emails.length === 0) { alert("Nessun indirizzo email trovato in Anagrafica, Ringraziamenti o Sponsor."); return; }
     const subject = encodeURIComponent(document.getElementById("iniz-nome").value.trim() || "Iniziativa Gruppo Alpini");
-    registraStoricoIniziativa(canale);
+    await registraStoricoIniziativa(canale);
     window.location.href = `mailto:${emails.join(",")}?subject=${subject}&body=${encoded}`;
   } else {
-    registraStoricoIniziativa(canale);
+    await registraStoricoIniziativa(canale);
     window.open(`https://api.whatsapp.com/send?text=${encoded}`, "_blank");
   }
   renderSection();
@@ -1477,9 +1501,9 @@ function caricaIniziativaNelForm(r) {
 function attachIniziativeEvents() {
   currentIniziativaId = null;
   const saveBtn = document.getElementById("iniz-save-btn");
-  if (saveBtn) saveBtn.addEventListener("click", () => {
+  if (saveBtn) saveBtn.addEventListener("click", async () => {
     if (!document.getElementById("iniz-nome").value.trim()) { alert("Inserisci almeno il nome dell'evento"); return; }
-    registraStoricoIniziativa(null);
+    await registraStoricoIniziativa(null);
     renderSection();
     toast("Iniziativa salvata");
   });
@@ -1508,8 +1532,8 @@ function attachIniziativeEvents() {
       const id = el.dataset.removeFile;
       const r = (state.iniziativeStorico || []).find(x => x.id === id);
       if (!r) return;
-      if (!confirm("Rimuovere il riferimento all'allegato da questa iniziativa?")) return;
-      r.fileNome = "";
+      if (!confirm("Rimuovere l'allegato da questa iniziativa?")) return;
+      r.allegatoUrl = ""; r.allegatoNome = ""; r.allegatoThumbUrl = "";
       saveState();
       renderSection();
     });
@@ -1542,13 +1566,21 @@ function attachIniziativeEvents() {
     el.addEventListener("click", () => {
       const r = (state.iniziativeStorico || []).find(x => x.id === el.dataset.openIniz);
       if (!r) return;
+      const isPdf = (r.allegatoNome || "").toLowerCase().endsWith(".pdf");
+      let allegatoHtml = "";
+      if (r.allegatoThumbUrl) {
+        allegatoHtml += `<img src="${esc(r.allegatoThumbUrl)}" style="max-width:100%; border-radius:8px; margin-top:10px; border:1px solid #ccc;">`;
+      }
+      if (r.allegatoUrl && isPdf) {
+        allegatoHtml += `<a href="${esc(r.allegatoUrl)}" target="_blank" class="btn block" style="margin-top:10px;">📄 Apri ${esc(r.allegatoNome || "PDF")}</a>`;
+      }
       const html = `
         <div class="modal-title">🎉 ${esc(r.nome || "Iniziativa")}</div>
         <div class="card-sub" style="margin-bottom:8px;">📅 ${r.data ? fmtDate(r.data) : "Data non indicata"}${r.ora ? " · 🕐 " + esc(r.ora) : ""}</div>
         ${r.luogo ? `<div class="card-sub" style="margin-bottom:8px;">📍 ${esc(r.luogo)}</div>` : ""}
         ${r.descrizione ? `<div class="card-sub" style="white-space:pre-wrap; margin-bottom:12px;">📝 ${esc(r.descrizione)}</div>` : ""}
-        ${r.fileNome ? `<div class="card-sub" style="margin-bottom:12px;">📎 ${esc(r.fileNome)}</div>` : ""}
-        <button type="button" class="btn secondary block" id="iniz-detail-close">Chiudi</button>
+        ${allegatoHtml}
+        <button type="button" class="btn secondary block" id="iniz-detail-close" style="margin-top:16px;">Chiudi</button>
       `;
       showModal(html);
       document.getElementById("iniz-detail-close").addEventListener("click", closeModal);
