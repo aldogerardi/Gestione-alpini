@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "5.74";
+const APP_VERSION = "5.76";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -11,7 +11,12 @@ let currentRole = localStorage.getItem("gestione_gruppo_role") || null;
 let firestoreUnsubscribe = null;
 
 function defaultUtenti() {
-  return USERS.map(u => ({ id: u, label: u, password: "", ruolo: "admin" }))
+  const ruoloPerId = {
+    security: "admin", pc_security: "admin",
+    capogruppo: "direttivo", pc_capogruppo: "direttivo",
+    segretario: "direttivo", pc_segretario: "direttivo"
+  };
+  return USERS.map(u => ({ id: u, label: u, password: "", ruolo: ruoloPerId[u] || "direttivo" }))
     .concat([{ id: "socio", label: "Soci", password: "alpino", ruolo: "socio" }]);
 }
 
@@ -2199,6 +2204,32 @@ function fmtDateTime(iso) {
 }
 
 function openSettings() {
+  const ridotto = currentRole === "direttivo";
+  const bloccoGestioneUtenti = ridotto ? "" : `
+    <div class="settings-block">
+      <h3>🔑 Gestione utenti</h3>
+      <div style="font-size:0.78rem; color:#666; margin-bottom:10px;">Ogni utente può avere una password (lasciala vuota per entrare senza password, come oggi). <b>Admin</b>: accesso completo, incluse Impostazioni avanzate (Gestione utenti, Backup/Ripristino, Zona pericolosa). <b>Direttivo</b>: accesso completo a tutte le sezioni operative, ma Impostazioni ridotte (senza Gestione utenti, Backup/Ripristino, Zona pericolosa). <b>Socio</b>: vede solo Home, Bacheca, Preghiera e Canto, Cena, Presenza Adunata e Iniziative, in sola visualizzazione — usalo per una password unica da dare a tutti i soci.</div>
+      <div id="utenti-lista">
+        ${(state.settings.utenti || []).map((u, idx) => `
+          <div class="card" data-utente-idx="${idx}" style="padding:10px; margin-bottom:8px;">
+            <div class="two-col">
+              <div class="form-group"><label>Nome</label><input type="text" class="ut-label" value="${esc(u.label)}"></div>
+              <div class="form-group"><label>Ruolo</label>
+                <select class="ut-ruolo">
+                  <option value="admin" ${u.ruolo === "admin" ? "selected" : ""}>Admin (accesso completo + impostazioni avanzate)</option>
+                  <option value="direttivo" ${u.ruolo === "direttivo" ? "selected" : ""}>Direttivo (accesso completo, impostazioni ridotte)</option>
+                  <option value="socio" ${u.ruolo === "socio" ? "selected" : ""}>Socio (accesso limitato)</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group"><label>Password</label><input type="text" class="ut-password" value="${esc(u.password)}" placeholder="vuota = nessuna password"></div>
+            <button type="button" class="btn danger" data-elimina-utente="${idx}" style="padding:4px 10px; font-size:0.78rem; margin-top:4px;">🗑️ Rimuovi utente</button>
+          </div>
+        `).join("")}
+      </div>
+      <button type="button" class="btn secondary block" id="aggiungi-utente-btn" style="margin-top:4px;">➕ Aggiungi utente</button>
+    </div>`;
+
   const html = `
     <div class="modal-title">⚙️ Impostazioni</div>
 
@@ -2210,28 +2241,7 @@ function openSettings() {
       <div class="card-sub" style="color:${window.db ? "#1a6b3c" : "#b33"};">${window.db ? "☁️ Sincronizzazione Firebase attiva" : "⚠️ Firebase non configurato (dati solo su questo dispositivo)"}</div>
     </div>
 
-    <div class="settings-block">
-      <h3>🔑 Gestione utenti</h3>
-      <div style="font-size:0.78rem; color:#666; margin-bottom:10px;">Ogni utente può avere una password (lasciala vuota per entrare senza password, come oggi). Il ruolo "socio" vede solo Home, Bacheca, Preghiera e Canto, Cena, Presenza Adunata e Iniziative (sola visualizzazione, senza box di inserimento) — usalo per una password unica da dare a tutti i soci.</div>
-      <div id="utenti-lista">
-        ${(state.settings.utenti || []).map((u, idx) => `
-          <div class="card" data-utente-idx="${idx}" style="padding:10px; margin-bottom:8px;">
-            <div class="two-col">
-              <div class="form-group"><label>Nome</label><input type="text" class="ut-label" value="${esc(u.label)}"></div>
-              <div class="form-group"><label>Ruolo</label>
-                <select class="ut-ruolo">
-                  <option value="admin" ${u.ruolo === "admin" ? "selected" : ""}>Admin (accesso completo)</option>
-                  <option value="socio" ${u.ruolo === "socio" ? "selected" : ""}>Socio (accesso limitato)</option>
-                </select>
-              </div>
-            </div>
-            <div class="form-group"><label>Password</label><input type="text" class="ut-password" value="${esc(u.password)}" placeholder="vuota = nessuna password"></div>
-            <button type="button" class="btn danger" data-elimina-utente="${idx}" style="padding:4px 10px; font-size:0.78rem; margin-top:4px;">🗑️ Rimuovi utente</button>
-          </div>
-        `).join("")}
-      </div>
-      <button type="button" class="btn secondary block" id="aggiungi-utente-btn" style="margin-top:4px;">➕ Aggiungi utente</button>
-    </div>
+    ${bloccoGestioneUtenti}
 
     <div class="settings-block">
       <h3>Nome app</h3>
@@ -2288,6 +2298,7 @@ function openSettings() {
     </div>
 
 
+    ${ridotto ? "" : `
     <div class="settings-block">
       <h3>Backup e ripristino</h3>
       <button class="btn block" id="backup-btn" style="margin-bottom:8px;">⬇️ Esegui backup</button>
@@ -2295,12 +2306,12 @@ function openSettings() {
       <input type="file" id="restore-input" accept=".json" style="display:none;">
     </div>
 
-
     <div class="settings-block">
       <h3 style="color:var(--red);">Zona pericolosa</h3>
       <button class="btn danger block" id="reset-bollino-btn">🗑️ Azzera tutti i pagamenti Bollino</button>
       <div style="font-size:0.78rem; color:#666; margin-top:6px;">Cancella tutti i pagamenti registrati (tutti gli anni, tutti i soci). Utile per ripartire puliti quando arriveranno i dati definitivi. L'anagrafica non viene toccata.</div>
     </div>
+    `}
 
     <div class="modal-actions">
       <button type="button" class="btn secondary" id="cancel-settings">Chiudi</button>
@@ -2311,12 +2322,16 @@ function openSettings() {
   document.getElementById("cancel-settings").addEventListener("click", closeModal);
   document.getElementById("save-settings").addEventListener("click", saveSettings);
   document.getElementById("set-logo").addEventListener("change", handleLogoUpload);
-  document.getElementById("backup-btn").addEventListener("click", doBackup);
-  document.getElementById("restore-btn").addEventListener("click", () => {
+  const backupBtn = document.getElementById("backup-btn");
+  if (backupBtn) backupBtn.addEventListener("click", doBackup);
+  const restoreBtn = document.getElementById("restore-btn");
+  if (restoreBtn) restoreBtn.addEventListener("click", () => {
     document.getElementById("restore-input").click();
   });
-  document.getElementById("restore-input").addEventListener("change", handleRestore);
-  document.getElementById("reset-bollino-btn").addEventListener("click", resetBollino);
+  const restoreInput = document.getElementById("restore-input");
+  if (restoreInput) restoreInput.addEventListener("change", handleRestore);
+  const resetBollinoBtn = document.getElementById("reset-bollino-btn");
+  if (resetBollinoBtn) resetBollinoBtn.addEventListener("click", resetBollino);
   document.getElementById("import-excel").addEventListener("change", handleExcelImport);
   document.getElementById("import-haccp-pdf-btn").addEventListener("click", openImportHaccpPdf);
   document.getElementById("import-andati-avanti-txt-btn").addEventListener("click", openImportAndatiAvantiTxt);
@@ -2328,7 +2343,8 @@ function openSettings() {
     closeModal();
     showLoginScreen(() => { location.reload(); });
   });
-  document.getElementById("aggiungi-utente-btn").addEventListener("click", () => {
+  const aggiungiUtenteBtn = document.getElementById("aggiungi-utente-btn");
+  if (aggiungiUtenteBtn) aggiungiUtenteBtn.addEventListener("click", () => {
     state.settings.utenti = leggiUtentiDalForm();
     state.settings.utenti.push({ id: uid(), label: "Nuovo utente", ruolo: "socio", password: "" });
     openSettings();
@@ -3222,7 +3238,7 @@ function saveSettings() {
   state.settings.testoPreghiera = document.getElementById("set-testo-preghiera").value.trim();
   state.settings.testoCanto = document.getElementById("set-testo-canto").value.trim();
   state.settings.testoAuguriCompleanno = document.getElementById("set-testo-auguri").value.trim();
-  state.settings.utenti = leggiUtentiDalForm();
+  if (document.getElementById("utenti-lista")) state.settings.utenti = leggiUtentiDalForm();
   saveState();
   updateTopbar();
   closeModal();
@@ -4050,13 +4066,24 @@ function init() {
 }
 
 const SOCIO_SEZIONI = ["home", "bacheca", "libretto", "cena", "presenza-adunata", "iniziative"];
+const SEZIONI_SOLO_ADMIN = ["cassa", "conv-casoncellata"];
 
 function sezioniAttive() {
-  return currentRole === "socio" ? SECTION_ORDER.filter(s => SOCIO_SEZIONI.includes(s)) : SECTION_ORDER;
+  if (currentRole === "socio") return SECTION_ORDER.filter(s => SOCIO_SEZIONI.includes(s));
+  if (currentRole !== "admin") return SECTION_ORDER.filter(s => !SEZIONI_SOLO_ADMIN.includes(s));
+  return SECTION_ORDER;
 }
 
 function applyRoleRestrictions() {
   const settingsBtn = document.getElementById("settings-btn");
+
+  if (currentRole !== "admin") {
+    document.querySelectorAll(".nav-btn").forEach(b => {
+      if (SEZIONI_SOLO_ADMIN.includes(b.dataset.section)) b.style.display = "none";
+    });
+    if (SEZIONI_SOLO_ADMIN.includes(currentSection)) currentSection = "home";
+  }
+
   if (currentRole !== "socio") {
     settingsBtn.textContent = "⚙️";
     settingsBtn.setAttribute("aria-label", "Impostazioni");
