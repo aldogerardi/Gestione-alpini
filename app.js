@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "5.76";
+const APP_VERSION = "5.97";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -113,6 +113,7 @@ function applyStateFields(source) {
   state.cene = source.cene || [];
   state.bacheca = source.bacheca || [];
   state.adunate = source.adunate || [];
+  state.prenotazioni = source.prenotazioni || [];
 }
 
 function syncToFirebase() {
@@ -159,6 +160,8 @@ const LETTERHEAD_HTML = `
 const WA_ICON = `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 2C6.48 2 2 6.13 2 11.22c0 2.09.86 4.01 2.29 5.58L3 22l5.48-1.43a10.6 10.6 0 0 0 3.52.6c5.52 0 10-4.13 10-9.22C22 6.13 17.52 2 12 2zm.02 16.68c-1.1 0-2.18-.24-3.15-.7l-.23-.11-3.25.85.87-3.13-.15-.24a7.9 7.9 0 0 1-1.26-4.33c0-4.35 3.74-7.88 8.34-7.88 4.6 0 8.34 3.53 8.34 7.88 0 4.35-3.74 7.66-8.51 7.66z"/></svg>`;
 
 const RUOLI_CONSIGLIO = ["Capogruppo","Vice Capogruppo","Tesoriere","Segretario","Consigliere"];
+const FASCIA_LABEL = { pranzo: "Pranzo", cena: "Cena", giornata: "Giornata intera" };
+const FASCIA_ORDER = ["pranzo", "cena", "giornata"];
 
 const PLACEHOLDER_SECTIONS = {
   "conv-casoncellata": { title: "Conv. Casoncellata", icon: "🥟", desc: "Convocazioni per la Casoncellata." },
@@ -188,6 +191,7 @@ let state = {
     testoPreghiera: "",
     testoCanto: "",
     testoAuguriCompleanno: "Tanti auguri di buon compleanno da tutto il Gruppo Alpini! 🎂🥂",
+    regolamentoSede: "",
     utenti: defaultUtenti()
   },
   consiglio: {
@@ -204,6 +208,7 @@ let state = {
   cene: [],
   bacheca: [],
   adunate: [],
+  prenotazioni: [],
   meta: { ultimaModifica: null, ultimoImport: null }
 };
 let bollinoAnno = new Date().getFullYear();
@@ -327,6 +332,9 @@ function renderSection() {
   } else if (currentSection === "presenza-adunata") {
     content.innerHTML = renderPresenzaAdunata();
     attachPresenzaAdunataEvents();
+  } else if (currentSection === "prenotazioni") {
+    content.innerHTML = renderPrenotazioni();
+    attachPrenotazioniEvents();
   } else {
     const s = PLACEHOLDER_SECTIONS[currentSection];
     content.innerHTML = `
@@ -2228,6 +2236,12 @@ function openSettings() {
         `).join("")}
       </div>
       <button type="button" class="btn secondary block" id="aggiungi-utente-btn" style="margin-top:4px;">➕ Aggiungi utente</button>
+    </div>
+
+    <div class="settings-block">
+      <h3>📜 Regolamento Prenotazione Sede</h3>
+      <div class="form-group"><textarea id="set-regolamento-sede" rows="6" placeholder="Incolla qui il regolamento per l'uso della sede...">${esc(state.settings.regolamentoSede)}</textarea></div>
+      <div style="font-size:0.78rem; color:#666;">Mostrato in cima alla sezione "Prenotaz. Sede", per ora visibile solo agli Admin.</div>
     </div>`;
 
   const html = `
@@ -3153,6 +3167,115 @@ function attachPresenzaAdunataEvents() {
   });
 }
 
+// ---------- Prenotaz. Sede ----------
+function fasceConflittuali(fascia) {
+  return fascia === "giornata" ? ["pranzo", "cena", "giornata"] : [fascia, "giornata"];
+}
+
+function prenotazioneSovrapposta(data, fascia, escludiId) {
+  return state.prenotazioni.some(p => p.id !== escludiId && p.data === data && fasceConflittuali(fascia).includes(p.fascia));
+}
+
+function renderPrenotazioni() {
+  const regolamento = (state.settings.regolamentoSede || "").trim();
+  const elenco = [...state.prenotazioni].sort((a, b) =>
+    (a.data || "").localeCompare(b.data || "") || FASCIA_ORDER.indexOf(a.fascia) - FASCIA_ORDER.indexOf(b.fascia)
+  );
+
+  const listaHtml = elenco.length ? elenco.map(p => {
+    const statoBadge = p.stato === "in attesa"
+      ? `<span class="badge badge-icon badge-warning">⏳ In attesa di approvazione</span>`
+      : `<span class="badge" style="background:#d7f0dd; border-color:#7ec98f;">✅ Confermata</span>`;
+    return `
+    <div class="card color-blue" data-prenotazione-id="${p.id}">
+      <div class="card-row">
+        <div>
+          <div class="card-name">${p.data ? fmtDate(p.data) : "Data non indicata"} — ${esc(FASCIA_LABEL[p.fascia] || p.fascia)}</div>
+          <div class="card-sub">👤 ${esc(p.nome || "-")}</div>
+          ${p.motivo ? `<div class="card-sub">📝 ${esc(p.motivo)}</div>` : ""}
+          <div class="badge-row" style="margin-top:6px;">${statoBadge}</div>
+        </div>
+        <div class="card-actions">
+          ${p.stato === "in attesa" ? `<button data-approva-prenotazione="${p.id}">✅</button>` : ""}
+          <button data-elimina-prenotazione="${p.id}">🗑️</button>
+        </div>
+      </div>
+    </div>`;
+  }).join("") : `<div class="card-sub">Nessuna prenotazione.</div>`;
+
+  return `
+    <div class="section-title">🗓️ Prenotaz. Sede</div>
+
+    ${regolamento ? `
+    <div class="card color-gold">
+      <div style="font-weight:800; margin-bottom:6px;">📜 Regolamento</div>
+      <div class="card-sub" style="white-space:pre-wrap;">${esc(regolamento)}</div>
+    </div>` : ""}
+
+    <div class="card">
+      <div style="font-weight:800; margin-bottom:10px;">Nuova prenotazione</div>
+      <div class="form-group"><label>Data</label><input type="date" id="pren-data"></div>
+      <div class="form-group"><label>Fascia</label>
+        <select id="pren-fascia">
+          <option value="pranzo">Pranzo</option>
+          <option value="cena">Cena</option>
+          <option value="giornata">Giornata intera</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Nome di chi prenota</label><input type="text" id="pren-nome" placeholder="Cognome e nome"></div>
+      <div class="form-group"><label>Motivo (opzionale)</label><input type="text" id="pren-motivo" placeholder="Es. Compleanno, riunione, ecc."></div>
+      <button type="button" class="btn block" id="pren-crea-btn" style="margin-top:6px;">➕ Prenota</button>
+    </div>
+
+    <div class="section-title" style="font-size:1.05rem; margin-top:22px;">🗂️ Prenotazioni</div>
+    ${listaHtml}
+  `;
+}
+
+function attachPrenotazioniEvents() {
+  document.getElementById("pren-crea-btn").addEventListener("click", creaPrenotazione);
+  document.querySelectorAll("[data-approva-prenotazione]").forEach(btn => {
+    btn.addEventListener("click", () => approvaPrenotazione(btn.dataset.approvaPrenotazione));
+  });
+  document.querySelectorAll("[data-elimina-prenotazione]").forEach(btn => {
+    btn.addEventListener("click", () => eliminaPrenotazione(btn.dataset.eliminaPrenotazione));
+  });
+}
+
+function creaPrenotazione() {
+  const data = document.getElementById("pren-data").value;
+  const fascia = document.getElementById("pren-fascia").value;
+  const nome = document.getElementById("pren-nome").value.trim();
+  const motivo = document.getElementById("pren-motivo").value.trim();
+  if (!data) { alert("Seleziona una data"); return; }
+  if (!nome) { alert("Inserisci il nome di chi prenota"); return; }
+  if (prenotazioneSovrapposta(data, fascia, null)) {
+    alert("Questa data/fascia è già occupata da un'altra prenotazione.");
+    return;
+  }
+  const stato = (currentRole === "admin" || currentRole === "direttivo") ? "confermata" : "in attesa";
+  state.prenotazioni.push({ id: uid(), data, fascia, nome, motivo, stato, creato: new Date().toISOString() });
+  saveState();
+  renderSection();
+  toast(stato === "confermata" ? "Prenotazione salvata" : "Prenotazione inviata, in attesa di approvazione");
+}
+
+function approvaPrenotazione(id) {
+  const p = state.prenotazioni.find(x => x.id === id);
+  if (!p) return;
+  p.stato = "confermata";
+  saveState();
+  renderSection();
+  toast("Prenotazione approvata");
+}
+
+function eliminaPrenotazione(id) {
+  if (!confirm("Eliminare questa prenotazione?")) return;
+  state.prenotazioni = state.prenotazioni.filter(p => p.id !== id);
+  saveState();
+  renderSection();
+}
+
 function apriDettaglioAdunata(adunataId) {
   const a = state.adunate.find(x => x.id === adunataId);
   if (!a) return;
@@ -3239,6 +3362,8 @@ function saveSettings() {
   state.settings.testoCanto = document.getElementById("set-testo-canto").value.trim();
   state.settings.testoAuguriCompleanno = document.getElementById("set-testo-auguri").value.trim();
   if (document.getElementById("utenti-lista")) state.settings.utenti = leggiUtentiDalForm();
+  const regolamentoSedeEl = document.getElementById("set-regolamento-sede");
+  if (regolamentoSedeEl) state.settings.regolamentoSede = regolamentoSedeEl.value.trim();
   saveState();
   updateTopbar();
   closeModal();
@@ -3988,7 +4113,7 @@ function setupScrollHide() {
 }
 
 // ---------- Init ----------
-const SECTION_ORDER = ["home","anagrafica","conv-consiglio","bollino","bollino-amici","ringraziamenti","sponsor","cena","iniziative","ore-alpine","report","report2","conv-casoncellata","presenza-adunata","cassa","bacheca","libretto"];
+const SECTION_ORDER = ["home","anagrafica","conv-consiglio","bollino","bollino-amici","ringraziamenti","sponsor","cena","iniziative","ore-alpine","report","report2","conv-casoncellata","presenza-adunata","prenotazioni","cassa","bacheca","libretto"];
 
 function vaiASezione(section) {
   const content = document.getElementById("app-content");
@@ -4066,7 +4191,7 @@ function init() {
 }
 
 const SOCIO_SEZIONI = ["home", "bacheca", "libretto", "cena", "presenza-adunata", "iniziative"];
-const SEZIONI_SOLO_ADMIN = ["cassa", "conv-casoncellata"];
+const SEZIONI_SOLO_ADMIN = ["cassa", "conv-casoncellata", "prenotazioni"];
 
 function sezioniAttive() {
   if (currentRole === "socio") return SECTION_ORDER.filter(s => SOCIO_SEZIONI.includes(s));
