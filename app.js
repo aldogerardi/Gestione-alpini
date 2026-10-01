@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "5.97";
+const APP_VERSION = "5.98";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -192,6 +192,8 @@ let state = {
     testoCanto: "",
     testoAuguriCompleanno: "Tanti auguri di buon compleanno da tutto il Gruppo Alpini! 🎂🥂",
     regolamentoSede: "",
+    moduloSedeUrl: "",
+    moduloSedeNome: "",
     utenti: defaultUtenti()
   },
   consiglio: {
@@ -2242,6 +2244,15 @@ function openSettings() {
       <h3>📜 Regolamento Prenotazione Sede</h3>
       <div class="form-group"><textarea id="set-regolamento-sede" rows="6" placeholder="Incolla qui il regolamento per l'uso della sede...">${esc(state.settings.regolamentoSede)}</textarea></div>
       <div style="font-size:0.78rem; color:#666;">Mostrato in cima alla sezione "Prenotaz. Sede", per ora visibile solo agli Admin.</div>
+    </div>
+
+    <div class="settings-block">
+      <h3>📄 Modulo Prenotazione Sede (da firmare)</h3>
+      ${state.settings.moduloSedeUrl
+        ? `<div class="card-sub" style="margin-bottom:8px;">File attuale: <a href="${esc(state.settings.moduloSedeUrl)}" target="_blank"><strong>${esc(state.settings.moduloSedeNome || "modulo.pdf")}</strong></a> <button type="button" class="btn danger" id="rimuovi-modulo-sede-btn" style="padding:3px 8px; font-size:0.75rem; margin-left:6px;">🗑️ Rimuovi</button></div>`
+        : `<div class="card-sub" style="margin-bottom:8px;">Nessun modulo caricato.</div>`}
+      <div class="form-group"><label>Carica/sostituisci file (PDF)</label><input type="file" id="set-modulo-sede-file" accept=".pdf"></div>
+      <div style="font-size:0.78rem; color:#666;">Chi prenota potrà scaricarlo, stamparlo, firmarlo e restituirlo controfirmato secondo le modalità del Gruppo.</div>
     </div>`;
 
   const html = `
@@ -2356,6 +2367,14 @@ function openSettings() {
     currentRole = null;
     closeModal();
     showLoginScreen(() => { location.reload(); });
+  });
+  const rimuoviModuloSedeBtn = document.getElementById("rimuovi-modulo-sede-btn");
+  if (rimuoviModuloSedeBtn) rimuoviModuloSedeBtn.addEventListener("click", () => {
+    if (!confirm("Rimuovere il modulo caricato?")) return;
+    state.settings.moduloSedeUrl = "";
+    state.settings.moduloSedeNome = "";
+    saveState();
+    openSettings();
   });
   const aggiungiUtenteBtn = document.getElementById("aggiungi-utente-btn");
   if (aggiungiUtenteBtn) aggiungiUtenteBtn.addEventListener("click", () => {
@@ -3214,6 +3233,7 @@ function renderPrenotazioni() {
 
     <div class="card">
       <div style="font-weight:800; margin-bottom:10px;">Nuova prenotazione</div>
+      ${state.settings.moduloSedeUrl ? `<a href="${esc(state.settings.moduloSedeUrl)}" target="_blank" class="btn block" style="margin-bottom:12px;">📄 Scarica il modulo da firmare</a>` : ""}
       <div class="form-group"><label>Data</label><input type="date" id="pren-data"></div>
       <div class="form-group"><label>Fascia</label>
         <select id="pren-fascia">
@@ -3354,7 +3374,7 @@ function leggiUtentiDalForm() {
   });
 }
 
-function saveSettings() {
+async function saveSettings() {
   state.settings.appName = document.getElementById("set-appname").value.trim() || "Gestione Gruppo";
   state.settings.quotaBollino = parseFloat(document.getElementById("set-quota").value) || 0;
   state.settings.quotaNazionale = parseFloat(document.getElementById("set-quota-nazionale").value) || 0;
@@ -3364,6 +3384,24 @@ function saveSettings() {
   if (document.getElementById("utenti-lista")) state.settings.utenti = leggiUtentiDalForm();
   const regolamentoSedeEl = document.getElementById("set-regolamento-sede");
   if (regolamentoSedeEl) state.settings.regolamentoSede = regolamentoSedeEl.value.trim();
+
+  const moduloFileEl = document.getElementById("set-modulo-sede-file");
+  const moduloFile = moduloFileEl && moduloFileEl.files[0];
+  if (moduloFile) {
+    if (window.storage) {
+      try {
+        toast("Caricamento modulo...");
+        state.settings.moduloSedeUrl = await uploadDocumento(moduloFile, "impostazioni/modulo-sede");
+        state.settings.moduloSedeNome = moduloFile.name;
+      } catch (err) {
+        console.error(err);
+        alert("Errore nel caricamento del modulo. Riprova.");
+      }
+    } else {
+      alert("Firebase non configurato: il modulo non può essere caricato su questo dispositivo.");
+    }
+  }
+
   saveState();
   updateTopbar();
   closeModal();
