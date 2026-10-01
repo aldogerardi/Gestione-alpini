@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "5.98";
+const APP_VERSION = "6.00";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -1311,7 +1311,7 @@ function buildIniziativaTesto() {
   const ora = getIniziativaOra();
   const luogo = document.getElementById("iniz-luogo").value.trim();
   const descrizione = document.getElementById("iniz-descrizione").value.trim();
-  let testo = `🎉 ${nome || "Iniziativa Gruppo"}\n\n`;
+  let testo = `🎉 ${nome || "Attività Gruppo"}\n\n`;
   if (data) testo += `📅 Data: ${fmtDate(data)}\n`;
   if (ora) testo += `🕐 Ora: ${ora}\n`;
   if (luogo) testo += `📍 Luogo: ${luogo}\n`;
@@ -1346,7 +1346,7 @@ function renderIniziative() {
       <div class="card color-purple" data-open-iniz="${r.id}" style="cursor:pointer;">
         <div class="card-row">
           <div>
-            <div class="card-name">${esc(r.nome || "Iniziativa")}</div>
+            <div class="card-name">${esc(r.nome || "Attività")}</div>
             <div class="card-sub">📅 ${r.data ? fmtDate(r.data) : "Data non indicata"}${r.ora ? " · 🕐 " + esc(r.ora) : ""}</div>
             ${r.luogo ? `<div class="card-sub">📍 ${esc(r.luogo)}</div>` : ""}
             <div class="badge-row" style="margin-top:6px;">${r.istituzionali ? `<span class="badge">🏛️ Istituzionali</span>` : ""}${r.feste ? `<span class="badge">🎉 Feste</span>` : ""}${r.volontariato ? `<span class="badge">🤝 Volontariato</span>` : ""}${badgeFile}${badgesCanali}</div>
@@ -1364,7 +1364,7 @@ function renderIniziative() {
 
   const formNuovaIniziativa = soloLettura ? "" : `
     <div class="card color-purple">
-      <div style="font-weight:800; margin-bottom:10px;">Nuova Iniziativa</div>
+      <div style="font-weight:800; margin-bottom:10px;">Nuova Attività</div>
 
       <div class="form-group"><label>Nome evento *</label><input type="text" id="iniz-nome" placeholder="Es. Festa di Primavera"></div>
       <div class="two-col">
@@ -1401,11 +1401,11 @@ function renderIniziative() {
     </div>`;
 
   return `
-    <div class="section-title">🎉 Iniziative</div>
+    <div class="section-title">🎉 Attività</div>
 
     ${formNuovaIniziativa}
 
-    <div class="section-title" style="font-size:1.05rem; margin-top:22px;">🗂️ Elenco Iniziative</div>
+    <div class="section-title" style="font-size:1.05rem; margin-top:22px;">🗂️ Elenco Attività</div>
     ${storicoHtml}
   `;
 }
@@ -1463,7 +1463,7 @@ async function condividiIniziativa() {
   const testo = buildIniziativaTesto();
   const fileInput = document.getElementById("iniz-file");
   const file = fileInput.files[0];
-  const shareData = { title: "Iniziativa Gruppo Alpini", text: testo };
+  const shareData = { title: "Attività Gruppo Alpini", text: testo };
   if (file) shareData.files = [file];
 
   if (!navigator.share) {
@@ -1489,7 +1489,7 @@ async function inviaIniziativaTesto(canale) {
   if (canale === "email") {
     const emails = getAllEmails();
     if (emails.length === 0) { alert("Nessun indirizzo email trovato in Anagrafica, Ringraziamenti o Sponsor."); return; }
-    const subject = encodeURIComponent(document.getElementById("iniz-nome").value.trim() || "Iniziativa Gruppo Alpini");
+    const subject = encodeURIComponent(document.getElementById("iniz-nome").value.trim() || "Attività Gruppo Alpini");
     await registraStoricoIniziativa(canale);
     window.location.href = `mailto:${emails.join(",")}?subject=${subject}&body=${encoded}`;
   } else {
@@ -1520,7 +1520,7 @@ function attachIniziativeEvents() {
     if (!document.getElementById("iniz-nome").value.trim()) { alert("Inserisci almeno il nome dell'evento"); return; }
     await registraStoricoIniziativa(null);
     renderSection();
-    toast("Iniziativa salvata");
+    toast("Attività salvata");
   });
   const shareBtn = document.getElementById("iniz-share-btn");
   if (shareBtn) shareBtn.addEventListener("click", condividiIniziativa);
@@ -1566,7 +1566,7 @@ function attachIniziativeEvents() {
       if (state.oreAlpine && state.oreAlpine[id]) delete state.oreAlpine[id];
       saveState();
       renderSection();
-      toast("Iniziativa eliminata");
+      toast("Attività eliminata");
     });
   });
 
@@ -1590,7 +1590,7 @@ function attachIniziativeEvents() {
         allegatoHtml += `<a href="${esc(r.allegatoUrl)}" target="_blank" class="btn block" style="margin-top:10px;">📄 Apri ${esc(r.allegatoNome || "PDF")}</a>`;
       }
       const html = `
-        <div class="modal-title">🎉 ${esc(r.nome || "Iniziativa")}</div>
+        <div class="modal-title">🎉 ${esc(r.nome || "Attività")}</div>
         <div class="card-sub" style="margin-bottom:8px;">📅 ${r.data ? fmtDate(r.data) : "Data non indicata"}${r.ora ? " · 🕐 " + esc(r.ora) : ""}</div>
         ${r.luogo ? `<div class="card-sub" style="margin-bottom:8px;">📍 ${esc(r.luogo)}</div>` : ""}
         ${r.descrizione ? `<div class="card-sub" style="white-space:pre-wrap; margin-bottom:12px;">📝 ${esc(r.descrizione)}</div>` : ""}
@@ -1623,7 +1623,7 @@ function renderOreAlpine() {
   const r2 = Math.round(sottoTotali.feste * 10) / 10;
   const r3 = Math.round(sottoTotali.volontariato * 10) / 10;
 
-  const iniziativaOpts = iniziative.map(i => `<option value="${i.id}" ${selectedOreIniziativaId===i.id?"selected":""}>${esc(i.nome || "Iniziativa")}${i.data ? " - " + fmtDate(i.data) : ""}</option>`).join("");
+  const iniziativaOpts = iniziative.map(i => `<option value="${i.id}" ${selectedOreIniziativaId===i.id?"selected":""}>${esc(i.nome || "Attività")}${i.data ? " - " + fmtDate(i.data) : ""}</option>`).join("");
 
   let rosterHtml = "";
   if (selectedOreIniziativaId) {
@@ -1642,7 +1642,7 @@ function renderOreAlpine() {
 
   let eventiHtml;
   if (iniziative.length === 0) {
-    eventiHtml = `<div class="empty-state"><div class="icon">⏱️</div>Nessuna iniziativa salvata.<br><span style="font-size:0.8rem;">Vai nella sezione Iniziative per crearne una.</span></div>`;
+    eventiHtml = `<div class="empty-state"><div class="icon">⏱️</div>Nessuna attività salvata.<br><span style="font-size:0.8rem;">Vai nella sezione Attività per crearne una.</span></div>`;
   } else {
     eventiHtml = iniziative.map(i => {
       const map = (state.oreAlpine && state.oreAlpine[i.id]) || {};
@@ -1651,7 +1651,7 @@ function renderOreAlpine() {
       <div class="card color-gold">
         <div class="card-row">
           <div style="cursor:pointer;" data-select-iniziativa="${i.id}">
-            <div class="card-name">${esc(i.nome || "Iniziativa")}</div>
+            <div class="card-name">${esc(i.nome || "Attività")}</div>
             <div class="card-sub">📅 ${i.data ? fmtDate(i.data) : "Data non indicata"}</div>
             <div class="badge-row"><span class="badge">⏱️ ${tot} ore</span></div>
           </div>
@@ -1680,18 +1680,18 @@ function renderOreAlpine() {
     </div>
 
     <div class="card color-gold" style="margin-top:16px;">
-      <div style="font-weight:800; margin-bottom:10px;">Registra ore per iniziativa</div>
+      <div style="font-weight:800; margin-bottom:10px;">Registra ore per attività</div>
       <div class="form-group">
-        <label>Iniziativa</label>
+        <label>Attività</label>
         <select id="ore-iniziativa-select">
-          <option value="">-- seleziona iniziativa --</option>
+          <option value="">-- seleziona attività --</option>
           ${iniziativaOpts}
         </select>
       </div>
       ${selectedOreIniziativaId ? `
         <div style="margin-top:10px;">${rosterHtml}</div>
         <button class="btn block" id="ore-save-btn" style="margin-top:12px;">Salva ore</button>
-      ` : `<div class="card-sub">Seleziona un'iniziativa per inserire le ore lavorate.</div>`}
+      ` : `<div class="card-sub">Seleziona un'attività per inserire le ore lavorate.</div>`}
     </div>
 
     <div class="section-title" style="font-size:1.05rem; margin-top:22px;">Eventi</div>
@@ -2218,7 +2218,7 @@ function openSettings() {
   const bloccoGestioneUtenti = ridotto ? "" : `
     <div class="settings-block">
       <h3>🔑 Gestione utenti</h3>
-      <div style="font-size:0.78rem; color:#666; margin-bottom:10px;">Ogni utente può avere una password (lasciala vuota per entrare senza password, come oggi). <b>Admin</b>: accesso completo, incluse Impostazioni avanzate (Gestione utenti, Backup/Ripristino, Zona pericolosa). <b>Direttivo</b>: accesso completo a tutte le sezioni operative, ma Impostazioni ridotte (senza Gestione utenti, Backup/Ripristino, Zona pericolosa). <b>Socio</b>: vede solo Home, Bacheca, Preghiera e Canto, Cena, Presenza Adunata e Iniziative, in sola visualizzazione — usalo per una password unica da dare a tutti i soci.</div>
+      <div style="font-size:0.78rem; color:#666; margin-bottom:10px;">Ogni utente può avere una password (lasciala vuota per entrare senza password, come oggi). <b>Admin</b>: accesso completo, incluse Impostazioni avanzate (Gestione utenti, Backup/Ripristino, Zona pericolosa). <b>Direttivo</b>: accesso completo a tutte le sezioni operative, ma Impostazioni ridotte (senza Gestione utenti, Backup/Ripristino, Zona pericolosa). <b>Socio</b>: vede solo Home, Bacheca, Preghiera e Canto, Cena, Presenza Adunata e Attività, in sola visualizzazione — usalo per una password unica da dare a tutti i soci.</div>
       <div id="utenti-lista">
         ${(state.settings.utenti || []).map((u, idx) => `
           <div class="card" data-utente-idx="${idx}" style="padding:10px; margin-bottom:8px;">
@@ -2238,12 +2238,6 @@ function openSettings() {
         `).join("")}
       </div>
       <button type="button" class="btn secondary block" id="aggiungi-utente-btn" style="margin-top:4px;">➕ Aggiungi utente</button>
-    </div>
-
-    <div class="settings-block">
-      <h3>📜 Regolamento Prenotazione Sede</h3>
-      <div class="form-group"><textarea id="set-regolamento-sede" rows="6" placeholder="Incolla qui il regolamento per l'uso della sede...">${esc(state.settings.regolamentoSede)}</textarea></div>
-      <div style="font-size:0.78rem; color:#666;">Mostrato in cima alla sezione "Prenotaz. Sede", per ora visibile solo agli Admin.</div>
     </div>
 
     <div class="settings-block">
@@ -3195,8 +3189,15 @@ function prenotazioneSovrapposta(data, fascia, escludiId) {
   return state.prenotazioni.some(p => p.id !== escludiId && p.data === data && fasceConflittuali(fascia).includes(p.fascia));
 }
 
+const MESI_CALENDARIO = ["Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno","Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre"];
+let calSedeAnno = null;
+let calSedeMese = null;
+let calSedeVisibile = false;
+let calSedeGiornoSelezionato = null;
+
 function renderPrenotazioni() {
-  const regolamento = (state.settings.regolamentoSede || "").trim();
+  if (currentRole === "socio") return renderPrenotazioniSocio();
+
   const elenco = [...state.prenotazioni].sort((a, b) =>
     (a.data || "").localeCompare(b.data || "") || FASCIA_ORDER.indexOf(a.fascia) - FASCIA_ORDER.indexOf(b.fascia)
   );
@@ -3225,15 +3226,10 @@ function renderPrenotazioni() {
   return `
     <div class="section-title">🗓️ Prenotaz. Sede</div>
 
-    ${regolamento ? `
-    <div class="card color-gold">
-      <div style="font-weight:800; margin-bottom:6px;">📜 Regolamento</div>
-      <div class="card-sub" style="white-space:pre-wrap;">${esc(regolamento)}</div>
-    </div>` : ""}
-
     <div class="card">
-      <div style="font-weight:800; margin-bottom:10px;">Nuova prenotazione</div>
-      ${state.settings.moduloSedeUrl ? `<a href="${esc(state.settings.moduloSedeUrl)}" target="_blank" class="btn block" style="margin-bottom:12px;">📄 Scarica il modulo da firmare</a>` : ""}
+      <div style="font-weight:800; margin-bottom:10px;">Conferma prenotazione</div>
+      <div class="card-sub" style="margin-bottom:10px;">Da usare una volta ricevuto il modulo compilato e firmato: se la data è libera, inseriscila qui per confermarla. Comparirà evidenziata nel calendario.</div>
+      ${state.settings.moduloSedeUrl ? `<a href="${esc(state.settings.moduloSedeUrl)}" target="_blank" class="btn block" style="margin-bottom:12px;">📄 Scarica il modulo</a>` : ""}
       <div class="form-group"><label>Data</label><input type="date" id="pren-data"></div>
       <div class="form-group"><label>Fascia</label>
         <select id="pren-fascia">
@@ -3244,21 +3240,126 @@ function renderPrenotazioni() {
       </div>
       <div class="form-group"><label>Nome di chi prenota</label><input type="text" id="pren-nome" placeholder="Cognome e nome"></div>
       <div class="form-group"><label>Motivo (opzionale)</label><input type="text" id="pren-motivo" placeholder="Es. Compleanno, riunione, ecc."></div>
-      <button type="button" class="btn block" id="pren-crea-btn" style="margin-top:6px;">➕ Prenota</button>
+      <button type="button" class="btn block" id="pren-crea-btn" style="margin-top:6px;">✅ Conferma</button>
     </div>
+
+    <button type="button" class="btn secondary block" id="pren-toggle-calendario-btn" style="margin-bottom:12px;">${calSedeVisibile ? "📋 Nascondi calendario" : "📅 Vedi calendario"}</button>
+    ${calSedeVisibile ? renderCalendarioSede() : ""}
 
     <div class="section-title" style="font-size:1.05rem; margin-top:22px;">🗂️ Prenotazioni</div>
     ${listaHtml}
   `;
 }
 
+function renderPrenotazioniSocio() {
+  return `
+    <div class="section-title">🗓️ Prenotaz. Sede</div>
+    <div class="card-sub" style="margin-bottom:14px;">Per prenotare l'uso della sede, scarica il modulo, compilalo e consegnalo secondo le modalità indicate dal Gruppo.</div>
+
+    ${state.settings.moduloSedeUrl
+      ? `<a href="${esc(state.settings.moduloSedeUrl)}" target="_blank" class="btn block" style="margin-bottom:12px;">📄 Scarica modulo</a>`
+      : `<div class="card-sub" style="margin-bottom:12px;">Il modulo non è ancora stato caricato: chiedi a un referente del Gruppo.</div>`}
+
+    <div class="card color-gold" style="margin-bottom:12px;">
+      <div class="card-sub">La conferma della prenotazione è a cura del Consiglio Direttivo. Alcune date sono riservate alle attività istituzionali del Gruppo.</div>
+    </div>
+
+    <button type="button" class="btn secondary block" id="pren-toggle-calendario-btn">${calSedeVisibile ? "📋 Nascondi calendario" : "📅 Calendario"}</button>
+
+    ${calSedeVisibile ? renderCalendarioSede() : ""}
+  `;
+}
+
+function generaGiorniMese(anno, mese) {
+  const primoGiorno = new Date(anno, mese, 1);
+  const ultimoGiorno = new Date(anno, mese + 1, 0);
+  const offset = (primoGiorno.getDay() + 6) % 7; // lunedì = 0
+  const giorni = [];
+  for (let i = 0; i < offset; i++) giorni.push(null);
+  for (let d = 1; d <= ultimoGiorno.getDate(); d++) giorni.push(d);
+  return giorni;
+}
+
+function renderCalendarioSede() {
+  const oggi = new Date();
+  if (calSedeAnno === null) calSedeAnno = oggi.getFullYear();
+  if (calSedeMese === null) calSedeMese = oggi.getMonth();
+
+  const confermate = state.prenotazioni.filter(p => p.stato !== "in attesa");
+  const giorni = generaGiorniMese(calSedeAnno, calSedeMese);
+  const meseStr = String(calSedeMese + 1).padStart(2, "0");
+
+  const celleHtml = giorni.map(g => {
+    if (!g) return `<div class="cal-giorno cal-vuoto"></div>`;
+    const dataStr = `${calSedeAnno}-${meseStr}-${String(g).padStart(2, "0")}`;
+    const occupato = confermate.some(p => p.data === dataStr);
+    const selezionato = dataStr === calSedeGiornoSelezionato;
+    return `<div class="cal-giorno${occupato ? " cal-occupato" : ""}${selezionato ? " cal-selezionato" : ""}" data-cal-giorno="${dataStr}">
+      <div class="cal-numero">${g}</div>
+    </div>`;
+  }).join("");
+
+  let dettaglioGiornoHtml = "";
+  if (calSedeGiornoSelezionato) {
+    const delGiorno = confermate.filter(p => p.data === calSedeGiornoSelezionato);
+    dettaglioGiornoHtml = `
+      <div class="card-sub" style="margin-top:10px; font-weight:700;">${fmtDate(calSedeGiornoSelezionato)}</div>
+      ${delGiorno.length
+        ? delGiorno.map(p => `<div class="card-sub">• ${esc(FASCIA_LABEL[p.fascia] || p.fascia)} — ${esc(p.nome || "-")}</div>`).join("")
+        : `<div class="card-sub">Nessuna prenotazione confermata questo giorno.</div>`}
+    `;
+  }
+
+  return `
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+        <button type="button" class="btn secondary" id="cal-prev-btn" style="padding:4px 12px;">◀</button>
+        <div style="font-weight:800;">${MESI_CALENDARIO[calSedeMese]} ${calSedeAnno}</div>
+        <button type="button" class="btn secondary" id="cal-next-btn" style="padding:4px 12px;">▶</button>
+      </div>
+      <div class="cal-grid">${celleHtml}</div>
+      <div style="margin-top:10px; font-size:0.78rem;">🔴 Giorno con prenotazione confermata</div>
+      ${dettaglioGiornoHtml}
+    </div>
+  `;
+}
+
 function attachPrenotazioniEvents() {
-  document.getElementById("pren-crea-btn").addEventListener("click", creaPrenotazione);
+  const creaBtn = document.getElementById("pren-crea-btn");
+  if (creaBtn) creaBtn.addEventListener("click", creaPrenotazione);
   document.querySelectorAll("[data-approva-prenotazione]").forEach(btn => {
     btn.addEventListener("click", () => approvaPrenotazione(btn.dataset.approvaPrenotazione));
   });
   document.querySelectorAll("[data-elimina-prenotazione]").forEach(btn => {
     btn.addEventListener("click", () => eliminaPrenotazione(btn.dataset.eliminaPrenotazione));
+  });
+
+  const toggleCalBtn = document.getElementById("pren-toggle-calendario-btn");
+  if (toggleCalBtn) toggleCalBtn.addEventListener("click", () => {
+    calSedeVisibile = !calSedeVisibile;
+    if (!calSedeVisibile) calSedeGiornoSelezionato = null;
+    renderSection();
+  });
+  const calPrevBtn = document.getElementById("cal-prev-btn");
+  if (calPrevBtn) calPrevBtn.addEventListener("click", () => {
+    calSedeMese--;
+    if (calSedeMese < 0) { calSedeMese = 11; calSedeAnno--; }
+    calSedeGiornoSelezionato = null;
+    renderSection();
+  });
+  const calNextBtn = document.getElementById("cal-next-btn");
+  if (calNextBtn) calNextBtn.addEventListener("click", () => {
+    calSedeMese++;
+    if (calSedeMese > 11) { calSedeMese = 0; calSedeAnno++; }
+    calSedeGiornoSelezionato = null;
+    renderSection();
+  });
+  document.querySelectorAll("[data-cal-giorno]").forEach(cella => {
+    cella.addEventListener("click", () => {
+      const g = cella.dataset.calGiorno;
+      calSedeGiornoSelezionato = calSedeGiornoSelezionato === g ? null : g;
+      renderSection();
+    });
   });
 }
 
@@ -3382,8 +3483,6 @@ async function saveSettings() {
   state.settings.testoCanto = document.getElementById("set-testo-canto").value.trim();
   state.settings.testoAuguriCompleanno = document.getElementById("set-testo-auguri").value.trim();
   if (document.getElementById("utenti-lista")) state.settings.utenti = leggiUtentiDalForm();
-  const regolamentoSedeEl = document.getElementById("set-regolamento-sede");
-  if (regolamentoSedeEl) state.settings.regolamentoSede = regolamentoSedeEl.value.trim();
 
   const moduloFileEl = document.getElementById("set-modulo-sede-file");
   const moduloFile = moduloFileEl && moduloFileEl.files[0];
@@ -4088,7 +4187,7 @@ function renderReport2() {
     <div class="section-title">📊 Report 2 – Ore Volontariato</div>
     <div class="card" style="margin-bottom:16px;">
       <div class="two-col">
-        <div class="form-group"><label>Iniziativa</label><select id="rep2-iniziativa"><option value="">Tutte (classifica generale)</option>${iniziativeOpts}</select></div>
+        <div class="form-group"><label>Attività</label><select id="rep2-iniziativa"><option value="">Tutte (classifica generale)</option>${iniziativeOpts}</select></div>
         <div class="form-group"><label>Anno</label><select id="rep2-anno"><option value="">Tutti</option>${anniOpts}</select></div>
       </div>
       <button type="button" class="btn block" id="rep2-genera-btn" style="margin-top:6px;">🔎 Genera report</button>
@@ -4229,7 +4328,7 @@ function init() {
 }
 
 const SOCIO_SEZIONI = ["home", "bacheca", "libretto", "cena", "presenza-adunata", "iniziative"];
-const SEZIONI_SOLO_ADMIN = ["cassa", "conv-casoncellata", "prenotazioni"];
+const SEZIONI_SOLO_ADMIN = ["cassa", "conv-casoncellata"];
 
 function sezioniAttive() {
   if (currentRole === "socio") return SECTION_ORDER.filter(s => SOCIO_SEZIONI.includes(s));

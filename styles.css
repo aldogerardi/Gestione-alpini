@@ -252,3 +252,38 @@ body {
 .slide-out-right { animation: slideOutRight 0.15s ease forwards; }
 .slide-in-right { animation: slideInRight 0.18s ease forwards; }
 .slide-in-left { animation: slideInLeft 0.18s ease forwards; }
+
+/* Calendario Prenotaz. Sede */
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+.cal-giorno {
+  aspect-ratio: 1 / 1;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.78rem;
+  cursor: pointer;
+  background: #fff;
+}
+.cal-giorno.cal-vuoto {
+  border: none;
+  cursor: default;
+}
+.cal-giorno.cal-occupato {
+  background: #f8d7da;
+  border-color: #e39aa0;
+  color: #8a1f2b;
+  font-weight: 700;
+}
+.cal-giorno.cal-selezionato {
+  border: 2px solid #1a6b3c;
+}
+.cal-numero {
+  line-height: 1.1;
+}
