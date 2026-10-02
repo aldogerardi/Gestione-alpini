@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "6.00";
+const APP_VERSION = "6.02";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -502,25 +502,29 @@ function renderAnagrafica() {
   } else {
     cardsHtml = list.map(s => {
       const badges = [];
-      if (s.carica) badges.push(`<span class="badge">${esc(s.carica)}</span>`);
-      if (state.consiglio.membriIds.includes(s.id)) badges.push(`<span class="badge badge-icon" title="Membro del Consiglio Direttivo" style="background:#dbe9ff; border-color:#8fb4e8;">🏛️</span>`);
-      if (s.incaricoFeste) badges.push(`<span class="badge">🎉 ${esc(s.incaricoFeste)}</span>`);
-      if (s.sms) badges.push(`<span class="badge badge-icon" title="SMS">📩</span>`);
-      if (s.whatsapp) badges.push(`<span class="badge whatsapp badge-icon" title="WhatsApp">${WA_ICON}</span>`);
-      if (s.chiaviSede) badges.push(`<span class="badge badge-icon" title="Ha le chiavi della sede">🔑</span>`);
-      if (!s.privacy) badges.push(`<span class="badge badge-icon badge-warning" title="Privacy non firmata">🔒❗</span>`);
-      if (s.haccp) {
-        if (s.haccpFoto) {
-          badges.push(`<span class="badge badge-icon" data-view-haccp="${esc(s.haccpFoto)}" title="Certificazione HACCP - attestato caricato, tocca per vederlo" style="background:#d7f0dd; border-color:#7ec98f; cursor:pointer;">📎✅</span>`);
-        } else {
-          badges.push(`<span class="badge badge-icon badge-warning" title="Certificazione HACCP - attestato NON caricato">📎❗</span>`);
+      if (s.andatoAvanti) {
+        if (s.carica) badges.push(`<span class="badge">${esc(s.carica)}</span>`);
+      } else {
+        if (s.carica) badges.push(`<span class="badge">${esc(s.carica)}</span>`);
+        if (state.consiglio.membriIds.includes(s.id)) badges.push(`<span class="badge badge-icon" title="Membro del Consiglio Direttivo" style="background:#dbe9ff; border-color:#8fb4e8;">🏛️</span>`);
+        if (s.incaricoFeste) badges.push(`<span class="badge">🎉 ${esc(s.incaricoFeste)}</span>`);
+        if (s.sms) badges.push(`<span class="badge badge-icon" title="SMS">📩</span>`);
+        if (s.whatsapp) badges.push(`<span class="badge whatsapp badge-icon" title="WhatsApp">${WA_ICON}</span>`);
+        if (s.chiaviSede) badges.push(`<span class="badge badge-icon" title="Ha le chiavi della sede">🔑</span>`);
+        if (!s.privacy) badges.push(`<span class="badge badge-icon badge-warning" title="Privacy non firmata">🔒❗</span>`);
+        if (s.haccp) {
+          if (s.haccpFoto) {
+            badges.push(`<span class="badge badge-icon" data-view-haccp="${esc(s.haccpFoto)}" title="Certificazione HACCP - attestato caricato, tocca per vederlo" style="background:#d7f0dd; border-color:#7ec98f; cursor:pointer;">📎✅</span>`);
+          } else {
+            badges.push(`<span class="badge badge-icon badge-warning" title="Certificazione HACCP - attestato NON caricato">📎❗</span>`);
+          }
         }
+        if (s.alfiere) badges.push(`<span class="badge badge-icon" title="Alfiere">🏅</span>`);
+        if (s.email && s.email.trim()) badges.push(`<span class="badge badge-icon" title="Email presente">@</span>`);
+        const annoCorrente = new Date().getFullYear();
+        const bollinoOk = state.pagamentiBollino.find(r => r.socioId === s.id && r.anno === annoCorrente && r.pagato);
+        if (!bollinoOk) badges.push(`<span class="badge badge-icon badge-warning" title="Bollino ${annoCorrente} non pagato">🎫❗</span>`);
       }
-      if (s.alfiere) badges.push(`<span class="badge badge-icon" title="Alfiere">🏅</span>`);
-      if (s.email && s.email.trim()) badges.push(`<span class="badge badge-icon" title="Email presente">@</span>`);
-      const annoCorrente = new Date().getFullYear();
-      const bollinoOk = state.pagamentiBollino.find(r => r.socioId === s.id && r.anno === annoCorrente && r.pagato);
-      if (!bollinoOk && !s.andatoAvanti) badges.push(`<span class="badge badge-icon badge-warning" title="Bollino ${annoCorrente} non pagato">🎫❗</span>`);
       return `
         <div class="card color-green">
           <div class="card-row">
@@ -2218,7 +2222,7 @@ function openSettings() {
   const bloccoGestioneUtenti = ridotto ? "" : `
     <div class="settings-block">
       <h3>🔑 Gestione utenti</h3>
-      <div style="font-size:0.78rem; color:#666; margin-bottom:10px;">Ogni utente può avere una password (lasciala vuota per entrare senza password, come oggi). <b>Admin</b>: accesso completo, incluse Impostazioni avanzate (Gestione utenti, Backup/Ripristino, Zona pericolosa). <b>Direttivo</b>: accesso completo a tutte le sezioni operative, ma Impostazioni ridotte (senza Gestione utenti, Backup/Ripristino, Zona pericolosa). <b>Socio</b>: vede solo Home, Bacheca, Preghiera e Canto, Cena, Presenza Adunata e Attività, in sola visualizzazione — usalo per una password unica da dare a tutti i soci.</div>
+      <div style="font-size:0.78rem; color:#666; margin-bottom:10px;">Ogni utente può avere una password (lasciala vuota per entrare senza password, come oggi). <b>Admin</b>: accesso completo, incluse Impostazioni avanzate (Gestione utenti, Backup/Ripristino, Zona pericolosa). <b>Direttivo</b>: accesso completo a tutte le sezioni operative, ma Impostazioni ridotte (senza Gestione utenti, Backup/Ripristino, Zona pericolosa). <b>Socio</b>: vede solo Home, Bacheca, Preghiera e Canto, Cena, Presenza Adunata, Attività e Prenotaz. Sede (quest'ultima con modulo, avviso, calendario e richieste in sola visualizzazione, senza poter confermare) — usalo per una password unica da dare a tutti i soci.</div>
       <div id="utenti-lista">
         ${(state.settings.utenti || []).map((u, idx) => `
           <div class="card" data-utente-idx="${idx}" style="padding:10px; margin-bottom:8px;">
@@ -3195,14 +3199,12 @@ let calSedeMese = null;
 let calSedeVisibile = false;
 let calSedeGiornoSelezionato = null;
 
-function renderPrenotazioni() {
-  if (currentRole === "socio") return renderPrenotazioniSocio();
-
+function renderElencoPrenotazioni(soloLettura) {
   const elenco = [...state.prenotazioni].sort((a, b) =>
     (a.data || "").localeCompare(b.data || "") || FASCIA_ORDER.indexOf(a.fascia) - FASCIA_ORDER.indexOf(b.fascia)
   );
-
-  const listaHtml = elenco.length ? elenco.map(p => {
+  if (!elenco.length) return `<div class="card-sub">Nessuna prenotazione.</div>`;
+  return elenco.map(p => {
     const statoBadge = p.stato === "in attesa"
       ? `<span class="badge badge-icon badge-warning">⏳ In attesa di approvazione</span>`
       : `<span class="badge" style="background:#d7f0dd; border-color:#7ec98f;">✅ Confermata</span>`;
@@ -3215,13 +3217,18 @@ function renderPrenotazioni() {
           ${p.motivo ? `<div class="card-sub">📝 ${esc(p.motivo)}</div>` : ""}
           <div class="badge-row" style="margin-top:6px;">${statoBadge}</div>
         </div>
+        ${soloLettura ? "" : `
         <div class="card-actions">
           ${p.stato === "in attesa" ? `<button data-approva-prenotazione="${p.id}">✅</button>` : ""}
           <button data-elimina-prenotazione="${p.id}">🗑️</button>
-        </div>
+        </div>`}
       </div>
     </div>`;
-  }).join("") : `<div class="card-sub">Nessuna prenotazione.</div>`;
+  }).join("");
+}
+
+function renderPrenotazioni() {
+  if (currentRole === "socio") return renderPrenotazioniSocio();
 
   return `
     <div class="section-title">🗓️ Prenotaz. Sede</div>
@@ -3247,7 +3254,7 @@ function renderPrenotazioni() {
     ${calSedeVisibile ? renderCalendarioSede() : ""}
 
     <div class="section-title" style="font-size:1.05rem; margin-top:22px;">🗂️ Prenotazioni</div>
-    ${listaHtml}
+    ${renderElencoPrenotazioni(false)}
   `;
 }
 
@@ -3267,6 +3274,9 @@ function renderPrenotazioniSocio() {
     <button type="button" class="btn secondary block" id="pren-toggle-calendario-btn">${calSedeVisibile ? "📋 Nascondi calendario" : "📅 Calendario"}</button>
 
     ${calSedeVisibile ? renderCalendarioSede() : ""}
+
+    <div class="section-title" style="font-size:1.05rem; margin-top:22px;">🗂️ Richieste</div>
+    ${renderElencoPrenotazioni(true)}
   `;
 }
 
@@ -4038,7 +4048,9 @@ const REPORT1_COLONNE = [
   { id: "anniNaja", label: "Anni naja", get: s => s.anniNaja || "" },
   { id: "incaricoFeste", label: "Incarico feste", get: s => s.incaricoFeste || "" },
   { id: "privacy", label: "Privacy firmata", get: s => s.privacy ? "Sì" : "No" },
+  { id: "privacyFile", label: "File Privacy caricato", get: s => s.privacyFoto ? "Sì" : "No" },
   { id: "haccp", label: "HACCP", get: s => s.haccp ? "Sì" : "No" },
+  { id: "haccpFile", label: "File HACCP caricato", get: s => s.haccpFoto ? "Sì" : "No" },
   { id: "sms", label: "SMS", get: s => s.sms ? "Sì" : "No" },
   { id: "whatsapp", label: "WhatsApp", get: s => s.whatsapp ? "Sì" : "No" },
   { id: "chiaviSede", label: "Chiavi sede", get: s => s.chiaviSede ? "Sì" : "No" },
@@ -4100,11 +4112,15 @@ function renderReport1() {
       </div>
       <div class="two-col">
         <div class="form-group"><label>Provincia</label><select id="rep1-provincia"><option value="">Tutte</option>${provinciaOpts}</select></div>
-        <div class="form-group"><label>Privacy</label><select id="rep1-privacy"><option value="">Tutti</option><option value="si">Sì</option><option value="no">No</option></select></div>
+        <div class="form-group"><label>Andato avanti</label><select id="rep1-andato-avanti"><option value="">Tutti</option><option value="no" selected>Escludi (solo attivi)</option><option value="si">Solo andati avanti</option></select></div>
+      </div>
+      <div class="two-col">
+        <div class="form-group"><label>Privacy firmata</label><select id="rep1-privacy"><option value="">Tutti</option><option value="si">Sì</option><option value="no">No</option></select></div>
+        <div class="form-group"><label>File Privacy caricato</label><select id="rep1-privacy-file"><option value="">Tutti</option><option value="si">Sì</option><option value="no">No</option></select></div>
       </div>
       <div class="two-col">
         <div class="form-group"><label>HACCP</label><select id="rep1-haccp"><option value="">Tutti</option><option value="si">Sì</option><option value="no">No</option></select></div>
-        <div class="form-group"><label>Andato avanti</label><select id="rep1-andato-avanti"><option value="">Tutti</option><option value="no" selected>Escludi (solo attivi)</option><option value="si">Solo andati avanti</option></select></div>
+        <div class="form-group"><label>File HACCP caricato</label><select id="rep1-haccp-file"><option value="">Tutti</option><option value="si">Sì</option><option value="no">No</option></select></div>
       </div>
       <div class="form-group">
         <label>Colonne da includere</label>
@@ -4143,7 +4159,9 @@ function attachReport1Events() {
     const caricheSelezionate = Array.from(document.querySelectorAll(".rep1-carica:checked")).map(el => el.value);
     const provincia = document.getElementById("rep1-provincia").value;
     const privacyFiltro = document.getElementById("rep1-privacy").value;
+    const privacyFileFiltro = document.getElementById("rep1-privacy-file").value;
     const haccpFiltro = document.getElementById("rep1-haccp").value;
+    const haccpFileFiltro = document.getElementById("rep1-haccp-file").value;
     const andatoAvantiFiltro = document.getElementById("rep1-andato-avanti").value;
     const colonneIds = Array.from(document.querySelectorAll(".rep1-col:checked")).map(el => el.value);
     if (colonneIds.length === 0) { alert("Seleziona almeno una colonna."); return; }
@@ -4154,8 +4172,12 @@ function attachReport1Events() {
     if (provincia) list = list.filter(s => (s.provincia || "").toUpperCase() === provincia);
     if (privacyFiltro === "si") list = list.filter(s => s.privacy);
     if (privacyFiltro === "no") list = list.filter(s => !s.privacy);
+    if (privacyFileFiltro === "si") list = list.filter(s => s.privacyFoto);
+    if (privacyFileFiltro === "no") list = list.filter(s => !s.privacyFoto);
     if (haccpFiltro === "si") list = list.filter(s => s.haccp);
     if (haccpFiltro === "no") list = list.filter(s => !s.haccp);
+    if (haccpFileFiltro === "si") list = list.filter(s => s.haccpFoto);
+    if (haccpFileFiltro === "no") list = list.filter(s => !s.haccpFoto);
     if (andatoAvantiFiltro === "si") list = list.filter(s => s.andatoAvanti);
     if (andatoAvantiFiltro === "no") list = list.filter(s => !s.andatoAvanti);
     if (andatoAvantiFiltro === "si") {
@@ -4327,7 +4349,7 @@ function init() {
   }
 }
 
-const SOCIO_SEZIONI = ["home", "bacheca", "libretto", "cena", "presenza-adunata", "iniziative"];
+const SOCIO_SEZIONI = ["home", "bacheca", "libretto", "cena", "presenza-adunata", "iniziative", "prenotazioni"];
 const SEZIONI_SOLO_ADMIN = ["cassa", "conv-casoncellata"];
 
 function sezioniAttive() {
