@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "6.02";
+const APP_VERSION = "6.22";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -8,6 +8,7 @@ const FIRESTORE_DOC = "stato";
 const USERS = ["capogruppo", "pc_capogruppo", "segretario", "pc_segretario", "security", "pc_security"];
 let currentUser = localStorage.getItem("gestione_gruppo_user") || null;
 let currentRole = localStorage.getItem("gestione_gruppo_role") || null;
+let loginAppenaEffettuato = false;
 let firestoreUnsubscribe = null;
 
 function defaultUtenti() {
@@ -54,6 +55,7 @@ function showLoginScreen(onDone) {
     currentRole = u.ruolo || "admin";
     localStorage.setItem("gestione_gruppo_user", currentUser);
     localStorage.setItem("gestione_gruppo_role", currentRole);
+    loginAppenaEffettuato = true;
     document.getElementById("login-screen").remove();
     onDone();
   }
@@ -84,6 +86,7 @@ function showLoginScreen(onDone) {
       entra(utenteScelto);
     } else {
       document.getElementById("login-password-error").textContent = "Password errata";
+      if (utenteScelto) scriviLog([{ ev: "⚠️ Tentativo di accesso con password errata" }], utenteScelto.id);
     }
   };
   document.getElementById("login-password-ok").addEventListener("click", provaPassword);
@@ -136,6 +139,7 @@ function initFirebaseSync() {
       return;
     }
     applyStateFields(snap.data());
+    logAggiornaBaseline();
     localStorage.setItem("gestione_gruppo_data", JSON.stringify(state));
     updateTopbar();
     renderSection();
@@ -251,7 +255,142 @@ function saveState() {
   state.meta.ultimaModifica = new Date().toISOString();
   state.meta.ultimaModificaDa = currentUser || "";
   localStorage.setItem("gestione_gruppo_data", JSON.stringify(state));
+  try { registraModificheNelLog(); } catch (e) { console.warn("Log non registrato", e); }
   syncToFirebase();
+}
+
+// ---------- Log attività ----------
+// Ogni evento viene aggiunto (mai sovrascritto) in un documento mensile separato
+// "log_AAAA-MM" nella stessa collection di Firebase, così non tocca lo stato principale.
+const LOG_CAMPI_NOMI = {
+  privacyFoto: "file privacy", privacyFotoNome: "file privacy", haccpFoto: "file HACCP", haccpFotoNome: "file HACCP",
+  allegatoUrl: "allegato", allegatoNome: "allegato", allegatoThumbUrl: "allegato",
+  andatoAvanti: "andato avanti", andatoAvantiData: "data andato avanti", dataNascita: "data di nascita",
+  codiceFiscale: "codice fiscale", utenti: "utenti/password", moduloSedeUrl: "modulo sede", moduloSedeNome: "modulo sede",
+  testoPreghiera: "testo preghiera", testoCanto: "testo canto", testoAuguriCompleanno: "testo auguri",
+  quotaBollino: "quota bollino", quotaNazionale: "quota nazionale", appName: "nome app", incaricoFeste: "incarico feste",
+  chiaviSede: "chiavi sede", dataIscrizione: "data iscrizione", haccpDataCorso: "data corso HACCP", haccpDataScadenza: "scadenza HACCP"
+};
+
+function nomeSocioPerLog(id) {
+  const s = (state.socios || []).find(x => x.id === id);
+  return s ? `${s.cognome || ""} ${s.nome || ""}`.trim() : "socio";
+}
+
+const LOG_TRACK = [
+  { id: "socios", nome: "Anagrafica", get: st => st.socios, label: s => `${s.cognome || ""} ${s.nome || ""}`.trim() },
+  { id: "sponsor", nome: "Sponsor", get: st => st.sponsor, label: s => s.nome },
+  { id: "ringraziamenti", nome: "Ringraziamenti", get: st => st.ringraziamenti, label: r => `${r.cognome || ""} ${r.nome || ""}`.trim() },
+  { id: "iniziative", nome: "Attività", get: st => st.iniziativeStorico, label: i => i.nome },
+  { id: "cene", nome: "Cena", get: st => st.cene, label: c => c.titolo },
+  { id: "bacheca", nome: "Bacheca", get: st => st.bacheca, label: a => a.titolo },
+  { id: "adunate", nome: "Adunata", get: st => st.adunate, label: a => a.titolo },
+  { id: "prenotazioni", nome: "Prenotaz. Sede", get: st => st.prenotazioni, label: p => `${p.data || ""} ${FASCIA_LABEL[p.fascia] || p.fascia || ""} ${p.nome || ""}`.trim() },
+  { id: "bollino", nome: "Bollino", get: st => st.pagamentiBollino, label: p => `${nomeSocioPerLog(p.socioId)} ${p.anno || ""}`.trim() },
+  { id: "convocazioni", nome: "Consiglio (convocazione)", get: st => (st.consiglio || {}).storico, label: c => c.data || "" },
+  { id: "gruppoInfo", nome: "Home (dati del Gruppo)", obj: true, get: st => st.gruppoInfo },
+  { id: "settings", nome: "Impostazioni", obj: true, get: st => st.settings },
+  { id: "consiglio", nome: "Consiglio", obj: true, get: st => Object.assign({}, st.consiglio, { storico: undefined }) },
+  { id: "bolliniIniziali", nome: "Bollini iniziali", obj: true, get: st => st.bolliniIniziali, chiave: k => `anno ${k}` },
+  { id: "oreAlpine", nome: "Ore Alpine", obj: true, get: st => st.oreAlpine, chiave: k => {
+    const i = (state.iniziativeStorico || []).find(x => x.id === k);
+    return i ? i.nome : "attività";
+  } }
+];
+
+let logBaseline = null;
+let logComeSistema = false;
+function logSnapshotStato() {
+  const snap = {};
+  LOG_TRACK.forEach(t => {
+    const v = t.get(state);
+    snap[t.id] = JSON.parse(JSON.stringify(v === undefined ? (t.obj ? {} : []) : v));
+  });
+  return snap;
+}
+function logAggiornaBaseline() { try { logBaseline = logSnapshotStato(); } catch (e) { logBaseline = null; } }
+
+function logCampiCambiati(a, b) {
+  const nomi = new Set();
+  new Set([...Object.keys(a || {}), ...Object.keys(b || {})]).forEach(k => {
+    if (JSON.stringify((a || {})[k]) !== JSON.stringify((b || {})[k])) nomi.add(LOG_CAMPI_NOMI[k] || k);
+  });
+  const lista = Array.from(nomi);
+  return lista.length > 6 ? lista.slice(0, 6).join(", ") + "…" : lista.join(", ");
+}
+
+function logCalcolaEventi(prev, curr) {
+  const eventi = [];
+  LOG_TRACK.forEach(t => {
+    const p = prev[t.id], n = curr[t.id];
+    if (t.obj) {
+      const chiavi = new Set([...Object.keys(p || {}), ...Object.keys(n || {})]);
+      const cambiate = Array.from(chiavi).filter(k => JSON.stringify((p || {})[k]) !== JSON.stringify((n || {})[k]));
+      if (!cambiate.length) return;
+      const nomiCampi = t.chiave
+        ? cambiate.slice(0, 5).map(t.chiave).join(", ")
+        : cambiate.slice(0, 6).map(k => LOG_CAMPI_NOMI[k] || k).filter((v, i, arr) => arr.indexOf(v) === i).join(", ");
+      eventi.push(`✏️ Modificato ${t.nome} (${nomiCampi}${cambiate.length > 6 ? "…" : ""})`);
+      return;
+    }
+    const pm = new Map((p || []).map(x => [x.id, x]));
+    const nm = new Map((n || []).map(x => [x.id, x]));
+    const aggiunti = (n || []).filter(x => !pm.has(x.id));
+    const rimossi = (p || []).filter(x => !nm.has(x.id));
+    const modificati = (n || []).filter(x => pm.has(x.id) && JSON.stringify(pm.get(x.id)) !== JSON.stringify(x));
+    const gruppo = (lista, icona, verbo, prep, fmt) => {
+      if (!lista.length) return;
+      if (lista.length > 5) eventi.push(`${icona} ${verbo} ${lista.length} elementi ${prep} ${t.nome}`);
+      else lista.forEach(x => eventi.push(fmt(x)));
+    };
+    gruppo(aggiunti, "➕", "Aggiunti", "in", x => `➕ Aggiunto in ${t.nome}: ${t.label(x) || "(senza nome)"}`);
+    gruppo(modificati, "✏️", "Modificati", "in", x => {
+      const campi = logCampiCambiati(pm.get(x.id), x);
+      return `✏️ Modificato in ${t.nome}: ${t.label(x) || "(senza nome)"}${campi ? " (" + campi + ")" : ""}`;
+    });
+    gruppo(rimossi, "🗑️", "Eliminati", "da", x => `🗑️ Eliminato da ${t.nome}: ${t.label(x) || "(senza nome)"}`);
+  });
+  return eventi;
+}
+
+function registraModificheNelLog() {
+  const corrente = logSnapshotStato();
+  if (logBaseline) {
+    const eventi = logCalcolaEventi(logBaseline, corrente);
+    if (eventi.length) scriviLog(eventi.map(ev => ({ ev })), logComeSistema ? "__sistema__" : undefined);
+  }
+  logBaseline = corrente;
+}
+
+function scriviLog(voci, utenteForzato) {
+  if (!voci || !voci.length) return;
+  const ora = new Date();
+  const uid_ = utenteForzato !== undefined ? utenteForzato : (currentUser || "");
+  const nomeUtente = utenteForzato === "__pubblico__" ? "🌐 Link pubblico"
+    : utenteForzato === "__sistema__" ? "🤖 Sistema (pulizia automatica)"
+    : (uid_ ? userLabel(uid_) : "—");
+  const voci2 = voci.map((v, i) => ({ id: uid(), t: ora.toISOString(), s: i, u: uid_, n: v.n || nomeUtente, ev: v.ev }));
+  if (window.db && window.firebase && firebase.firestore) {
+    const docId = "log_" + ora.getFullYear() + "-" + String(ora.getMonth() + 1).padStart(2, "0");
+    db.collection(FIRESTORE_COLLECTION).doc(docId)
+      .set({ eventi: firebase.firestore.FieldValue.arrayUnion(...voci2) }, { merge: true })
+      .catch(err => console.warn("Log non salvato su Firebase", err));
+  } else {
+    try {
+      const k = "gestione_gruppo_log_locale";
+      const arr = JSON.parse(localStorage.getItem(k) || "[]").concat(voci2).slice(-300);
+      localStorage.setItem(k, JSON.stringify(arr));
+    } catch (e) { /* ignora */ }
+  }
+}
+
+function logAccesso(nuovoLogin) {
+  const kTs = "gestione_gruppo_ultimo_log_accesso";
+  const ultimo = parseInt(localStorage.getItem(kTs) || "0", 10);
+  const adesso = Date.now();
+  if (!nuovoLogin && adesso - ultimo < 10 * 60 * 1000) return; // evita rumore: max 1 apertura ogni 10 minuti
+  localStorage.setItem(kTs, String(adesso));
+  scriviLog([{ ev: nuovoLogin ? "🔑 Accesso (login)" : "🔑 Apertura app" }]);
 }
 
 // ---------- Utils ----------
@@ -337,6 +476,9 @@ function renderSection() {
   } else if (currentSection === "prenotazioni") {
     content.innerHTML = renderPrenotazioni();
     attachPrenotazioniEvents();
+  } else if (currentSection === "log") {
+    content.innerHTML = renderLog();
+    attachLogEvents();
   } else {
     const s = PLACEHOLDER_SECTIONS[currentSection];
     content.innerHTML = `
@@ -2915,6 +3057,7 @@ async function renderCenaRisposta(cenaId) {
         await db.collection(FIRESTORE_COLLECTION).doc(`cena_${cenaId}`).update({
           [`risposte.${entryId}`]: { nome, persone: n, ts: new Date().toISOString() }
         });
+        scriviLog([{ ev: `🍽️ Risposta alla cena "${c.titolo || ""}": ${nome} (${n} ${n === 1 ? "persona" : "persone"})` }], "__pubblico__");
         root.innerHTML = `${intestazione}<div style="font-size:1.1rem; font-weight:700; color:#1a6b3c; padding-top:10px;">✅ Grazie! Confermate ${n} ${n === 1 ? "persona" : "persone"} per ${esc(nome)}.</div><button type="button" id="cr-altra" style="width:100%; margin-top:18px; padding:14px; font-size:1rem; font-weight:700; background:#eee; border:none; border-radius:12px;">➕ Conferma un'altra persona</button>`;
         document.getElementById("cr-altra").addEventListener("click", disegnaForm);
       } catch (err) {
@@ -2958,7 +3101,10 @@ function pulisciEventiScadutiBacheca() {
     const giorniPassati = Math.floor((oggi - d) / 86400000);
     return giorniPassati < 2;
   });
-  if (state.bacheca.length !== primaLen) saveState();
+  if (state.bacheca.length !== primaLen) {
+    logComeSistema = true;
+    try { saveState(); } finally { logComeSistema = false; }
+  }
 }
 
 function parseDataISO(str) {
@@ -3182,6 +3328,90 @@ function attachPresenzaAdunataEvents() {
   document.querySelectorAll("[data-dettaglio-adunata]").forEach(card => {
     card.addEventListener("click", () => apriDettaglioAdunata(card.dataset.dettaglioAdunata));
   });
+}
+
+// ---------- Sezione Log ----------
+let logMese = null;
+let logCache = [];
+
+function renderLog() {
+  if (!logMese) {
+    const o = new Date();
+    logMese = o.getFullYear() + "-" + String(o.getMonth() + 1).padStart(2, "0");
+  }
+  const [a, m] = logMese.split("-").map(Number);
+  return `
+    <div class="section-title">📜 Log attività</div>
+    <div class="card-sub" style="margin-bottom:12px;">Registro di accessi, inserimenti, modifiche ed eliminazioni. Per tutelare la privacy vengono registrati solo cosa è cambiato e chi l'ha fatto, non i valori dei campi.</div>
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+        <button type="button" class="btn secondary" id="log-prev-btn" style="padding:4px 12px;">◀</button>
+        <div style="font-weight:800;">${MESI_CALENDARIO[m - 1]} ${a}</div>
+        <button type="button" class="btn secondary" id="log-next-btn" style="padding:4px 12px;">▶</button>
+      </div>
+      <input type="text" id="log-filtro" placeholder="Filtra (utente, sezione, nome...)" style="width:100%; margin-bottom:10px; box-sizing:border-box;">
+      <div style="display:grid; grid-template-columns:62px 44px 1fr; gap:6px; font-size:0.74rem; font-weight:800; color:#1a6b3c; border-bottom:2px solid #1a6b3c; padding-bottom:4px;">
+        <div>Data</div><div>Ora</div><div>Evento</div>
+      </div>
+      <div id="log-lista" class="card-sub">Caricamento...</div>
+      <button type="button" class="btn secondary block" id="log-aggiorna-btn" style="margin-top:10px;">🔄 Aggiorna</button>
+    </div>
+  `;
+}
+
+async function caricaLog() {
+  const el = document.getElementById("log-lista");
+  if (!el) return;
+  let eventi = [];
+  try {
+    if (window.db) {
+      const snap = await db.collection(FIRESTORE_COLLECTION).doc("log_" + logMese).get();
+      eventi = snap.exists ? (snap.data().eventi || []) : [];
+    } else {
+      eventi = JSON.parse(localStorage.getItem("gestione_gruppo_log_locale") || "[]").filter(e => (e.t || "").startsWith(logMese));
+    }
+  } catch (err) {
+    console.error(err);
+    if (document.getElementById("log-lista")) document.getElementById("log-lista").textContent = "Errore nel caricamento del log.";
+    return;
+  }
+  logCache = eventi.slice().sort((x, y) => (y.t || "").localeCompare(x.t || "") || (y.s || 0) - (x.s || 0));
+  disegnaLog();
+}
+
+function disegnaLog() {
+  const el = document.getElementById("log-lista");
+  if (!el) return;
+  const filtroEl = document.getElementById("log-filtro");
+  const q = filtroEl ? filtroEl.value.trim().toLowerCase() : "";
+  const lista = logCache.filter(e => !q || `${e.n || ""} ${e.ev || ""}`.toLowerCase().includes(q));
+  if (!lista.length) {
+    el.innerHTML = logCache.length ? "Nessun evento corrisponde al filtro." : "Nessun evento registrato in questo mese.";
+    return;
+  }
+  const righe = lista.slice(0, 500).map(e => {
+    const d = new Date(e.t);
+    const data = d.toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit", year: "2-digit" });
+    const ora = d.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
+    return `<div style="display:grid; grid-template-columns:62px 44px 1fr; gap:6px; font-size:0.78rem; padding:6px 0; border-bottom:1px solid #eee; color:#222;">
+      <div>${data}</div><div>${ora}</div><div><b>${esc(e.n || "—")}</b> — ${esc(e.ev || "")}</div>
+    </div>`;
+  }).join("");
+  el.innerHTML = righe + (lista.length > 500 ? `<div class="card-sub" style="margin-top:8px;">Mostrati i 500 eventi più recenti di ${lista.length}: usa il filtro per restringere.</div>` : "");
+}
+
+function attachLogEvents() {
+  const cambiaMese = delta => {
+    const [a, m] = logMese.split("-").map(Number);
+    const d = new Date(a, m - 1 + delta, 1);
+    logMese = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
+    renderSection();
+  };
+  document.getElementById("log-prev-btn").addEventListener("click", () => cambiaMese(-1));
+  document.getElementById("log-next-btn").addEventListener("click", () => cambiaMese(1));
+  document.getElementById("log-aggiorna-btn").addEventListener("click", caricaLog);
+  document.getElementById("log-filtro").addEventListener("input", disegnaLog);
+  caricaLog();
 }
 
 // ---------- Prenotaz. Sede ----------
@@ -4272,7 +4502,7 @@ function setupScrollHide() {
 }
 
 // ---------- Init ----------
-const SECTION_ORDER = ["home","anagrafica","conv-consiglio","bollino","bollino-amici","ringraziamenti","sponsor","cena","iniziative","ore-alpine","report","report2","conv-casoncellata","presenza-adunata","prenotazioni","cassa","bacheca","libretto"];
+const SECTION_ORDER = ["home","anagrafica","conv-consiglio","bollino","bollino-amici","ringraziamenti","sponsor","cena","iniziative","ore-alpine","report","report2","conv-casoncellata","presenza-adunata","prenotazioni","cassa","bacheca","libretto","log"];
 
 function vaiASezione(section) {
   const content = document.getElementById("app-content");
@@ -4350,7 +4580,7 @@ function init() {
 }
 
 const SOCIO_SEZIONI = ["home", "bacheca", "libretto", "cena", "presenza-adunata", "iniziative", "prenotazioni"];
-const SEZIONI_SOLO_ADMIN = ["cassa", "conv-casoncellata"];
+const SEZIONI_SOLO_ADMIN = ["cassa", "conv-casoncellata", "log"];
 
 function sezioniAttive() {
   if (currentRole === "socio") return SECTION_ORDER.filter(s => SOCIO_SEZIONI.includes(s));
@@ -4391,6 +4621,9 @@ function confermaCambiaUtente() {
 }
 
 function startApp() {
+  logAggiornaBaseline();
+  logAccesso(loginAppenaEffettuato);
+  loginAppenaEffettuato = false;
   updateTopbar();
   document.querySelectorAll(".nav-btn").forEach(btn => {
     btn.addEventListener("click", () => vaiASezione(btn.dataset.section));
