@@ -1,4 +1,4 @@
-const CACHE_NAME = "gestione-gruppo-v6-74";
+const CACHE_NAME = "gestione-gruppo-v6-94";
 const PRECACHE_URLS = [
   "./",
   "./index.html",

@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "6.74";
+const APP_VERSION = "6.94";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -58,7 +58,8 @@ function passwordInizialeSocio(s) {
   return String(gi).padStart(2, "0") + String(mi).padStart(2, "0") + a;
 }
 
-function socioPuoAccedere(s) { return !!(s && s.accessoApp && !s.andatoAvanti && passwordInizialeSocio(s)); }
+function socioIdoneoApp(s) { return !!(s && !s.andatoAvanti && s.carica !== "Amici"); }
+function socioPuoAccedere(s) { return !!(s && s.accessoApp && socioIdoneoApp(s) && passwordInizialeSocio(s)); }
 function ruoloPersonale(s) { return s && (s.accessoLivello === "admin" || s.accessoLivello === "direttivo") ? s.accessoLivello : "socio"; }
 function trovaSociPerNome(testo) {
   const k = normalizzaNomePerLogin(testo);
@@ -1020,7 +1021,7 @@ function openSocioForm(id) {
           <input type="text" id="f-andato-avanti-data" placeholder="Data gg-mm-aaaa" value="${esc(s.andatoAvantiData)}" style="width:100%;">
         </div>
       </div>
-      <div class="form-group" style="border:1px dashed #999; padding:10px; border-radius:8px;">
+      <div class="form-group" id="f-accesso-box" style="border:1px dashed #999; padding:10px; border-radius:8px;${s.carica === "Amici" ? " display:none;" : ""}">
         <label style="font-weight:800;">📲 Accesso all'app</label>
         <label style="display:flex; align-items:center; gap:6px; margin-top:4px;"><input type="checkbox" id="f-accesso-app" ${s.accessoApp ? "checked" : ""}> Abilitato (cognome e nome + password)</label>
         <div class="card-sub" style="margin-top:4px;">${passwordInizialeSocio(s) ? "La prima volta la password è la data di nascita (ggmmaaaa)." : "⚠️ Per poter accedere serve una data di nascita valida con anno a 4 cifre (gg-mm-aaaa)."}</div>
@@ -1055,6 +1056,10 @@ function openSocioForm(id) {
   pendingHaccpFotoFile = null;
   updateVisibilitaSimpatizzante();
   document.getElementById("f-carica").addEventListener("change", updateVisibilitaSimpatizzante);
+  document.getElementById("f-carica").addEventListener("change", e => {
+    const box = document.getElementById("f-accesso-box");
+    if (box) box.style.display = e.target.value === "Amici" ? "none" : "";
+  });
   document.getElementById("f-andato-avanti").addEventListener("change", e => {
     document.getElementById("f-andato-avanti-data-wrap").style.display = e.target.checked ? "" : "none";
   });
@@ -1190,6 +1195,7 @@ async function saveSocio() {
   if (accessoEl) data.accessoApp = accessoEl.checked;
   const livelloEl = document.getElementById("f-accesso-livello");
   if (livelloEl) data.accessoLivello = livelloEl.value;
+  if (data.carica === "Amici") data.accessoApp = false;   // gli Amici non possono usare l'app
 
   const socioId = editingId || uid();
   const existing = editingId ? state.socios.find(x => x.id === editingId) : null;
@@ -2585,7 +2591,7 @@ function fmtDateTime(iso) {
 
 function openSettings() {
   const ridotto = currentRole === "direttivo";
-  const sociAttivi = (state.socios || []).filter(s => !s.andatoAvanti);
+  const sociAttivi = (state.socios || []).filter(socioIdoneoApp);
   const nAbilitati = sociAttivi.filter(s => s.accessoApp).length;
   const nIdonei = sociAttivi.filter(s => passwordInizialeSocio(s)).length;
   const nSenzaData = sociAttivi.length - nIdonei;
@@ -2616,7 +2622,7 @@ function openSettings() {
 
     <div class="settings-block">
       <h3>📲 Accesso soci con nome e password</h3>
-      <div class="card-sub" style="margin-bottom:8px;">Soci attivi: <strong>${sociAttivi.length}</strong> · abilitati all'accesso: <strong>${nAbilitati}</strong> · con data di nascita valida: <strong>${nIdonei}</strong> · senza data valida: <strong>${nSenzaData}</strong></div>
+      <div class="card-sub" style="margin-bottom:8px;">Soci attivi (esclusi gli Amici): <strong>${sociAttivi.length}</strong> · abilitati all'accesso: <strong>${nAbilitati}</strong> · con data di nascita valida: <strong>${nIdonei}</strong> · senza data valida: <strong>${nSenzaData}</strong></div>
       <div style="font-size:0.78rem; color:#666; margin-bottom:8px;">La prima volta la password è la data di nascita (ggmmaaaa); poi il socio la cambia da Menù → Cambia password. Chi ha dimenticato la password si reimposta dalla sua scheda in Anagrafica.</div>
       <button type="button" class="btn block" id="accesso-abilita-tutti-btn" style="margin-bottom:6px;">✅ Abilita tutti i soci con data di nascita valida</button>
       <button type="button" class="btn secondary block" id="accesso-senza-data-btn" style="margin-bottom:6px;">📋 Elenca i soci senza data di nascita valida</button>
@@ -2747,7 +2753,7 @@ function openSettings() {
   });
   const abilitaTuttiBtn = document.getElementById("accesso-abilita-tutti-btn");
   if (abilitaTuttiBtn) abilitaTuttiBtn.addEventListener("click", () => {
-    const target = state.socios.filter(s => !s.andatoAvanti && passwordInizialeSocio(s) && !s.accessoApp);
+    const target = state.socios.filter(s => socioIdoneoApp(s) && passwordInizialeSocio(s) && !s.accessoApp);
     if (!target.length) { alert("Nessun socio da abilitare."); return; }
     if (!confirm(`Abilitare l'accesso con nome e password a ${target.length} soci?`)) return;
     target.forEach(s => { s.accessoApp = true; });
@@ -2757,7 +2763,7 @@ function openSettings() {
   });
   const senzaDataBtn = document.getElementById("accesso-senza-data-btn");
   if (senzaDataBtn) senzaDataBtn.addEventListener("click", () => {
-    const lista = state.socios.filter(s => !s.andatoAvanti && !passwordInizialeSocio(s)).map(s => `${s.cognome} ${s.nome}`.trim());
+    const lista = state.socios.filter(s => socioIdoneoApp(s) && !passwordInizialeSocio(s)).map(s => `${s.cognome} ${s.nome}`.trim());
     alert(lista.length ? `Soci senza data di nascita valida (${lista.length}):\n\n` + lista.slice(0, 60).join("\n") + (lista.length > 60 ? "\n..." : "") : "Tutti i soci attivi hanno una data di nascita valida.");
   });
   const disabilitaTuttiBtn = document.getElementById("accesso-disabilita-tutti-btn");
@@ -4942,6 +4948,95 @@ function vaiASezione(section) {
   }, { once: true });
 }
 
+// ---------- La mia scheda (modifica dei propri dati da parte del socio) ----------
+// Il socio può modificare solo questi campi. Gli altri (matricola, carica, note, bollino, privacy, HACCP,
+// SMS/WhatsApp, chiavi, alfiere, andato avanti, accesso app) restano gestiti dal Direttivo.
+const MIA_SCHEDA_CAMPI = ["cognome", "nome", "dataNascita", "luogoNascita", "provinciaNascita", "codiceFiscale",
+  "indirizzo", "paese", "provincia", "cap", "telefono", "cellulare", "email", "grado", "reparto", "anniNaja"];
+
+function validaMiaScheda(input) {
+  const campi = {};
+  MIA_SCHEDA_CAMPI.forEach(k => { if (input[k] !== undefined && input[k] !== null) campi[k] = String(input[k]).trim(); });
+  ["provinciaNascita", "provincia", "codiceFiscale"].forEach(k => { if (campi[k] !== undefined) campi[k] = campi[k].toUpperCase(); });
+  if (!campi.cognome || !campi.nome) return { errore: "Cognome e nome sono obbligatori." };
+  if (campi.dataNascita !== undefined && !passwordInizialeSocio({ dataNascita: campi.dataNascita })) {
+    return { errore: "Data di nascita non valida: usa il formato gg-mm-aaaa con l'anno a 4 cifre." };
+  }
+  if (campi.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(campi.email)) return { errore: "L'indirizzo email non sembra valido." };
+  return { campi };
+}
+
+// Scrive SOLO la scheda del socio dentro il documento principale, con una transazione:
+// non sovrascrive il resto dei dati e non perde le modifiche fatte da altri nello stesso momento.
+async function salvaMiaSchedaRemoto(socioId, campi) {
+  const ref = db.collection(FIRESTORE_COLLECTION).doc(FIRESTORE_DOC);
+  await conTimeout(db.runTransaction(async tx => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw new Error("documento principale non trovato");
+    const socios = (snap.data().socios || []).slice();
+    const idx = socios.findIndex(s => s.id === socioId);
+    if (idx < 0) throw new Error("socio non trovato");
+    socios[idx] = Object.assign({}, socios[idx], campi);
+    tx.update(ref, { socios });
+  }), 15000);
+}
+
+function apriMiaScheda() {
+  const s = socioCorrente();
+  if (!s) return;
+  const simp = s.carica === "Simpatizzante";
+  const campo = (k, label, extra) => `<div class="form-group"${extra && extra.stile ? ` style="${extra.stile}"` : ""}><label>${label}</label><input type="${(extra && extra.tipo) || "text"}" id="ms-${k}" value="${esc(s[k])}"${extra && extra.attr ? " " + extra.attr : ""}></div>`;
+  const html = `
+    <div class="modal-title">👤 La mia scheda</div>
+    <div class="card-sub" style="margin-bottom:10px;">Qui puoi aggiornare i tuoi dati. Matricola, categoria e le altre voci le gestisce il Direttivo.</div>
+    <div class="two-col">${campo("cognome", "Cognome *")}${campo("nome", "Nome *")}</div>
+    <div class="two-col">${campo("dataNascita", "Data di nascita", { attr: 'placeholder="gg-mm-aaaa"' })}${campo("codiceFiscale", "Codice fiscale", { attr: 'style="text-transform:uppercase"' })}</div>
+    ${simp ? "" : `<div class="two-col">${campo("luogoNascita", "Luogo di nascita")}${campo("provinciaNascita", "Prov. nascita", { attr: 'maxlength="2" style="text-transform:uppercase"' })}</div>`}
+    ${campo("indirizzo", "Residenza - Indirizzo")}
+    <div class="two-col">${campo("paese", "Paese")}${campo("provincia", "Provincia", { attr: 'maxlength="2" style="text-transform:uppercase"' })}${campo("cap", "CAP", { attr: 'maxlength="5" inputmode="numeric"' })}</div>
+    <div class="two-col">${campo("telefono", "Telefono", { tipo: "tel" })}${campo("cellulare", "Cellulare", { tipo: "tel" })}</div>
+    ${campo("email", "Email", { tipo: "email" })}
+    ${simp ? "" : `<div class="two-col">${campo("grado", "Grado")}${campo("reparto", "Reparto")}</div>${campo("anniNaja", "Anni di naja")}`}
+    <div class="card-sub" style="margin:4px 0 10px;">Matricola: <strong>${esc(s.matricola) || "-"}</strong> · Iscritto dal: <strong>${esc(s.dataIscrizione) || "-"}</strong> · Categoria: <strong>${esc(s.carica) || "-"}</strong></div>
+    <div style="font-size:0.74rem; color:#666; margin-bottom:8px;">Se cambi cognome e nome, per accedere userai quelli nuovi. Se non hai ancora cambiato password, cambiando la data di nascita cambia anche la password iniziale.</div>
+    <div id="ms-errore" style="color:var(--red); font-size:0.82rem; min-height:1.1em; margin-bottom:6px;"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn secondary" id="ms-annulla">Annulla</button>
+      <button type="button" class="btn" id="ms-salva">Salva</button>
+    </div>`;
+  showModal(html);
+  document.getElementById("ms-annulla").addEventListener("click", closeModal);
+  document.getElementById("ms-salva").addEventListener("click", async () => {
+    const err = document.getElementById("ms-errore");
+    const input = {};
+    MIA_SCHEDA_CAMPI.forEach(k => { const el = document.getElementById("ms-" + k); if (el) input[k] = el.value; });
+    const v = validaMiaScheda(input);
+    if (v.errore) { err.textContent = v.errore; return; }
+    if (!window.db) { err.textContent = "Firebase non configurato: impossibile salvare."; return; }
+    const btn = document.getElementById("ms-salva");
+    btn.disabled = true; err.textContent = "";
+    try {
+      await salvaMiaSchedaRemoto(s.id, v.campi);
+    } catch (e) {
+      console.error(e);
+      err.textContent = "Non sono riuscito a salvare: controlla la connessione e riprova.";
+      btn.disabled = false;
+      return;
+    }
+    const idx = state.socios.findIndex(x => x.id === s.id);
+    const prima = idx >= 0 ? JSON.parse(JSON.stringify(state.socios[idx])) : {};
+    if (idx >= 0) Object.assign(state.socios[idx], v.campi);
+    localStorage.setItem("gestione_gruppo_data", JSON.stringify(state));
+    logAggiornaBaseline();
+    const cambiati = logCampiCambiati(prima, state.socios[idx] || {});
+    scriviLog([{ ev: `✏️ Ha modificato la propria scheda${cambiati ? " (" + cambiati + ")" : " (nessuna variazione)"}` }]);
+    closeModal();
+    updateTopbar();
+    renderSection();
+    toast("Scheda aggiornata");
+  });
+}
+
 // ---------- Cambio password personale ----------
 function apriCambioPassword(primoAccesso) {
   const socio = socioCorrente();
@@ -5024,7 +5119,8 @@ function renderMenuDrawer() {
     </div>
     ${gruppi}
     <div class="menu-gruppo">Profilo</div>
-    ${currentUser && currentUser.startsWith("socio:") ? `<button type="button" class="menu-voce" data-menu-azione="password"><span class="mv-ic">🔑</span><span class="mv-lb">Cambia password</span></button>` : ""}
+    ${currentUser && currentUser.startsWith("socio:") ? `<button type="button" class="menu-voce" data-menu-azione="scheda"><span class="mv-ic">👤</span><span class="mv-lb">La mia scheda</span></button>
+    <button type="button" class="menu-voce" data-menu-azione="password"><span class="mv-ic">🔑</span><span class="mv-lb">Cambia password</span></button>` : ""}
     <button type="button" class="menu-voce" data-menu-azione="esci"><span class="mv-ic">🚪</span><span class="mv-lb">Esci</span></button>
     <div class="menu-foot">🔒 = non disponibile per il tuo profilo · v${APP_VERSION}</div>
   `;
@@ -5055,6 +5151,7 @@ function setupMenuLaterale() {
     if (azione) {
       chiudiMenu();
       if (azione.dataset.menuAzione === "password") apriCambioPassword(false);
+      else if (azione.dataset.menuAzione === "scheda") apriMiaScheda();
       else confermaCambiaUtente();
       return;
     }
