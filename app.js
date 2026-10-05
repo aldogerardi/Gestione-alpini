@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "6.22";
+const APP_VERSION = "6.44";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -117,6 +117,7 @@ function applyStateFields(source) {
   state.bacheca = source.bacheca || [];
   state.adunate = source.adunate || [];
   state.prenotazioni = source.prenotazioni || [];
+  state.verbali = source.verbali || [];
 }
 
 function syncToFirebase() {
@@ -215,6 +216,7 @@ let state = {
   bacheca: [],
   adunate: [],
   prenotazioni: [],
+  verbali: [],
   meta: { ultimaModifica: null, ultimoImport: null }
 };
 let bollinoAnno = new Date().getFullYear();
@@ -286,6 +288,7 @@ const LOG_TRACK = [
   { id: "bacheca", nome: "Bacheca", get: st => st.bacheca, label: a => a.titolo },
   { id: "adunate", nome: "Adunata", get: st => st.adunate, label: a => a.titolo },
   { id: "prenotazioni", nome: "Prenotaz. Sede", get: st => st.prenotazioni, label: p => `${p.data || ""} ${FASCIA_LABEL[p.fascia] || p.fascia || ""} ${p.nome || ""}`.trim() },
+  { id: "verbali", nome: "Verbali Consiglio", get: st => st.verbali, label: v => v.titolo },
   { id: "bollino", nome: "Bollino", get: st => st.pagamentiBollino, label: p => `${nomeSocioPerLog(p.socioId)} ${p.anno || ""}`.trim() },
   { id: "convocazioni", nome: "Consiglio (convocazione)", get: st => (st.consiglio || {}).storico, label: c => c.data || "" },
   { id: "gruppoInfo", nome: "Home (dati del Gruppo)", obj: true, get: st => st.gruppoInfo },
@@ -419,11 +422,14 @@ function updateTopbar() {
 }
 
 function setActiveNav() {
+  let sulBar = false;
   document.querySelectorAll(".nav-btn").forEach(b => {
-    b.classList.toggle("active", b.dataset.section === currentSection);
+    const on = b.dataset.section === currentSection;
+    b.classList.toggle("active", on);
+    if (on) sulBar = true;
   });
-  const activeBtn = document.querySelector(".nav-btn.active");
-  if (activeBtn) activeBtn.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+  const menuBtn = document.getElementById("menu-btn");
+  if (menuBtn) menuBtn.classList.toggle("active", !sulBar);
 }
 
 function renderSection() {
@@ -476,6 +482,9 @@ function renderSection() {
   } else if (currentSection === "prenotazioni") {
     content.innerHTML = renderPrenotazioni();
     attachPrenotazioniEvents();
+  } else if (currentSection === "verbali") {
+    content.innerHTML = renderVerbali();
+    attachVerbaliEvents();
   } else if (currentSection === "log") {
     content.innerHTML = renderLog();
     attachLogEvents();
@@ -2364,7 +2373,7 @@ function openSettings() {
   const bloccoGestioneUtenti = ridotto ? "" : `
     <div class="settings-block">
       <h3>🔑 Gestione utenti</h3>
-      <div style="font-size:0.78rem; color:#666; margin-bottom:10px;">Ogni utente può avere una password (lasciala vuota per entrare senza password, come oggi). <b>Admin</b>: accesso completo, incluse Impostazioni avanzate (Gestione utenti, Backup/Ripristino, Zona pericolosa). <b>Direttivo</b>: accesso completo a tutte le sezioni operative, ma Impostazioni ridotte (senza Gestione utenti, Backup/Ripristino, Zona pericolosa). <b>Socio</b>: vede solo Home, Bacheca, Preghiera e Canto, Cena, Presenza Adunata, Attività e Prenotaz. Sede (quest'ultima con modulo, avviso, calendario e richieste in sola visualizzazione, senza poter confermare) — usalo per una password unica da dare a tutti i soci.</div>
+      <div style="font-size:0.78rem; color:#666; margin-bottom:10px;">Ogni utente può avere una password (lasciala vuota per entrare senza password, come oggi). <b>Admin</b>: accesso completo, incluse Impostazioni avanzate (Gestione utenti, Backup/Ripristino, Zona pericolosa). <b>Direttivo</b>: accesso completo a tutte le sezioni operative, ma Impostazioni ridotte (senza Gestione utenti, Backup/Ripristino, Zona pericolosa). <b>Socio</b>: vede solo Home, Bacheca, Preghiera e Canto, Cena, Presenza Adunata, Attività, Verbali Consiglio (solo consultazione) e Prenotaz. Sede (quest'ultima con modulo, avviso, calendario e richieste in sola visualizzazione, senza poter confermare) — usalo per una password unica da dare a tutti i soci.</div>
       <div id="utenti-lista">
         ${(state.settings.utenti || []).map((u, idx) => `
           <div class="card" data-utente-idx="${idx}" style="padding:10px; margin-bottom:8px;">
@@ -3328,6 +3337,114 @@ function attachPresenzaAdunataEvents() {
   document.querySelectorAll("[data-dettaglio-adunata]").forEach(card => {
     card.addEventListener("click", () => apriDettaglioAdunata(card.dataset.dettaglioAdunata));
   });
+}
+
+// ---------- Verbali Consiglio ----------
+function cardVerbale(v, soloLettura) {
+  return `
+    <div class="card" data-dettaglio-verbale="${v.id}" style="cursor:pointer;">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
+        <div>
+          <div style="font-weight:800;">${esc(v.titolo || "Verbale")} 📄</div>
+          <div class="card-sub">${v.data ? "📅 " + fmtDate(v.data) : ""}</div>
+        </div>
+        ${soloLettura ? "" : `<button type="button" class="btn danger" data-elimina-verbale="${v.id}" style="padding:5px 10px; font-size:0.8rem;">🗑️</button>`}
+      </div>
+      ${v.allegatoThumbUrl ? `<img src="${esc(v.allegatoThumbUrl)}" style="max-width:100%; border-radius:8px; margin-top:8px; border:1px solid #ccc;">` : ""}
+    </div>`;
+}
+
+function renderVerbali() {
+  const soloLettura = currentRole === "socio";
+  const elenco = [...(state.verbali || [])].sort((a, b) => {
+    if (!a.data && !b.data) return (b.creato || "").localeCompare(a.creato || "");
+    if (!a.data) return 1;
+    if (!b.data) return -1;
+    return b.data.localeCompare(a.data);
+  });
+  const listaHtml = elenco.length ? elenco.map(v => cardVerbale(v, soloLettura)).join("") : `<div class="card-sub">Nessun verbale pubblicato.</div>`;
+
+  const form = soloLettura ? "" : `
+    <div class="card">
+      <div style="font-weight:800; margin-bottom:10px;">Nuovo verbale</div>
+      <div class="form-group"><label>Titolo</label><input type="text" id="verbale-titolo" placeholder="Es. Verbale del Consiglio del 12 ottobre"></div>
+      <div class="form-group"><label>Data della riunione</label><input type="date" id="verbale-data"></div>
+      <div class="form-group"><label>File PDF del verbale</label><input type="file" id="verbale-file" accept=".pdf,application/pdf"></div>
+      <button type="button" class="btn block" id="crea-verbale-btn" style="margin-top:6px;">➕ Pubblica verbale</button>
+    </div>`;
+
+  return `
+    <div class="section-title">📑 Verbali Consiglio</div>
+    <div class="card-sub" style="margin-bottom:12px;">Verbali delle riunioni del Consiglio Direttivo, dal più recente.</div>
+    ${form}
+    <div class="section-title" style="font-size:1.05rem; margin-top:22px;">🗂️ Verbali</div>
+    <div id="verbali-lista">${listaHtml}</div>
+  `;
+}
+
+function attachVerbaliEvents() {
+  const creaBtn = document.getElementById("crea-verbale-btn");
+  if (creaBtn) creaBtn.addEventListener("click", creaVerbale);
+  document.querySelectorAll("[data-elimina-verbale]").forEach(btn => {
+    btn.addEventListener("click", e => { e.stopPropagation(); eliminaVerbale(btn.dataset.eliminaVerbale); });
+  });
+  document.querySelectorAll("[data-dettaglio-verbale]").forEach(card => {
+    card.addEventListener("click", () => apriDettaglioVerbale(card.dataset.dettaglioVerbale));
+  });
+}
+
+function apriDettaglioVerbale(id) {
+  const v = (state.verbali || []).find(x => x.id === id);
+  if (!v) return;
+  const html = `
+    <div style="font-weight:900; font-size:1.2rem; margin-bottom:2px;">${esc(v.titolo || "Verbale")}</div>
+    <div class="card-sub" style="margin-bottom:10px;">${v.data ? "📅 " + fmtDate(v.data) : ""}</div>
+    ${v.allegatoThumbUrl ? `<img src="${esc(v.allegatoThumbUrl)}" style="max-width:100%; border-radius:8px; border:1px solid #ccc;">` : ""}
+    ${v.allegatoUrl ? `<a href="${esc(v.allegatoUrl)}" target="_blank" class="btn block" style="margin-top:10px;">📄 Apri il verbale</a>` : ""}
+    <div class="modal-actions" style="margin-top:16px;">
+      <button type="button" class="btn secondary block" id="dettaglio-verbale-chiudi">Chiudi</button>
+    </div>
+  `;
+  showModal(html);
+  document.getElementById("dettaglio-verbale-chiudi").addEventListener("click", closeModal);
+}
+
+async function creaVerbale() {
+  const titolo = document.getElementById("verbale-titolo").value.trim();
+  const data = document.getElementById("verbale-data").value;
+  const file = document.getElementById("verbale-file").files[0];
+  if (!titolo) { alert("Inserisci un titolo per il verbale"); return; }
+  if (!file) { alert("Seleziona il file PDF del verbale"); return; }
+  if (!(file.name.toLowerCase().endsWith(".pdf") || file.type === "application/pdf")) { alert("Il verbale deve essere un file PDF"); return; }
+  if (!window.storage) { alert("Firebase non configurato: il verbale non può essere caricato su questo dispositivo."); return; }
+  const id = uid();
+  const nuovo = { id, titolo, data, creato: new Date().toISOString(), allegatoUrl: "", allegatoNome: file.name, allegatoThumbUrl: "" };
+  try {
+    toast("Caricamento verbale...");
+    nuovo.allegatoUrl = await uploadDocumento(file, `verbali/${id}`);
+  } catch (err) {
+    console.error(err);
+    alert("Errore nel caricamento del verbale. Riprova.");
+    return;
+  }
+  try {
+    const miniatura = await generaMiniaturaPdf(file);
+    if (miniatura) nuovo.allegatoThumbUrl = await uploadDocumento(miniatura, `verbali/${id}_thumb`);
+  } catch (err) {
+    console.warn("Anteprima verbale non generata", err);
+  }
+  state.verbali = state.verbali || [];
+  state.verbali.push(nuovo);
+  saveState();
+  renderSection();
+  toast("Verbale pubblicato");
+}
+
+function eliminaVerbale(id) {
+  if (!confirm("Eliminare questo verbale?")) return;
+  state.verbali = (state.verbali || []).filter(v => v.id !== id);
+  saveState();
+  renderSection();
 }
 
 // ---------- Sezione Log ----------
@@ -4298,6 +4415,39 @@ function parseDataGGMMAAAA(str) {
   return isNaN(d.getTime()) ? null : d;
 }
 
+const REPORT1_ORDINAMENTI = [
+  { id: "cognome", label: "Cognome e nome (alfabetico)", tipo: "testo", key: s => `${s.cognome || ""} ${s.nome || ""}`.trim() },
+  { id: "nome", label: "Nome e cognome", tipo: "testo", key: s => `${s.nome || ""} ${s.cognome || ""}`.trim() },
+  { id: "dataNascita", label: "Data di nascita", tipo: "data", key: s => parseDataGGMMAAAA(s.dataNascita) },
+  { id: "dataIscrizione", label: "Data iscrizione (anzianità)", tipo: "data", key: s => parseDataGGMMAAAA(s.dataIscrizione) },
+  { id: "paese", label: "Residenza (paese)", tipo: "testo", key: s => s.paese || "" },
+  { id: "provincia", label: "Provincia", tipo: "testo", key: s => s.provincia || "" },
+  { id: "cap", label: "CAP", tipo: "testo", key: s => s.cap || "" },
+  { id: "indirizzo", label: "Indirizzo (via)", tipo: "testo", key: s => s.indirizzo || "" },
+  { id: "luogoNascita", label: "Luogo di nascita", tipo: "testo", key: s => s.luogoNascita || "" },
+  { id: "carica", label: "Carica", tipo: "num", key: s => { const i = CARICHE.indexOf(s.carica); return i < 0 ? null : i; } },
+  { id: "matricola", label: "Matricola", tipo: "testo", key: s => s.matricola || "" },
+  { id: "andatoAvantiData", label: "Data andato avanti", tipo: "data", key: s => parseDataGGMMAAAA(s.andatoAvantiData) }
+];
+
+function ordinaSociReport(list, ordId, dir) {
+  const o = REPORT1_ORDINAMENTI.find(x => x.id === ordId) || REPORT1_ORDINAMENTI[0];
+  const segno = dir === "desc" ? -1 : 1;
+  const opz = { numeric: true, sensitivity: "base" };
+  const perNome = (a, b) => `${a.cognome || ""} ${a.nome || ""}`.localeCompare(`${b.cognome || ""} ${b.nome || ""}`, "it", opz);
+  list.sort((a, b) => {
+    const ka = o.key(a), kb = o.key(b);
+    const va = ka === null || ka === "" || ka === undefined;
+    const vb = kb === null || kb === "" || kb === undefined;
+    if (va && vb) return perNome(a, b);
+    if (va) return 1;   // i valori mancanti restano sempre in fondo
+    if (vb) return -1;
+    const r = o.tipo === "testo" ? ka.localeCompare(kb, "it", opz) : (ka - kb);
+    return r ? r * segno : perNome(a, b);
+  });
+  return list;
+}
+
 function apriReportAndatiAvanti() {
   const elenco = state.socios
     .filter(s => s.andatoAvanti)
@@ -4351,6 +4501,16 @@ function renderReport1() {
       <div class="two-col">
         <div class="form-group"><label>HACCP</label><select id="rep1-haccp"><option value="">Tutti</option><option value="si">Sì</option><option value="no">No</option></select></div>
         <div class="form-group"><label>File HACCP caricato</label><select id="rep1-haccp-file"><option value="">Tutti</option><option value="si">Sì</option><option value="no">No</option></select></div>
+      </div>
+      <div class="two-col">
+        <div class="form-group"><label>Ordina per</label><select id="rep1-ordina">
+          <option value="auto" selected>Predefinito</option>
+          ${REPORT1_ORDINAMENTI.map(o => `<option value="${o.id}">${o.label}</option>`).join("")}
+        </select></div>
+        <div class="form-group"><label>Ordine</label><select id="rep1-direzione">
+          <option value="asc" selected>Crescente (A→Z, più vecchio prima)</option>
+          <option value="desc">Decrescente (Z→A, più recente prima)</option>
+        </select></div>
       </div>
       <div class="form-group">
         <label>Colonne da includere</label>
@@ -4410,17 +4570,10 @@ function attachReport1Events() {
     if (haccpFileFiltro === "no") list = list.filter(s => !s.haccpFoto);
     if (andatoAvantiFiltro === "si") list = list.filter(s => s.andatoAvanti);
     if (andatoAvantiFiltro === "no") list = list.filter(s => !s.andatoAvanti);
-    if (andatoAvantiFiltro === "si") {
-      list.sort((a, b) => {
-        const da = parseDataGGMMAAAA(a.andatoAvantiData), db = parseDataGGMMAAAA(b.andatoAvantiData);
-        if (!da && !db) return 0;
-        if (!da) return 1;
-        if (!db) return -1;
-        return da - db;
-      });
-    } else {
-      list.sort((a, b) => (a.cognome + a.nome).localeCompare(b.cognome + b.nome));
-    }
+    let ordineScelto = document.getElementById("rep1-ordina").value;
+    const direzione = document.getElementById("rep1-direzione").value;
+    if (ordineScelto === "auto") ordineScelto = andatoAvantiFiltro === "si" ? "andatoAvantiData" : "cognome";
+    ordinaSociReport(list, ordineScelto, direzione);
     const colonne = REPORT1_COLONNE.filter(c => colonneIds.includes(c.id));
     const headers = colonne.map(c => c.label);
     const rows = list.map(s => colonne.map(c => esc(c.get(s))));
@@ -4502,9 +4655,10 @@ function setupScrollHide() {
 }
 
 // ---------- Init ----------
-const SECTION_ORDER = ["home","anagrafica","conv-consiglio","bollino","bollino-amici","ringraziamenti","sponsor","cena","iniziative","ore-alpine","report","report2","conv-casoncellata","presenza-adunata","prenotazioni","cassa","bacheca","libretto","log"];
+const SECTION_ORDER = ["home","anagrafica","conv-consiglio","bollino","bollino-amici","ringraziamenti","sponsor","cena","iniziative","ore-alpine","report","report2","conv-casoncellata","presenza-adunata","prenotazioni","cassa","bacheca","verbali","libretto","log"];
 
 function vaiASezione(section) {
+  if (!sezionePermessa(section)) return;
   const content = document.getElementById("app-content");
   const ordine = sezioniAttive();
   const oldIdx = ordine.indexOf(currentSection);
@@ -4531,6 +4685,75 @@ function vaiASezione(section) {
     content.classList.remove("slide-out-left", "slide-out-right");
     eseguiCambio();
   }, { once: true });
+}
+
+// ---------- Menù laterale ----------
+const MENU_GRUPPI = [
+  { titolo: "", voci: [["home", "🏠", "Home"]] },
+  { titolo: "Soci e tesseramento", voci: [["anagrafica", "👤", "Anagrafica"], ["conv-consiglio", "📋", "Consiglio"], ["bollino", "🎫", "Bollino"], ["bollino-amici", "🤝", "Bollino Amici"]] },
+  { titolo: "Eventi", voci: [["cena", "🍽️", "Cena"], ["iniziative", "🎉", "Attività"], ["presenza-adunata", "🎖️", "Adunata"], ["prenotazioni", "🗓️", "Prenotaz. Sede"], ["conv-casoncellata", "🥟", "Conv. Casoncellata"]] },
+  { titolo: "Comunicazione", voci: [["bacheca", "📌", "Bacheca"], ["verbali", "📑", "Verbali Consiglio"], ["libretto", "📖", "Preghiera e Canto"], ["ringraziamenti", "🙏", "Ringraziamenti"], ["sponsor", "💼", "Sponsor"]] },
+  { titolo: "Gestione e report", voci: [["cassa", "💰", "Cassa"], ["ore-alpine", "⏱️", "Ore Alpine"], ["report", "📊", "Report 1"], ["report2", "📊", "Report 2"], ["log", "📜", "Log"]] }
+];
+
+function sezionePermessa(sezione) {
+  if (currentRole === "socio") return SOCIO_SEZIONI.includes(sezione);
+  if (currentRole !== "admin") return !SEZIONI_SOLO_ADMIN.includes(sezione);
+  return true;
+}
+
+function renderMenuDrawer() {
+  const drawer = document.getElementById("menu-drawer");
+  if (!drawer) return;
+  const gruppi = MENU_GRUPPI.map(g => `
+    ${g.titolo ? `<div class="menu-gruppo">${g.titolo}</div>` : ""}
+    ${g.voci.map(([sez, icona, label]) => {
+      const permessa = sezionePermessa(sez);
+      return `<button type="button" class="menu-voce${sez === currentSection ? " attiva" : ""}" data-menu-sezione="${sez}"${permessa ? "" : ' disabled aria-disabled="true"'}>
+        <span class="mv-ic">${icona}</span><span class="mv-lb">${label}</span>${permessa ? "" : '<span class="mv-lock" title="Non disponibile per il tuo profilo">🔒</span>'}
+      </button>`;
+    }).join("")}
+  `).join("");
+  drawer.innerHTML = `
+    <div class="menu-head">
+      <div>
+        <div class="mh-titolo">Menù</div>
+        <div class="mh-sub">${esc(userLabel(currentUser))}</div>
+      </div>
+      <button type="button" class="menu-close" id="menu-close-btn" aria-label="Chiudi il menù">✕</button>
+    </div>
+    ${gruppi}
+    <div class="menu-foot">🔒 = non disponibile per il tuo profilo · v${APP_VERSION}</div>
+  `;
+}
+
+function apriMenu() {
+  renderMenuDrawer();
+  const overlay = document.getElementById("menu-overlay");
+  overlay.classList.add("open");
+  overlay.setAttribute("aria-hidden", "false");
+  document.body.classList.add("menu-aperto");
+}
+
+function chiudiMenu() {
+  const overlay = document.getElementById("menu-overlay");
+  if (!overlay) return;
+  overlay.classList.remove("open");
+  overlay.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("menu-aperto");
+}
+
+function setupMenuLaterale() {
+  document.getElementById("menu-btn").addEventListener("click", apriMenu);
+  document.getElementById("menu-scrim").addEventListener("click", chiudiMenu);
+  document.getElementById("menu-drawer").addEventListener("click", e => {
+    if (e.target.closest("#menu-close-btn")) { chiudiMenu(); return; }
+    const voce = e.target.closest("[data-menu-sezione]");
+    if (!voce || voce.disabled) return;
+    chiudiMenu();
+    vaiASezione(voce.dataset.menuSezione);
+  });
+  document.addEventListener("keydown", e => { if (e.key === "Escape") chiudiMenu(); });
 }
 
 let touchStartX = 0, touchStartY = 0;
@@ -4579,7 +4802,7 @@ function init() {
   }
 }
 
-const SOCIO_SEZIONI = ["home", "bacheca", "libretto", "cena", "presenza-adunata", "iniziative", "prenotazioni"];
+const SOCIO_SEZIONI = ["home", "bacheca", "libretto", "cena", "presenza-adunata", "iniziative", "prenotazioni", "verbali"];
 const SEZIONI_SOLO_ADMIN = ["cassa", "conv-casoncellata", "log"];
 
 function sezioniAttive() {
@@ -4637,7 +4860,7 @@ function startApp() {
     if (e.target.id === "modal-overlay") { closeModal(); currentConvocazioneId = null; renderSection(); }
   });
   setupScrollHide();
-  setupSwipeNav();
+  setupMenuLaterale();
   renderSection();
   initFirebaseSync();
 

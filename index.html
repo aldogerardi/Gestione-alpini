@@ -35,25 +35,16 @@
 
 <nav id="navbar">
   <button class="nav-btn" data-section="home">🏠<span>Home</span></button>
-  <button class="nav-btn" data-section="anagrafica">👤<span>Anagrafica</span></button>
-  <button class="nav-btn" data-section="conv-consiglio">📋<span>Consiglio</span></button>
-  <button class="nav-btn" data-section="bollino">🎫<span>Bollino</span></button>
-  <button class="nav-btn" data-section="bollino-amici">🤝<span>Bollino Amici</span></button>
-  <button class="nav-btn" data-section="ringraziamenti">🙏<span>Ringraziamenti</span></button>
-  <button class="nav-btn" data-section="sponsor">💼<span>Sponsor</span></button>
-  <button class="nav-btn" data-section="cena">🍽️<span>Cena</span></button>
   <button class="nav-btn" data-section="iniziative">🎉<span>Attività</span></button>
-  <button class="nav-btn" data-section="ore-alpine">⏱️<span>Ore Alpine</span></button>
-  <button class="nav-btn" data-section="report">📊<span>Report 1</span></button>
-  <button class="nav-btn" data-section="report2">📊<span>Report 2</span></button>
-  <button class="nav-btn" data-section="conv-casoncellata">🥟<span>Conv. Casoncellata</span></button>
-  <button class="nav-btn" data-section="presenza-adunata">🎖️<span>Adunata</span></button>
-  <button class="nav-btn" data-section="prenotazioni">🗓️<span>Prenotaz. Sede</span></button>
-  <button class="nav-btn" data-section="cassa">💰<span>Cassa</span></button>
   <button class="nav-btn" data-section="bacheca">📌<span>Bacheca</span></button>
-  <button class="nav-btn" data-section="libretto">📖<span>Preghiera e Canto</span></button>
-  <button class="nav-btn" data-section="log">📜<span>Log</span></button>
+  <button class="nav-btn" data-section="cena">🍽️<span>Cena</span></button>
+  <button class="nav-btn-menu" id="menu-btn" type="button" aria-haspopup="dialog">☰<span>Menù</span></button>
 </nav>
+
+<div id="menu-overlay" aria-hidden="true">
+  <div id="menu-scrim"></div>
+  <aside id="menu-drawer" role="dialog" aria-label="Menù"></aside>
+</div>
 
 <div id="modal-overlay" class="hidden">
   <div id="modal-box"></div>
