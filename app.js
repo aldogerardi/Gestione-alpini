@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "6.44";
+const APP_VERSION = "6.74";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -23,18 +23,168 @@ function defaultUtenti() {
 
 function userLabel(u) {
   if (!u) return "-";
+  if (u.startsWith("socio:")) {
+    const sc = (state.socios || []).find(x => x.id === u.slice(6));
+    return sc ? "👤 " + `${sc.cognome || ""} ${sc.nome || ""}`.trim() : "👤 (socio non trovato)";
+  }
   const utente = (state.settings.utenti || []).find(x => x.id === u);
   const nomeVisibile = utente ? utente.label : u;
   return u.startsWith("pc_") ? "💻 " + nomeVisibile.replace(/^pc_/, "") : "📱 " + nomeVisibile;
 }
 
+// ---------- Accesso personale (nome e cognome + password) ----------
+// Le password NON stanno nello stato principale: ogni socio ha un documento separato "pwd_<id>"
+// con solo un hash PBKDF2 + sale. Finché il documento non esiste, la password è la data di nascita (ggmmaaaa).
+let proponiCambioPassword = false;
+const LOGIN_FALLITI_KEY = "gestione_gruppo_login_falliti";
+const PWD_ITERAZIONI = 100000;
+
+function normalizzaNomePerLogin(str) {
+  return (str || "").toString().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+    .replace(/[^a-z\s]/g, " ").split(/\s+/).filter(Boolean).sort().join(" ");
+}
+
+function passwordInizialeSocio(s) {
+  const v = ((s && s.dataNascita) || "").trim();
+  let g, me, a, m = v.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
+  if (m) { g = m[1]; me = m[2]; a = m[3]; }
+  else {
+    m = v.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return null;
+    a = m[1]; me = m[2]; g = m[3];
+  }
+  const gi = parseInt(g, 10), mi = parseInt(me, 10), ai = parseInt(a, 10);
+  if (ai < 1900 || mi < 1 || mi > 12 || gi < 1 || gi > 31) return null;
+  return String(gi).padStart(2, "0") + String(mi).padStart(2, "0") + a;
+}
+
+function socioPuoAccedere(s) { return !!(s && s.accessoApp && !s.andatoAvanti && passwordInizialeSocio(s)); }
+function ruoloPersonale(s) { return s && (s.accessoLivello === "admin" || s.accessoLivello === "direttivo") ? s.accessoLivello : "socio"; }
+function trovaSociPerNome(testo) {
+  const k = normalizzaNomePerLogin(testo);
+  if (!k) return [];
+  return (state.socios || []).filter(s => normalizzaNomePerLogin(`${s.cognome || ""} ${s.nome || ""}`) === k);
+}
+function socioCorrente() {
+  return currentUser && currentUser.startsWith("socio:") ? (state.socios || []).find(x => x.id === currentUser.slice(6)) : null;
+}
+
+function bytesToB64(bytes) { let s = ""; bytes.forEach(b => { s += String.fromCharCode(b); }); return btoa(s); }
+function b64ToBytes(b64) { const s = atob(b64); const a = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) a[i] = s.charCodeAt(i); return a; }
+
+async function derivaHashPassword(password, saltBytes, iter) {
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]);
+  const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt: saltBytes, iterations: iter }, key, 256);
+  return bytesToB64(new Uint8Array(bits));
+}
+
+function conTimeout(promise, ms) {
+  return Promise.race([promise, new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), ms))]);
+}
+
+async function leggiRecordPassword(socioId) {
+  const snap = await conTimeout(db.collection(FIRESTORE_COLLECTION).doc("pwd_" + socioId).get(), 10000);
+  return snap.exists ? snap.data() : null;
+}
+
+async function verificaPasswordSocio(s, digitata) {
+  const rec = await leggiRecordPassword(s.id);
+  if (rec) {
+    const h = await derivaHashPassword(digitata, b64ToBytes(rec.s), rec.i || PWD_ITERAZIONI);
+    return { ok: h === rec.h, primoAccesso: false };
+  }
+  const iniz = passwordInizialeSocio(s);
+  const soloCifre = /^[\d\s\/\-.]+$/.test(digitata);
+  return { ok: !!iniz && soloCifre && digitata.replace(/\D/g, "") === iniz, primoAccesso: true };
+}
+
+async function salvaNuovaPassword(socioId, nuova) {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const h = await derivaHashPassword(nuova, salt, PWD_ITERAZIONI);
+  await conTimeout(db.collection(FIRESTORE_COLLECTION).doc("pwd_" + socioId).set({ h, s: bytesToB64(salt), i: PWD_ITERAZIONI, t: new Date().toISOString() }), 10000);
+}
+
+async function reimpostaPasswordSocioDoc(socioId) {
+  await conTimeout(db.collection(FIRESTORE_COLLECTION).doc("pwd_" + socioId).delete(), 10000);
+}
+
+function loginBloccatoPer() {
+  try {
+    const o = JSON.parse(localStorage.getItem(LOGIN_FALLITI_KEY) || "{}");
+    const sec = Math.ceil(((o.until || 0) - Date.now()) / 1000);
+    return sec > 0 ? sec : 0;
+  } catch (e) { return 0; }
+}
+function registraTentativoFallito() {
+  let o = {};
+  try { o = JSON.parse(localStorage.getItem(LOGIN_FALLITI_KEY) || "{}"); } catch (e) { o = {}; }
+  o.n = (o.n || 0) + 1;
+  if (o.n >= 5) o.until = Date.now() + Math.min(15 * 60 * 1000, 30000 * Math.pow(2, o.n - 5));
+  localStorage.setItem(LOGIN_FALLITI_KEY, JSON.stringify(o));
+}
+function azzeraTentativiFalliti() { localStorage.removeItem(LOGIN_FALLITI_KEY); }
+
+async function tentaLoginPersonale(nomeTesto, password) {
+  if (!window.db) return { errore: "Accesso personale non disponibile: Firebase non è configurato su questo dispositivo." };
+  if (!(window.crypto && crypto.subtle)) return { errore: "Questo browser non supporta l'accesso sicuro: aggiornalo o usa il profilo condiviso." };
+  const attesa = loginBloccatoPer();
+  if (attesa > 0) return { errore: `Troppi tentativi: riprova tra ${attesa} secondi.` };
+  const tutti = trovaSociPerNome(nomeTesto);
+  let esito = null;
+  try {
+    for (const s of tutti.filter(socioPuoAccedere)) {
+      const r = await verificaPasswordSocio(s, password);
+      if (r.ok) { esito = { socio: s, primoAccesso: r.primoAccesso }; break; }
+    }
+  } catch (err) {
+    console.error(err);
+    return { errore: "Impossibile verificare la password: controlla la connessione e riprova." };
+  }
+  if (!esito) {
+    registraTentativoFallito();
+    scriviLog([{ ev: tutti.length ? "⚠️ Tentativo di accesso con password errata" : "⚠️ Tentativo di accesso con nome non riconosciuto" }],
+      tutti.length === 1 ? "socio:" + tutti[0].id : "");
+    return { errore: "Nome o password non corretti. Se non riesci ad entrare, rivolgiti al Direttivo." };
+  }
+  azzeraTentativiFalliti();
+  return esito;
+}
+
+// Allinea ruolo/validità dell'accesso personale con l'Anagrafica. Ritorna true se ha avviato un ricaricamento.
+function riallineaAccessoPersonale() {
+  if (!currentUser || !currentUser.startsWith("socio:")) return false;
+  if (!state.socios || !state.socios.length) return false;
+  const s = state.socios.find(x => x.id === currentUser.slice(6));
+  if (!s || !socioPuoAccedere(s)) {
+    localStorage.removeItem("gestione_gruppo_user");
+    localStorage.removeItem("gestione_gruppo_role");
+    alert("Il tuo accesso all'app non è più attivo. Rivolgiti al Direttivo.");
+    location.reload();
+    return true;
+  }
+  const ruolo = ruoloPersonale(s);
+  if (ruolo !== currentRole) {
+    currentRole = ruolo;
+    localStorage.setItem("gestione_gruppo_role", ruolo);
+    location.reload();
+    return true;
+  }
+  return false;
+}
+
 function showLoginScreen(onDone) {
   const utenti = (state.settings.utenti && state.settings.utenti.length) ? state.settings.utenti : defaultUtenti();
   const html = `
-    <div id="login-screen" style="position:fixed; inset:0; background:#1a6b3c; z-index:9999; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; padding:20px;">
-      <div id="login-step-scelta">
-        <div style="color:#fff; font-size:1.3rem; font-weight:800; margin-bottom:8px; text-align:center;">Chi sei?</div>
-        <div style="display:flex; flex-direction:column; gap:10px; width:100%; max-width:320px;">
+    <div id="login-screen" style="position:fixed; inset:0; background:#1a6b3c; z-index:9999; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; padding:20px; overflow-y:auto;">
+      <div id="login-step-scelta" style="width:100%; max-width:320px;">
+        <div style="color:#fff; font-size:1.3rem; font-weight:800; margin-bottom:12px; text-align:center;">Accedi</div>
+        <input type="text" id="lp-nome" placeholder="Cognome e nome" autocomplete="username" autocapitalize="words" style="width:100%; padding:11px; border-radius:8px; border:none; margin-bottom:10px; box-sizing:border-box; font-size:1rem;">
+        <input type="password" id="lp-pass" placeholder="Password" autocomplete="current-password" style="width:100%; padding:11px; border-radius:8px; border:none; margin-bottom:8px; box-sizing:border-box; font-size:1rem;">
+        <div style="color:#cfe9d8; font-size:0.76rem; text-align:center; margin-bottom:8px;">Primo accesso: la password è la tua data di nascita a 8 cifre (ggmmaaaa)</div>
+        <div id="lp-errore" style="color:#ffdddd; font-size:0.85rem; margin-bottom:8px; text-align:center; min-height:1.1em;"></div>
+        <button type="button" class="btn block" id="lp-entra" style="background:#fff; color:#1a6b3c; font-weight:700; margin-bottom:16px;">Entra</button>
+        <button type="button" class="btn secondary block" id="lp-profili-btn" style="background:transparent; border:1px solid #fff; color:#fff;">Accesso con profilo condiviso</button>
+        <div id="login-profili" style="display:none; flex-direction:column; gap:10px; margin-top:12px;">
           ${utenti.map(u => `<button type="button" class="btn block login-btn" data-user="${u.id}" style="background:#fff; color:#1a6b3c; font-weight:700;">${userLabel(u.id)}</button>`).join("")}
         </div>
       </div>
@@ -59,6 +209,37 @@ function showLoginScreen(onDone) {
     document.getElementById("login-screen").remove();
     onDone();
   }
+
+  function entraPersonale(socio, primoAccesso) {
+    currentUser = "socio:" + socio.id;
+    currentRole = ruoloPersonale(socio);
+    localStorage.setItem("gestione_gruppo_user", currentUser);
+    localStorage.setItem("gestione_gruppo_role", currentRole);
+    loginAppenaEffettuato = true;
+    proponiCambioPassword = !!primoAccesso;
+    document.getElementById("login-screen").remove();
+    onDone();
+  }
+
+  const lpEntra = async () => {
+    const nome = document.getElementById("lp-nome").value;
+    const pass = document.getElementById("lp-pass").value;
+    const errEl = document.getElementById("lp-errore");
+    const btn = document.getElementById("lp-entra");
+    if (!nome.trim() || !pass) { errEl.textContent = "Inserisci cognome e nome e la password."; return; }
+    errEl.textContent = "";
+    btn.disabled = true; btn.textContent = "Verifica in corso...";
+    const r = await tentaLoginPersonale(nome, pass);
+    btn.disabled = false; btn.textContent = "Entra";
+    if (r.errore) { errEl.textContent = r.errore; return; }
+    entraPersonale(r.socio, r.primoAccesso);
+  };
+  document.getElementById("lp-entra").addEventListener("click", lpEntra);
+  ["lp-nome", "lp-pass"].forEach(id => document.getElementById(id).addEventListener("keydown", e => { if (e.key === "Enter") lpEntra(); }));
+  document.getElementById("lp-profili-btn").addEventListener("click", () => {
+    const box = document.getElementById("login-profili");
+    box.style.display = box.style.display === "none" ? "flex" : "none";
+  });
 
   document.querySelectorAll(".login-btn").forEach(b => {
     b.addEventListener("click", () => {
@@ -141,6 +322,7 @@ function initFirebaseSync() {
     }
     applyStateFields(snap.data());
     logAggiornaBaseline();
+    if (riallineaAccessoPersonale()) return;
     localStorage.setItem("gestione_gruppo_data", JSON.stringify(state));
     updateTopbar();
     renderSection();
@@ -271,7 +453,7 @@ const LOG_CAMPI_NOMI = {
   codiceFiscale: "codice fiscale", utenti: "utenti/password", moduloSedeUrl: "modulo sede", moduloSedeNome: "modulo sede",
   testoPreghiera: "testo preghiera", testoCanto: "testo canto", testoAuguriCompleanno: "testo auguri",
   quotaBollino: "quota bollino", quotaNazionale: "quota nazionale", appName: "nome app", incaricoFeste: "incarico feste",
-  chiaviSede: "chiavi sede", dataIscrizione: "data iscrizione", haccpDataCorso: "data corso HACCP", haccpDataScadenza: "scadenza HACCP"
+  accessoApp: "accesso app", accessoLivello: "livello accesso", chiaviSede: "chiavi sede", dataIscrizione: "data iscrizione", haccpDataCorso: "data corso HACCP", haccpDataScadenza: "scadenza HACCP"
 };
 
 function nomeSocioPerLog(id) {
@@ -838,6 +1020,20 @@ function openSocioForm(id) {
           <input type="text" id="f-andato-avanti-data" placeholder="Data gg-mm-aaaa" value="${esc(s.andatoAvantiData)}" style="width:100%;">
         </div>
       </div>
+      <div class="form-group" style="border:1px dashed #999; padding:10px; border-radius:8px;">
+        <label style="font-weight:800;">📲 Accesso all'app</label>
+        <label style="display:flex; align-items:center; gap:6px; margin-top:4px;"><input type="checkbox" id="f-accesso-app" ${s.accessoApp ? "checked" : ""}> Abilitato (cognome e nome + password)</label>
+        <div class="card-sub" style="margin-top:4px;">${passwordInizialeSocio(s) ? "La prima volta la password è la data di nascita (ggmmaaaa)." : "⚠️ Per poter accedere serve una data di nascita valida con anno a 4 cifre (gg-mm-aaaa)."}</div>
+        ${currentRole === "admin" ? `
+        <div class="form-group" style="margin-top:8px;"><label>Livello di accesso</label>
+          <select id="f-accesso-livello">
+            <option value="socio" ${(s.accessoLivello || "socio") === "socio" ? "selected" : ""}>Socio (consultazione)</option>
+            <option value="direttivo" ${s.accessoLivello === "direttivo" ? "selected" : ""}>Direttivo</option>
+            <option value="admin" ${s.accessoLivello === "admin" ? "selected" : ""}>Admin</option>
+          </select>
+        </div>
+        ${id ? `<button type="button" class="btn secondary" id="f-reset-password" style="font-size:0.82rem;">↺ Reimposta password (torna alla data di nascita)</button>` : ""}` : ""}
+      </div>
       <div class="form-group"><label>Note</label><textarea id="f-note">${esc(s.note)}</textarea></div>
       ${id ? `
       <details class="bollino-details">
@@ -861,6 +1057,21 @@ function openSocioForm(id) {
   document.getElementById("f-carica").addEventListener("change", updateVisibilitaSimpatizzante);
   document.getElementById("f-andato-avanti").addEventListener("change", e => {
     document.getElementById("f-andato-avanti-data-wrap").style.display = e.target.checked ? "" : "none";
+  });
+  const resetPwdBtn = document.getElementById("f-reset-password");
+  if (resetPwdBtn) resetPwdBtn.addEventListener("click", async () => {
+    const sc = state.socios.find(x => x.id === id);
+    if (!sc) return;
+    if (!window.db) { alert("Firebase non configurato: impossibile reimpostare la password."); return; }
+    if (!confirm(`Reimpostare la password di ${sc.cognome} ${sc.nome}? Da ora dovrà usare di nuovo la data di nascita.`)) return;
+    try {
+      await reimpostaPasswordSocioDoc(id);
+      scriviLog([{ ev: `🔑 Password reimpostata: ${sc.cognome} ${sc.nome}` }]);
+      toast("Password reimpostata: torna alla data di nascita");
+    } catch (e) {
+      console.error(e);
+      alert("Non sono riuscito a reimpostare la password: controlla la connessione e riprova.");
+    }
   });
 
   document.getElementById("privacy-doc-btn").addEventListener("click", () => {
@@ -975,6 +1186,10 @@ async function saveSocio() {
     note: document.getElementById("f-note").value.trim(),
   };
   if (!data.cognome || !data.nome) { alert("Cognome e nome sono obbligatori"); return; }
+  const accessoEl = document.getElementById("f-accesso-app");
+  if (accessoEl) data.accessoApp = accessoEl.checked;
+  const livelloEl = document.getElementById("f-accesso-livello");
+  if (livelloEl) data.accessoLivello = livelloEl.value;
 
   const socioId = editingId || uid();
   const existing = editingId ? state.socios.find(x => x.id === editingId) : null;
@@ -2370,6 +2585,10 @@ function fmtDateTime(iso) {
 
 function openSettings() {
   const ridotto = currentRole === "direttivo";
+  const sociAttivi = (state.socios || []).filter(s => !s.andatoAvanti);
+  const nAbilitati = sociAttivi.filter(s => s.accessoApp).length;
+  const nIdonei = sociAttivi.filter(s => passwordInizialeSocio(s)).length;
+  const nSenzaData = sociAttivi.length - nIdonei;
   const bloccoGestioneUtenti = ridotto ? "" : `
     <div class="settings-block">
       <h3>🔑 Gestione utenti</h3>
@@ -2393,6 +2612,15 @@ function openSettings() {
         `).join("")}
       </div>
       <button type="button" class="btn secondary block" id="aggiungi-utente-btn" style="margin-top:4px;">➕ Aggiungi utente</button>
+    </div>
+
+    <div class="settings-block">
+      <h3>📲 Accesso soci con nome e password</h3>
+      <div class="card-sub" style="margin-bottom:8px;">Soci attivi: <strong>${sociAttivi.length}</strong> · abilitati all'accesso: <strong>${nAbilitati}</strong> · con data di nascita valida: <strong>${nIdonei}</strong> · senza data valida: <strong>${nSenzaData}</strong></div>
+      <div style="font-size:0.78rem; color:#666; margin-bottom:8px;">La prima volta la password è la data di nascita (ggmmaaaa); poi il socio la cambia da Menù → Cambia password. Chi ha dimenticato la password si reimposta dalla sua scheda in Anagrafica.</div>
+      <button type="button" class="btn block" id="accesso-abilita-tutti-btn" style="margin-bottom:6px;">✅ Abilita tutti i soci con data di nascita valida</button>
+      <button type="button" class="btn secondary block" id="accesso-senza-data-btn" style="margin-bottom:6px;">📋 Elenca i soci senza data di nascita valida</button>
+      <button type="button" class="btn danger block" id="accesso-disabilita-tutti-btn">⛔ Disabilita l'accesso a tutti</button>
     </div>
 
     <div class="settings-block">
@@ -2516,6 +2744,32 @@ function openSettings() {
     currentRole = null;
     closeModal();
     showLoginScreen(() => { location.reload(); });
+  });
+  const abilitaTuttiBtn = document.getElementById("accesso-abilita-tutti-btn");
+  if (abilitaTuttiBtn) abilitaTuttiBtn.addEventListener("click", () => {
+    const target = state.socios.filter(s => !s.andatoAvanti && passwordInizialeSocio(s) && !s.accessoApp);
+    if (!target.length) { alert("Nessun socio da abilitare."); return; }
+    if (!confirm(`Abilitare l'accesso con nome e password a ${target.length} soci?`)) return;
+    target.forEach(s => { s.accessoApp = true; });
+    saveState();
+    openSettings();
+    toast(`${target.length} soci abilitati`);
+  });
+  const senzaDataBtn = document.getElementById("accesso-senza-data-btn");
+  if (senzaDataBtn) senzaDataBtn.addEventListener("click", () => {
+    const lista = state.socios.filter(s => !s.andatoAvanti && !passwordInizialeSocio(s)).map(s => `${s.cognome} ${s.nome}`.trim());
+    alert(lista.length ? `Soci senza data di nascita valida (${lista.length}):\n\n` + lista.slice(0, 60).join("\n") + (lista.length > 60 ? "\n..." : "") : "Tutti i soci attivi hanno una data di nascita valida.");
+  });
+  const disabilitaTuttiBtn = document.getElementById("accesso-disabilita-tutti-btn");
+  if (disabilitaTuttiBtn) disabilitaTuttiBtn.addEventListener("click", () => {
+    const mio = currentUser && currentUser.startsWith("socio:") ? currentUser.slice(6) : null;
+    const target = state.socios.filter(s => s.accessoApp && s.id !== mio);
+    if (!target.length) { alert("Nessun accesso da disabilitare."); return; }
+    if (!confirm(`Disabilitare l'accesso a ${target.length} soci? Chi è già collegato verrà disconnesso.`)) return;
+    target.forEach(s => { s.accessoApp = false; });
+    saveState();
+    openSettings();
+    toast(`${target.length} accessi disabilitati`);
   });
   const rimuoviModuloSedeBtn = document.getElementById("rimuovi-modulo-sede-btn");
   if (rimuoviModuloSedeBtn) rimuoviModuloSedeBtn.addEventListener("click", () => {
@@ -4398,6 +4652,7 @@ const REPORT1_COLONNE = [
   { id: "privacyFile", label: "File Privacy caricato", get: s => s.privacyFoto ? "Sì" : "No" },
   { id: "haccp", label: "HACCP", get: s => s.haccp ? "Sì" : "No" },
   { id: "haccpFile", label: "File HACCP caricato", get: s => s.haccpFoto ? "Sì" : "No" },
+  { id: "accessoApp", label: "Accesso app", get: s => s.accessoApp ? "Sì" : "No" },
   { id: "sms", label: "SMS", get: s => s.sms ? "Sì" : "No" },
   { id: "whatsapp", label: "WhatsApp", get: s => s.whatsapp ? "Sì" : "No" },
   { id: "chiaviSede", label: "Chiavi sede", get: s => s.chiaviSede ? "Sì" : "No" },
@@ -4687,6 +4942,51 @@ function vaiASezione(section) {
   }, { once: true });
 }
 
+// ---------- Cambio password personale ----------
+function apriCambioPassword(primoAccesso) {
+  const socio = socioCorrente();
+  if (!socio) return;
+  const html = `
+    <div class="modal-title">🔑 Cambia password</div>
+    ${primoAccesso
+      ? `<div class="card-sub" style="margin-bottom:10px;">Stai usando la password iniziale (la tua data di nascita). Scegline una personale: da ora userai quella.</div>`
+      : `<div class="form-group"><label>Password attuale</label><input type="password" id="cp-attuale" autocomplete="current-password"></div>`}
+    <div class="form-group"><label>Nuova password (almeno 6 caratteri)</label><input type="password" id="cp-nuova" autocomplete="new-password"></div>
+    <div class="form-group"><label>Ripeti la nuova password</label><input type="password" id="cp-conferma" autocomplete="new-password"></div>
+    <div id="cp-errore" style="color:var(--red); font-size:0.82rem; min-height:1.1em; margin-bottom:6px;"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn secondary" id="cp-annulla">${primoAccesso ? "Più tardi" : "Annulla"}</button>
+      <button type="button" class="btn" id="cp-salva">Salva</button>
+    </div>`;
+  showModal(html);
+  document.getElementById("cp-annulla").addEventListener("click", closeModal);
+  document.getElementById("cp-salva").addEventListener("click", async () => {
+    const err = document.getElementById("cp-errore");
+    const nuova = document.getElementById("cp-nuova").value;
+    const conferma = document.getElementById("cp-conferma").value;
+    if (nuova.length < 6) { err.textContent = "La nuova password deve avere almeno 6 caratteri."; return; }
+    if (nuova !== conferma) { err.textContent = "Le due password non coincidono."; return; }
+    if (nuova.replace(/\D/g, "") === passwordInizialeSocio(socio) && /^[\d\s\/\-.]+$/.test(nuova)) { err.textContent = "Non puoi usare la data di nascita: scegli un'altra password."; return; }
+    const btn = document.getElementById("cp-salva");
+    btn.disabled = true; err.textContent = "";
+    try {
+      if (!primoAccesso) {
+        const r = await verificaPasswordSocio(socio, document.getElementById("cp-attuale").value);
+        if (!r.ok) { err.textContent = "La password attuale non è corretta."; btn.disabled = false; return; }
+      }
+      await salvaNuovaPassword(socio.id, nuova);
+    } catch (e) {
+      console.error(e);
+      err.textContent = "Non sono riuscito a salvare: controlla la connessione e riprova.";
+      btn.disabled = false;
+      return;
+    }
+    scriviLog([{ ev: "🔑 Password personale cambiata" }]);
+    closeModal();
+    toast("Password cambiata");
+  });
+}
+
 // ---------- Menù laterale ----------
 const MENU_GRUPPI = [
   { titolo: "", voci: [["home", "🏠", "Home"]] },
@@ -4723,6 +5023,9 @@ function renderMenuDrawer() {
       <button type="button" class="menu-close" id="menu-close-btn" aria-label="Chiudi il menù">✕</button>
     </div>
     ${gruppi}
+    <div class="menu-gruppo">Profilo</div>
+    ${currentUser && currentUser.startsWith("socio:") ? `<button type="button" class="menu-voce" data-menu-azione="password"><span class="mv-ic">🔑</span><span class="mv-lb">Cambia password</span></button>` : ""}
+    <button type="button" class="menu-voce" data-menu-azione="esci"><span class="mv-ic">🚪</span><span class="mv-lb">Esci</span></button>
     <div class="menu-foot">🔒 = non disponibile per il tuo profilo · v${APP_VERSION}</div>
   `;
 }
@@ -4748,6 +5051,13 @@ function setupMenuLaterale() {
   document.getElementById("menu-scrim").addEventListener("click", chiudiMenu);
   document.getElementById("menu-drawer").addEventListener("click", e => {
     if (e.target.closest("#menu-close-btn")) { chiudiMenu(); return; }
+    const azione = e.target.closest("[data-menu-azione]");
+    if (azione) {
+      chiudiMenu();
+      if (azione.dataset.menuAzione === "password") apriCambioPassword(false);
+      else confermaCambiaUtente();
+      return;
+    }
     const voce = e.target.closest("[data-menu-sezione]");
     if (!voce || voce.disabled) return;
     chiudiMenu();
@@ -4844,6 +5154,7 @@ function confermaCambiaUtente() {
 }
 
 function startApp() {
+  if (riallineaAccessoPersonale()) return;
   logAggiornaBaseline();
   logAccesso(loginAppenaEffettuato);
   loginAppenaEffettuato = false;
@@ -4863,6 +5174,7 @@ function startApp() {
   setupMenuLaterale();
   renderSection();
   initFirebaseSync();
+  if (proponiCambioPassword) { proponiCambioPassword = false; setTimeout(() => apriCambioPassword(true), 500); }
 
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).then(reg => {
