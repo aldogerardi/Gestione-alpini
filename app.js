@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "6.94";
+const APP_VERSION = "7.36";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -300,6 +300,7 @@ function applyStateFields(source) {
   state.adunate = source.adunate || [];
   state.prenotazioni = source.prenotazioni || [];
   state.verbali = source.verbali || [];
+  state.archivioBui = source.archivioBui || [];
 }
 
 function syncToFirebase() {
@@ -400,6 +401,7 @@ let state = {
   adunate: [],
   prenotazioni: [],
   verbali: [],
+  archivioBui: [],
   meta: { ultimaModifica: null, ultimoImport: null }
 };
 let bollinoAnno = new Date().getFullYear();
@@ -454,7 +456,7 @@ const LOG_CAMPI_NOMI = {
   codiceFiscale: "codice fiscale", utenti: "utenti/password", moduloSedeUrl: "modulo sede", moduloSedeNome: "modulo sede",
   testoPreghiera: "testo preghiera", testoCanto: "testo canto", testoAuguriCompleanno: "testo auguri",
   quotaBollino: "quota bollino", quotaNazionale: "quota nazionale", appName: "nome app", incaricoFeste: "incarico feste",
-  accessoApp: "accesso app", accessoLivello: "livello accesso", chiaviSede: "chiavi sede", dataIscrizione: "data iscrizione", haccpDataCorso: "data corso HACCP", haccpDataScadenza: "scadenza HACCP"
+  tagliaVestiario: "taglia vestiario", accessoApp: "accesso app", accessoLivello: "livello accesso", chiaviSede: "chiavi sede", dataIscrizione: "data iscrizione", haccpDataCorso: "data corso HACCP", haccpDataScadenza: "scadenza HACCP"
 };
 
 function nomeSocioPerLog(id) {
@@ -472,6 +474,7 @@ const LOG_TRACK = [
   { id: "adunate", nome: "Adunata", get: st => st.adunate, label: a => a.titolo },
   { id: "prenotazioni", nome: "Prenotaz. Sede", get: st => st.prenotazioni, label: p => `${p.data || ""} ${FASCIA_LABEL[p.fascia] || p.fascia || ""} ${p.nome || ""}`.trim() },
   { id: "verbali", nome: "Verbali Consiglio", get: st => st.verbali, label: v => v.titolo },
+  { id: "archivioBui", nome: "Archivio BUI", get: st => st.archivioBui, label: v => v.titolo },
   { id: "bollino", nome: "Bollino", get: st => st.pagamentiBollino, label: p => `${nomeSocioPerLog(p.socioId)} ${p.anno || ""}`.trim() },
   { id: "convocazioni", nome: "Consiglio (convocazione)", get: st => (st.consiglio || {}).storico, label: c => c.data || "" },
   { id: "gruppoInfo", nome: "Home (dati del Gruppo)", obj: true, get: st => st.gruppoInfo },
@@ -665,6 +668,9 @@ function renderSection() {
   } else if (currentSection === "prenotazioni") {
     content.innerHTML = renderPrenotazioni();
     attachPrenotazioniEvents();
+  } else if (currentSection === "archivio-bui") {
+    content.innerHTML = puoVedereArchivioBui() ? renderArchivioBui() : `<div class="card-sub">Sezione riservata.</div>`;
+    if (puoVedereArchivioBui()) attachArchivioBuiEvents();
   } else if (currentSection === "verbali") {
     content.innerHTML = renderVerbali();
     attachVerbaliEvents();
@@ -724,6 +730,26 @@ function renderNotizieDelGiorno() {
   `;
 }
 
+function linkSicuro(u) {
+  let v = String(u || "").trim();
+  if (!v) return "";
+  if (/^(javascript|data|vbscript):/i.test(v)) return "";
+  if (!/^https?:\/\//i.test(v)) {
+    if (!/^[\w-]+(\.[\w-]+)+(\/|$)/.test(v) && !/^www\./i.test(v)) return "";
+    v = "https://" + v;
+  }
+  return /^https?:\/\/[^\s\/]+\.[^\s\/]+/i.test(v) ? v : "";
+}
+
+function tastiSocial(g) {
+  const ig = linkSicuro(g.instagram), fb = linkSicuro(g.facebook);
+  if (!ig && !fb) return "";
+  const stile = "display:block; text-align:center; text-decoration:none; padding:12px; border-radius:10px; font-weight:700; margin-bottom:8px;";
+  return `
+    ${ig ? `<a href="${esc(ig)}" target="_blank" rel="noopener" class="btn block" style="${stile}">📷 Apri la pagina Instagram</a>` : ""}
+    ${fb ? `<a href="${esc(fb)}" target="_blank" rel="noopener" class="btn block" style="${stile}">📘 Apri la pagina Facebook</a>` : ""}`;
+}
+
 function renderHome() {
   const g = state.gruppoInfo || {};
   const capogruppo = state.socios.find(s => s.carica === "Capogruppo");
@@ -740,10 +766,9 @@ function renderHome() {
         <div class="form-group"><label>Via</label><div class="card-sub">${esc(g.via) || "-"}</div></div>
         <div class="form-group"><label>Città</label><div class="card-sub">${esc(g.citta) || "-"}${g.prov ? " (" + esc(g.prov) + ")" : ""}</div></div>
         <div class="form-group"><label>Capogruppo</label><div class="card-sub">${esc(nomeCapogruppo)}</div></div>
-        ${(g.instagram || g.facebook) ? `
+        ${tastiSocial(g) ? `
         <div style="font-weight:800; margin:16px 0 10px;">Social</div>
-        ${g.instagram ? `<div class="form-group"><label>📷 Instagram</label><div class="card-sub">${esc(g.instagram)}</div></div>` : ""}
-        ${g.facebook ? `<div class="form-group"><label>📘 Facebook</label><div class="card-sub">${esc(g.facebook)}</div></div>` : ""}
+        ${tastiSocial(g)}
         ` : ""}
       </div>
     `;
@@ -769,6 +794,7 @@ function renderHome() {
         <div style="font-size:0.75rem; color:#888;">Preso automaticamente da Anagrafica (socio con carica "Capogruppo")</div>
       </div>
       <div style="font-weight:800; margin:16px 0 10px;">Social</div>
+      ${tastiSocial(g)}
       <div class="form-group"><label>📷 Instagram (link)</label><input type="text" id="home-instagram" value="${esc(g.instagram)}" placeholder="https://instagram.com/..."></div>
       <div class="form-group"><label>📘 Facebook (link)</label><input type="text" id="home-facebook" value="${esc(g.facebook)}" placeholder="https://facebook.com/..."></div>
       <button type="button" class="btn block" id="home-save-btn" style="margin-top:6px;">💾 Salva</button>
@@ -995,6 +1021,8 @@ function openSocioForm(id) {
         <div class="form-group"><label style="font-size:0.8rem;">Scadenza rinnovo</label><input type="text" id="f-haccp-data-scadenza" placeholder="gg-mm-aaaa" value="${esc(s.haccpDataScadenza)}"></div>
       </div>
       <div class="form-group"><label>Email</label><input type="email" id="f-email" value="${esc(s.email)}"></div>
+      <div class="form-group"><label>Taglia vestiario</label><input type="text" id="f-taglia" list="lista-taglie" value="${esc(s.tagliaVestiario)}" placeholder="Es. L, XL, 52...">
+        <datalist id="lista-taglie">${TAGLIE_SUGGERITE.map(t => `<option value="${t}"></option>`).join("")}</datalist></div>
       <div class="two-col">
         <div class="form-group"><label>Data iscrizione al gruppo</label><input type="text" id="f-dataIscrizione" placeholder="gg-mm-aaaa" value="${esc(s.dataIscrizione)}"></div>
         <div class="form-group"><label>Carica/ruolo</label>
@@ -1179,6 +1207,7 @@ async function saveSocio() {
     haccpDataCorso: document.getElementById("f-haccp-data-corso").value.trim(),
     haccpDataScadenza: document.getElementById("f-haccp-data-scadenza").value.trim(),
     email: document.getElementById("f-email").value.trim(),
+    tagliaVestiario: document.getElementById("f-taglia").value.trim(),
     dataIscrizione: document.getElementById("f-dataIscrizione").value.trim(),
     carica: document.getElementById("f-carica").value,
     alfiere: document.getElementById("f-alfiere").checked,
@@ -3707,6 +3736,132 @@ function eliminaVerbale(id) {
   renderSection();
 }
 
+// ---------- Archivio BUI (riservato a Capogruppo e Admin) ----------
+function cardBui(v) {
+  const ext = (v.allegatoNome || "").split(".").pop().toLowerCase();
+  const icona = ext === "pdf" ? "📄" : (["jpg", "jpeg", "png", "gif", "webp"].includes(ext) ? "🖼️" : "📎");
+  return `
+    <div class="card" data-dettaglio-bui="${v.id}" style="cursor:pointer;">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
+        <div>
+          <div style="font-weight:800;">${esc(v.titolo || "Documento")} ${icona}</div>
+          <div class="card-sub">${v.data ? "📅 " + fmtDate(v.data) : ""}</div>
+          ${v.note ? `<div class="card-sub" style="margin-top:2px;">${esc(v.note)}</div>` : ""}
+        </div>
+        <button type="button" class="btn danger" data-elimina-bui="${v.id}" style="padding:5px 10px; font-size:0.8rem;">🗑️</button>
+      </div>
+      ${v.allegatoThumbUrl ? `<img src="${esc(v.allegatoThumbUrl)}" style="max-width:100%; border-radius:8px; margin-top:8px; border:1px solid #ccc;">` : ""}
+    </div>`;
+}
+
+function elencoBuiOrdinato(filtro) {
+  const q = (filtro || "").trim().toLowerCase();
+  return [...(state.archivioBui || [])]
+    .filter(v => !q || `${v.titolo || ""} ${v.note || ""}`.toLowerCase().includes(q))
+    .sort((a, b) => {
+      if (!a.data && !b.data) return (b.creato || "").localeCompare(a.creato || "");
+      if (!a.data) return 1;
+      if (!b.data) return -1;
+      return b.data.localeCompare(a.data);
+    });
+}
+
+function renderArchivioBui() {
+  const lista = elencoBuiOrdinato("");
+  return `
+    <div class="section-title">🗄️ Archivio BUI</div>
+    <div class="card-sub" style="margin-bottom:12px;">Archivio documenti riservato al Capogruppo e all'amministratore.</div>
+    <div class="card">
+      <div style="font-weight:800; margin-bottom:10px;">Nuovo documento</div>
+      <div class="form-group"><label>Titolo *</label><input type="text" id="bui-titolo" placeholder="Es. Comunicazione sezione, anno 2026"></div>
+      <div class="form-group"><label>Data (facoltativa)</label><input type="date" id="bui-data"></div>
+      <div class="form-group"><label>Note (facoltative)</label><input type="text" id="bui-note" placeholder="Breve descrizione"></div>
+      <div class="form-group"><label>File (PDF, foto, Word o Excel) *</label><input type="file" id="bui-file" accept=".pdf,application/pdf,image/*,.doc,.docx,.xls,.xlsx,.txt"></div>
+      <button type="button" class="btn block" id="crea-bui-btn" style="margin-top:6px;">➕ Aggiungi all'archivio</button>
+    </div>
+    <div class="section-title" style="font-size:1.05rem; margin-top:22px;">🗂️ Documenti (${lista.length})</div>
+    <input type="text" id="bui-filtro" placeholder="Cerca per titolo o note..." style="width:100%; margin-bottom:10px; box-sizing:border-box;">
+    <div id="bui-lista">${lista.length ? lista.map(cardBui).join("") : `<div class="card-sub">Nessun documento in archivio.</div>`}</div>
+  `;
+}
+
+function attachArchivioBuiEvents() {
+  document.getElementById("crea-bui-btn").addEventListener("click", creaDocumentoBui);
+  const lista = document.getElementById("bui-lista");
+  document.getElementById("bui-filtro").addEventListener("input", e => {
+    const el = elencoBuiOrdinato(e.target.value);
+    lista.innerHTML = el.length ? el.map(cardBui).join("") : `<div class="card-sub">Nessun documento corrisponde alla ricerca.</div>`;
+  });
+  lista.addEventListener("click", e => {
+    const del = e.target.closest("[data-elimina-bui]");
+    if (del) { e.stopPropagation(); eliminaDocumentoBui(del.dataset.eliminaBui); return; }
+    const card = e.target.closest("[data-dettaglio-bui]");
+    if (card) apriDettaglioBui(card.dataset.dettaglioBui);
+  });
+}
+
+function apriDettaglioBui(id) {
+  const v = (state.archivioBui || []).find(x => x.id === id);
+  if (!v) return;
+  const html = `
+    <div style="font-weight:900; font-size:1.2rem; margin-bottom:2px;">${esc(v.titolo || "Documento")}</div>
+    <div class="card-sub" style="margin-bottom:6px;">${v.data ? "📅 " + fmtDate(v.data) : ""}</div>
+    ${v.note ? `<div class="card-sub" style="margin-bottom:10px;">${esc(v.note)}</div>` : ""}
+    ${v.allegatoThumbUrl ? `<img src="${esc(v.allegatoThumbUrl)}" style="max-width:100%; border-radius:8px; border:1px solid #ccc;">` : ""}
+    ${v.allegatoUrl ? `<a href="${esc(v.allegatoUrl)}" target="_blank" class="btn block" style="margin-top:10px;">📄 Apri ${esc(v.allegatoNome || "il file")}</a>` : ""}
+    <div class="modal-actions" style="margin-top:16px;">
+      <button type="button" class="btn secondary block" id="dettaglio-bui-chiudi">Chiudi</button>
+    </div>
+  `;
+  showModal(html);
+  document.getElementById("dettaglio-bui-chiudi").addEventListener("click", closeModal);
+}
+
+async function creaDocumentoBui() {
+  if (!puoVedereArchivioBui()) return;
+  const titolo = document.getElementById("bui-titolo").value.trim();
+  const data = document.getElementById("bui-data").value;
+  const note = document.getElementById("bui-note").value.trim();
+  const file = document.getElementById("bui-file").files[0];
+  if (!titolo) { alert("Inserisci un titolo per il documento"); return; }
+  if (!file) { alert("Seleziona il file da archiviare"); return; }
+  if (!window.storage) { alert("Firebase non configurato: il documento non può essere caricato su questo dispositivo."); return; }
+  const id = uid();
+  const nuovo = { id, titolo, data, note, creato: new Date().toISOString(), allegatoUrl: "", allegatoNome: file.name, allegatoThumbUrl: "" };
+  const isPdf = file.name.toLowerCase().endsWith(".pdf") || file.type === "application/pdf";
+  try {
+    toast("Caricamento documento...");
+    nuovo.allegatoUrl = await uploadDocumento(file, `archivio-bui/${id}`);
+  } catch (err) {
+    console.error(err);
+    alert("Errore nel caricamento del documento. Riprova.");
+    return;
+  }
+  try {
+    if (isPdf) {
+      const miniatura = await generaMiniaturaPdf(file);
+      if (miniatura) nuovo.allegatoThumbUrl = await uploadDocumento(miniatura, `archivio-bui/${id}_thumb`);
+    } else if ((file.type || "").startsWith("image/")) {
+      nuovo.allegatoThumbUrl = nuovo.allegatoUrl;
+    }
+  } catch (err) {
+    console.warn("Anteprima non generata", err);
+  }
+  state.archivioBui = state.archivioBui || [];
+  state.archivioBui.push(nuovo);
+  saveState();
+  renderSection();
+  toast("Documento archiviato");
+}
+
+function eliminaDocumentoBui(id) {
+  if (!puoVedereArchivioBui()) return;
+  if (!confirm("Eliminare questo documento dall'archivio?")) return;
+  state.archivioBui = (state.archivioBui || []).filter(v => v.id !== id);
+  saveState();
+  renderSection();
+}
+
 // ---------- Sezione Log ----------
 let logMese = null;
 let logCache = [];
@@ -4659,6 +4814,7 @@ const REPORT1_COLONNE = [
   { id: "haccp", label: "HACCP", get: s => s.haccp ? "Sì" : "No" },
   { id: "haccpFile", label: "File HACCP caricato", get: s => s.haccpFoto ? "Sì" : "No" },
   { id: "accessoApp", label: "Accesso app", get: s => s.accessoApp ? "Sì" : "No" },
+  { id: "taglia", label: "Taglia vestiario", get: s => s.tagliaVestiario || "" },
   { id: "sms", label: "SMS", get: s => s.sms ? "Sì" : "No" },
   { id: "whatsapp", label: "WhatsApp", get: s => s.whatsapp ? "Sì" : "No" },
   { id: "chiaviSede", label: "Chiavi sede", get: s => s.chiaviSede ? "Sì" : "No" },
@@ -4676,7 +4832,17 @@ function parseDataGGMMAAAA(str) {
   return isNaN(d.getTime()) ? null : d;
 }
 
+const TAGLIE_ORDINE = ["XXS", "XS", "S", "M", "L", "XL", "XXL", "3XL", "4XL", "5XL", "6XL"];
+function chiaveTaglia(s) {
+  const t = String((s && s.tagliaVestiario) || "").toUpperCase().replace(/\s+/g, "");
+  if (!t) return null;
+  const i = TAGLIE_ORDINE.indexOf(t);
+  if (i >= 0) return i;
+  const n = parseFloat(t.replace(",", "."));
+  return isNaN(n) ? null : 100 + n;
+}
 const REPORT1_ORDINAMENTI = [
+  { id: "taglia", label: "Taglia vestiario", tipo: "num", key: chiaveTaglia },
   { id: "cognome", label: "Cognome e nome (alfabetico)", tipo: "testo", key: s => `${s.cognome || ""} ${s.nome || ""}`.trim() },
   { id: "nome", label: "Nome e cognome", tipo: "testo", key: s => `${s.nome || ""} ${s.cognome || ""}`.trim() },
   { id: "dataNascita", label: "Data di nascita", tipo: "data", key: s => parseDataGGMMAAAA(s.dataNascita) },
@@ -4916,7 +5082,7 @@ function setupScrollHide() {
 }
 
 // ---------- Init ----------
-const SECTION_ORDER = ["home","anagrafica","conv-consiglio","bollino","bollino-amici","ringraziamenti","sponsor","cena","iniziative","ore-alpine","report","report2","conv-casoncellata","presenza-adunata","prenotazioni","cassa","bacheca","verbali","libretto","log"];
+const SECTION_ORDER = ["home","anagrafica","conv-consiglio","bollino","bollino-amici","ringraziamenti","sponsor","cena","iniziative","ore-alpine","report","report2","conv-casoncellata","presenza-adunata","prenotazioni","cassa","bacheca","verbali","libretto","archivio-bui","log"];
 
 function vaiASezione(section) {
   if (!sezionePermessa(section)) return;
@@ -4951,8 +5117,9 @@ function vaiASezione(section) {
 // ---------- La mia scheda (modifica dei propri dati da parte del socio) ----------
 // Il socio può modificare solo questi campi. Gli altri (matricola, carica, note, bollino, privacy, HACCP,
 // SMS/WhatsApp, chiavi, alfiere, andato avanti, accesso app) restano gestiti dal Direttivo.
+const TAGLIE_SUGGERITE = ["XS", "S", "M", "L", "XL", "XXL", "3XL", "4XL", "5XL"];
 const MIA_SCHEDA_CAMPI = ["cognome", "nome", "dataNascita", "luogoNascita", "provinciaNascita", "codiceFiscale",
-  "indirizzo", "paese", "provincia", "cap", "telefono", "cellulare", "email", "grado", "reparto", "anniNaja"];
+  "indirizzo", "paese", "provincia", "cap", "telefono", "cellulare", "email", "tagliaVestiario", "grado", "reparto", "anniNaja"];
 
 function validaMiaScheda(input) {
   const campi = {};
@@ -4996,6 +5163,8 @@ function apriMiaScheda() {
     <div class="two-col">${campo("paese", "Paese")}${campo("provincia", "Provincia", { attr: 'maxlength="2" style="text-transform:uppercase"' })}${campo("cap", "CAP", { attr: 'maxlength="5" inputmode="numeric"' })}</div>
     <div class="two-col">${campo("telefono", "Telefono", { tipo: "tel" })}${campo("cellulare", "Cellulare", { tipo: "tel" })}</div>
     ${campo("email", "Email", { tipo: "email" })}
+    <div class="form-group"><label>Taglia vestiario</label><input type="text" id="ms-tagliaVestiario" list="lista-taglie-ms" value="${esc(s.tagliaVestiario)}" placeholder="Es. L, XL, 52...">
+      <datalist id="lista-taglie-ms">${TAGLIE_SUGGERITE.map(t => `<option value="${t}"></option>`).join("")}</datalist></div>
     ${simp ? "" : `<div class="two-col">${campo("grado", "Grado")}${campo("reparto", "Reparto")}</div>${campo("anniNaja", "Anni di naja")}`}
     <div class="card-sub" style="margin:4px 0 10px;">Matricola: <strong>${esc(s.matricola) || "-"}</strong> · Iscritto dal: <strong>${esc(s.dataIscrizione) || "-"}</strong> · Categoria: <strong>${esc(s.carica) || "-"}</strong></div>
     <div style="font-size:0.74rem; color:#666; margin-bottom:8px;">Se cambi cognome e nome, per accedere userai quelli nuovi. Se non hai ancora cambiato password, cambiando la data di nascita cambia anche la password iniziale.</div>
@@ -5088,10 +5257,18 @@ const MENU_GRUPPI = [
   { titolo: "Soci e tesseramento", voci: [["anagrafica", "👤", "Anagrafica"], ["conv-consiglio", "📋", "Consiglio"], ["bollino", "🎫", "Bollino"], ["bollino-amici", "🤝", "Bollino Amici"]] },
   { titolo: "Eventi", voci: [["cena", "🍽️", "Cena"], ["iniziative", "🎉", "Attività"], ["presenza-adunata", "🎖️", "Adunata"], ["prenotazioni", "🗓️", "Prenotaz. Sede"], ["conv-casoncellata", "🥟", "Conv. Casoncellata"]] },
   { titolo: "Comunicazione", voci: [["bacheca", "📌", "Bacheca"], ["verbali", "📑", "Verbali Consiglio"], ["libretto", "📖", "Preghiera e Canto"], ["ringraziamenti", "🙏", "Ringraziamenti"], ["sponsor", "💼", "Sponsor"]] },
-  { titolo: "Gestione e report", voci: [["cassa", "💰", "Cassa"], ["ore-alpine", "⏱️", "Ore Alpine"], ["report", "📊", "Report 1"], ["report2", "📊", "Report 2"], ["log", "📜", "Log"]] }
+  { titolo: "Gestione e report", voci: [["archivio-bui", "🗄️", "Archivio BUI"], ["cassa", "💰", "Cassa"], ["ore-alpine", "⏱️", "Ore Alpine"], ["report", "📊", "Report 1"], ["report2", "📊", "Report 2"], ["log", "📜", "Log"]] }
 ];
 
+function isCapogruppo() {
+  if (currentUser === "capogruppo" || currentUser === "pc_capogruppo") return true;
+  const s = socioCorrente();
+  return !!(s && s.carica === "Capogruppo");
+}
+function puoVedereArchivioBui() { return currentRole === "admin" || isCapogruppo(); }
+
 function sezionePermessa(sezione) {
+  if (sezione === "archivio-bui") return puoVedereArchivioBui();
   if (currentRole === "socio") return SOCIO_SEZIONI.includes(sezione);
   if (currentRole !== "admin") return !SEZIONI_SOLO_ADMIN.includes(sezione);
   return true;
@@ -5102,7 +5279,7 @@ function renderMenuDrawer() {
   if (!drawer) return;
   const gruppi = MENU_GRUPPI.map(g => `
     ${g.titolo ? `<div class="menu-gruppo">${g.titolo}</div>` : ""}
-    ${g.voci.map(([sez, icona, label]) => {
+    ${g.voci.filter(([sez]) => sez !== "archivio-bui" || puoVedereArchivioBui()).map(([sez, icona, label]) => {
       const permessa = sezionePermessa(sez);
       return `<button type="button" class="menu-voce${sez === currentSection ? " attiva" : ""}" data-menu-sezione="${sez}"${permessa ? "" : ' disabled aria-disabled="true"'}>
         <span class="mv-ic">${icona}</span><span class="mv-lb">${label}</span>${permessa ? "" : '<span class="mv-lock" title="Non disponibile per il tuo profilo">🔒</span>'}
@@ -5121,6 +5298,7 @@ function renderMenuDrawer() {
     <div class="menu-gruppo">Profilo</div>
     ${currentUser && currentUser.startsWith("socio:") ? `<button type="button" class="menu-voce" data-menu-azione="scheda"><span class="mv-ic">👤</span><span class="mv-lb">La mia scheda</span></button>
     <button type="button" class="menu-voce" data-menu-azione="password"><span class="mv-ic">🔑</span><span class="mv-lb">Cambia password</span></button>` : ""}
+    <button type="button" class="menu-voce" data-menu-azione="guide"><span class="mv-ic">🎬</span><span class="mv-lb">Guide video</span></button>
     <button type="button" class="menu-voce" data-menu-azione="esci"><span class="mv-ic">🚪</span><span class="mv-lb">Esci</span></button>
     <div class="menu-foot">🔒 = non disponibile per il tuo profilo · v${APP_VERSION}</div>
   `;
@@ -5152,6 +5330,7 @@ function setupMenuLaterale() {
       chiudiMenu();
       if (azione.dataset.menuAzione === "password") apriCambioPassword(false);
       else if (azione.dataset.menuAzione === "scheda") apriMiaScheda();
+      else if (azione.dataset.menuAzione === "guide") window.open("guide/", "_blank");
       else confermaCambiaUtente();
       return;
     }
@@ -5213,6 +5392,10 @@ const SOCIO_SEZIONI = ["home", "bacheca", "libretto", "cena", "presenza-adunata"
 const SEZIONI_SOLO_ADMIN = ["cassa", "conv-casoncellata", "log"];
 
 function sezioniAttive() {
+  if (!puoVedereArchivioBui()) return sezioniAttiveBase().filter(s => s !== "archivio-bui");
+  return sezioniAttiveBase();
+}
+function sezioniAttiveBase() {
   if (currentRole === "socio") return SECTION_ORDER.filter(s => SOCIO_SEZIONI.includes(s));
   if (currentRole !== "admin") return SECTION_ORDER.filter(s => !SEZIONI_SOLO_ADMIN.includes(s));
   return SECTION_ORDER;
@@ -5227,6 +5410,7 @@ function applyRoleRestrictions() {
     });
     if (SEZIONI_SOLO_ADMIN.includes(currentSection)) currentSection = "home";
   }
+  if (!sezionePermessa(currentSection)) currentSection = "home";
 
   if (currentRole !== "socio") {
     settingsBtn.textContent = "⚙️";

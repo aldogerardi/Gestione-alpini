@@ -1,4 +1,4 @@
-const CACHE_NAME = "gestione-gruppo-v6-94";
+const CACHE_NAME = "gestione-gruppo-v7-36";
 const PRECACHE_URLS = [
   "./",
   "./index.html",
@@ -34,6 +34,9 @@ self.addEventListener("activate", event => {
 });
 
 self.addEventListener("fetch", event => {
+  // Guide video: niente memoria locale (i video usano richieste parziali, e su iPhone devono arrivare direttamente dalla rete).
+  const url = new URL(event.request.url);
+  if (url.pathname.indexOf("/guide/") !== -1 || event.request.headers.has("range")) return;
   event.respondWith(
     caches.match(event.request).then(cached => {
       const fetchPromise = fetch(event.request).then(networkResponse => {
