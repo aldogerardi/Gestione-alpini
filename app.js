@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "7.36";
+const APP_VERSION = "7.37";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -303,12 +303,22 @@ function applyStateFields(source) {
   state.archivioBui = source.archivioBui || [];
 }
 
+const SYNC_STATO = { ok: null, quando: null, errore: "", ricevuto: null, daCache: false };
+
 function syncToFirebase() {
-  if (!window.db) return;
+  if (!window.db) return Promise.resolve(false);
   const clean = JSON.parse(JSON.stringify(state));
-  db.collection(FIRESTORE_COLLECTION).doc(FIRESTORE_DOC).set(clean).catch(err => {
+  const kb = Math.round(JSON.stringify(clean).length / 1024);
+  return db.collection(FIRESTORE_COLLECTION).doc(FIRESTORE_DOC).set(clean).then(() => {
+    SYNC_STATO.ok = true; SYNC_STATO.quando = new Date().toISOString(); SYNC_STATO.errore = "";
+    return true;
+  }).catch(err => {
+    SYNC_STATO.ok = false; SYNC_STATO.quando = new Date().toISOString();
+    SYNC_STATO.errore = String((err && (err.code || err.message)) || "errore");
     console.error("Errore salvataggio su Firebase", err);
-    toast("⚠️ Salvato solo in locale, controlla la connessione");
+    const troppo = kb > 1000 || /size|exceeds|invalid-argument/i.test(String((err && (err.message || err.code)) || ""));
+    toast(troppo ? "⚠️ Dati troppo grandi per Firebase: non salvati online" : "⚠️ Salvato solo in locale, controlla la connessione");
+    return false;
   });
 }
 
@@ -323,6 +333,8 @@ function initFirebaseSync() {
       return;
     }
     applyStateFields(snap.data());
+    SYNC_STATO.ricevuto = new Date().toISOString();
+    SYNC_STATO.daCache = !!(snap.metadata && snap.metadata.fromCache);
     logAggiornaBaseline();
     if (riallineaAccessoPersonale()) return;
     localStorage.setItem("gestione_gruppo_data", JSON.stringify(state));
@@ -443,7 +455,7 @@ function saveState() {
   state.meta.ultimaModificaDa = currentUser || "";
   localStorage.setItem("gestione_gruppo_data", JSON.stringify(state));
   try { registraModificheNelLog(); } catch (e) { console.warn("Log non registrato", e); }
-  syncToFirebase();
+  return syncToFirebase();
 }
 
 // ---------- Log attività ----------
@@ -819,6 +831,7 @@ function attachHomeEvents() {
     };
     saveState();
     toast("Dati del gruppo salvati");
+    renderSection();
   });
   document.querySelectorAll("[data-wa-auguri]").forEach(btn => {
     btn.addEventListener("click", () => inviaAuguriWhatsapp(btn.dataset.waAuguri));
@@ -2676,6 +2689,10 @@ function openSettings() {
       <div class="card-sub">Ultima modifica: <strong>${esc(userLabel(state.meta && state.meta.ultimaModificaDa))}</strong> il <strong>${fmtDateTime(state.meta && state.meta.ultimaModifica)}</strong></div>
       <div class="card-sub">Ultimo backup importato: <strong>${fmtDateTime(state.meta && state.meta.ultimoImport)}</strong></div>
       <div class="card-sub" style="color:${window.db ? "#1a6b3c" : "#b33"};">${window.db ? "☁️ Sincronizzazione Firebase attiva" : "⚠️ Firebase non configurato (dati solo su questo dispositivo)"}</div>
+      <div class="card-sub">Dimensione dei dati: <strong>${Math.round(JSON.stringify(state).length / 1024)} KB</strong> su 1.024 KB (limite di Firebase)</div>
+      <div class="card-sub">Ultimo salvataggio online: <strong>${SYNC_STATO.ok === null ? "nessuno in questa sessione" : (SYNC_STATO.ok ? "riuscito alle " : "NON riuscito (" + esc(SYNC_STATO.errore) + ") alle ") + (SYNC_STATO.quando ? new Date(SYNC_STATO.quando).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }) : "")}</strong></div>
+      <div class="card-sub">Ultimi dati ricevuti: <strong>${SYNC_STATO.ricevuto ? new Date(SYNC_STATO.ricevuto).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }) + (SYNC_STATO.daCache ? " (dalla memoria del telefono)" : "") : "-"}</strong></div>
+      <button type="button" class="btn secondary block" id="controlla-sync-btn" style="margin-top:8px;">🔍 Controlla sincronizzazione</button>
     </div>
 
     ${bloccoGestioneUtenti}
@@ -2814,6 +2831,7 @@ function openSettings() {
     saveState();
     openSettings();
   });
+  document.getElementById("controlla-sync-btn").addEventListener("click", controllaSincronizzazione);
   const aggiungiUtenteBtn = document.getElementById("aggiungi-utente-btn");
   if (aggiungiUtenteBtn) aggiungiUtenteBtn.addEventListener("click", () => {
     state.settings.utenti = leggiUtentiDalForm();
@@ -3391,18 +3409,21 @@ function renderLibretto() {
 
 function pulisciEventiScadutiBacheca() {
   const oggi = new Date(); oggi.setHours(0, 0, 0, 0);
-  const primaLen = state.bacheca.length;
-  state.bacheca = state.bacheca.filter(a => {
+  const filtrata = state.bacheca.filter(a => {
     if (!a.data) return true; // senza data, non scade da solo
     const d = parseDataISO(a.data);
     if (!d) return true;
     const giorniPassati = Math.floor((oggi - d) / 86400000);
     return giorniPassati < 2;
   });
-  if (state.bacheca.length !== primaLen) {
-    logComeSistema = true;
-    try { saveState(); } finally { logComeSistema = false; }
-  }
+  if (filtrata.length === state.bacheca.length) return;
+  // Questo è l'unico salvataggio che parte da solo: se il telefono non ha ancora ricevuto i dati
+  // aggiornati da Firebase potrebbe riscrivere dati vecchi e cancellare le modifiche fatte da altri.
+  // Quindi aspetta: riproverà al prossimo disegno della Bacheca, a dati allineati.
+  if (window.db && !SYNC_STATO.ricevuto) return;
+  state.bacheca = filtrata;
+  logComeSistema = true;
+  try { saveState(); } finally { logComeSistema = false; }
 }
 
 function parseDataISO(str) {
@@ -5206,7 +5227,55 @@ function apriMiaScheda() {
   });
 }
 
+// ---------- Controllo della sincronizzazione ----------
+async function controllaSincronizzazione() {
+  if (!window.db) { alert("Firebase non è configurato su questo dispositivo."); return; }
+  let snap;
+  try {
+    snap = await conTimeout(db.collection(FIRESTORE_COLLECTION).doc(FIRESTORE_DOC).get({ source: "server" }), 12000);
+  } catch (e) {
+    alert("Non riesco a leggere i dati dal server: il telefono è senza connessione oppure Firebase non risponde. I dati che vedi ora sono quelli salvati su questo dispositivo.");
+    return;
+  }
+  if (!snap.exists) { alert("Sul server non ci sono ancora dati."); return; }
+  const cloud = snap.data();
+  const social = g => `Instagram ${g && g.instagram ? "sì" : "no"}, Facebook ${g && g.facebook ? "sì" : "no"}`;
+  const quando = m => m && m.ultimaModifica ? new Date(m.ultimaModifica).toLocaleString("it-IT") : "-";
+  const kb = Math.round(JSON.stringify(cloud).length / 1024);
+  const righe = [
+    `SERVER (Firebase): ${kb} KB`,
+    `  soci: ${(cloud.socios || []).length}`,
+    `  link social: ${social(cloud.gruppoInfo)}`,
+    `  ultima modifica: ${quando(cloud.meta)}`,
+    "",
+    "QUESTO TELEFONO",
+    `  soci: ${(state.socios || []).length}`,
+    `  link social: ${social(state.gruppoInfo)}`,
+    `  ultima modifica: ${quando(state.meta)}`,
+  ];
+  const uguali = (cloud.socios || []).length === (state.socios || []).length &&
+    !!(cloud.gruppoInfo && cloud.gruppoInfo.instagram) === !!(state.gruppoInfo && state.gruppoInfo.instagram) &&
+    !!(cloud.gruppoInfo && cloud.gruppoInfo.facebook) === !!(state.gruppoInfo && state.gruppoInfo.facebook);
+  righe.push("", uguali ? "Server e telefono combaciano." : "ATTENZIONE: server e telefono NON combaciano. Chiudi e riapri l'app; se i dati giusti sono su un altro dispositivo, salva di nuovo da lì.");
+  alert(righe.join("\n"));
+}
+
 // ---------- Cambio password personale ----------
+// A ogni apertura dell'app, finché il socio usa ancora la password iniziale (data di nascita),
+// l'app gli propone di sceglierne una personale. "Più tardi" la rimanda alla prossima apertura.
+async function controllaPasswordIniziale() {
+  if (!currentUser || !currentUser.startsWith("socio:") || !window.db) return;
+  const s = socioCorrente();
+  if (!s) return;
+  try {
+    const rec = await leggiRecordPassword(s.id);
+    if (rec) return;                       // ha già una password personale
+  } catch (e) { return; }                  // offline o errore: non disturbare
+  const m = document.getElementById("modal-overlay");
+  if (m && !m.classList.contains("hidden")) return;   // c'è già una finestra aperta
+  apriCambioPassword(true);
+}
+
 function apriCambioPassword(primoAccesso) {
   const socio = socioCorrente();
   if (!socio) return;
@@ -5455,7 +5524,7 @@ function startApp() {
   setupMenuLaterale();
   renderSection();
   initFirebaseSync();
-  if (proponiCambioPassword) { proponiCambioPassword = false; setTimeout(() => apriCambioPassword(true), 500); }
+  setTimeout(controllaPasswordIniziale, 1200);
 
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).then(reg => {
@@ -5482,8 +5551,11 @@ function startApp() {
     });
 
     let refreshing = false;
+    const eraControllato = !!navigator.serviceWorker.controller;
     navigator.serviceWorker.addEventListener("controllerchange", () => {
-      if (refreshing) return;
+      // Alla prima installazione non c'era un controllore: ricaricare qui farebbe sparire
+      // la finestra "Cambia password" appena aperta. Si ricarica solo se è un vero aggiornamento.
+      if (!eraControllato || refreshing) return;
       refreshing = true;
       window.location.reload();
     });

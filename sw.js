@@ -1,10 +1,13 @@
-const CACHE_NAME = "gestione-gruppo-v7-36";
+const VER = "7.37";
+const CACHE_NAME = "gestione-gruppo-v" + VER.replace(".", "-");
+// I file principali hanno ?v=<versione> nel nome: così a ogni versione il telefono li scarica di nuovo
+// e non può riusare una copia vecchia conservata dal browser (GitHub Pages la tiene fino a 10 minuti).
 const PRECACHE_URLS = [
   "./",
   "./index.html",
-  "./styles.css",
-  "./app.js",
-  "./firebase-config.js",
+  "./styles.css?v=" + VER,
+  "./app.js?v=" + VER,
+  "./firebase-config.js?v=" + VER,
   "./manifest.json",
   "./icon-192.png",
   "./icon-512.png",
@@ -13,7 +16,7 @@ const PRECACHE_URLS = [
 
 self.addEventListener("install", event => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(PRECACHE_URLS))
+    caches.open(CACHE_NAME).then(cache => cache.addAll(PRECACHE_URLS.map(u => new Request(u, { cache: "reload" }))))
   );
   // Nessuno skipWaiting qui: il nuovo service worker resta "in attesa"
   // finché l'utente non conferma l'aggiornamento dal banner.
