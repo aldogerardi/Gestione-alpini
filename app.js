@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "7.37";
+const APP_VERSION = "7.38";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -468,7 +468,7 @@ const LOG_CAMPI_NOMI = {
   codiceFiscale: "codice fiscale", utenti: "utenti/password", moduloSedeUrl: "modulo sede", moduloSedeNome: "modulo sede",
   testoPreghiera: "testo preghiera", testoCanto: "testo canto", testoAuguriCompleanno: "testo auguri",
   quotaBollino: "quota bollino", quotaNazionale: "quota nazionale", appName: "nome app", incaricoFeste: "incarico feste",
-  tagliaVestiario: "taglia vestiario", accessoApp: "accesso app", accessoLivello: "livello accesso", chiaviSede: "chiavi sede", dataIscrizione: "data iscrizione", haccpDataCorso: "data corso HACCP", haccpDataScadenza: "scadenza HACCP"
+  tagliaVestiario: "taglia vestiario", brigataAlpina: "brigata alpina", accessoApp: "accesso app", accessoLivello: "livello accesso", chiaviSede: "chiavi sede", dataIscrizione: "data iscrizione", haccpDataCorso: "data corso HACCP", haccpDataScadenza: "scadenza HACCP"
 };
 
 function nomeSocioPerLog(id) {
@@ -743,23 +743,31 @@ function renderNotizieDelGiorno() {
 }
 
 function linkSicuro(u) {
-  let v = String(u || "").trim();
+  // toglie i caratteri invisibili che a volte si portano dietro i link copiati dalle app
+  let v = String(u || "").replace(/[\u200B-\u200F\u202A-\u202E\u2060\uFEFF\u00A0]/g, " ").trim();
   if (!v) return "";
   if (/^(javascript|data|vbscript):/i.test(v)) return "";
-  if (!/^https?:\/\//i.test(v)) {
-    if (!/^[\w-]+(\.[\w-]+)+(\/|$)/.test(v) && !/^www\./i.test(v)) return "";
-    v = "https://" + v;
+  const m = v.match(/https?:\/\/[^\s<>"']+/i);          // un indirizzo vero dentro al testo
+  if (m) v = m[0];
+  else {
+    const d = v.match(/(?:[\w-]+\.)+[a-z]{2,}(?:\/[^\s<>"']*)?/i);   // oppure uno senza https://
+    if (!d) return "";
+    v = "https://" + d[0];
   }
+  v = v.replace(/[.,;:!?)\]]+$/, "");
   return /^https?:\/\/[^\s\/]+\.[^\s\/]+/i.test(v) ? v : "";
 }
 
-function tastiSocial(g) {
-  const ig = linkSicuro(g.instagram), fb = linkSicuro(g.facebook);
-  if (!ig && !fb) return "";
+function tastiSocial(g, conTesto) {
   const stile = "display:block; text-align:center; text-decoration:none; padding:12px; border-radius:10px; font-weight:700; margin-bottom:8px;";
-  return `
-    ${ig ? `<a href="${esc(ig)}" target="_blank" rel="noopener" class="btn block" style="${stile}">📷 Apri la pagina Instagram</a>` : ""}
-    ${fb ? `<a href="${esc(fb)}" target="_blank" rel="noopener" class="btn block" style="${stile}">📘 Apri la pagina Facebook</a>` : ""}`;
+  const parte = (icona, nome, raw) => {
+    const link = linkSicuro(raw);
+    if (link) return `<a href="${esc(link)}" target="_blank" rel="noopener" class="btn block" style="${stile}">${icona} Apri la pagina ${nome}</a>`;
+    // link non riconosciuto: ai soci resta visibile come testo (come nella 7.35), nel modulo c'è l'avviso rosso
+    const t = String(raw || "").trim();
+    return (conTesto && t) ? `<div class="card-sub" style="margin-bottom:8px;">${icona} ${nome}: ${esc(t)}</div>` : "";
+  };
+  return parte("📷", "Instagram", g.instagram) + parte("📘", "Facebook", g.facebook);
 }
 
 function renderHome() {
@@ -778,9 +786,9 @@ function renderHome() {
         <div class="form-group"><label>Via</label><div class="card-sub">${esc(g.via) || "-"}</div></div>
         <div class="form-group"><label>Città</label><div class="card-sub">${esc(g.citta) || "-"}${g.prov ? " (" + esc(g.prov) + ")" : ""}</div></div>
         <div class="form-group"><label>Capogruppo</label><div class="card-sub">${esc(nomeCapogruppo)}</div></div>
-        ${tastiSocial(g) ? `
+        ${tastiSocial(g, true) ? `
         <div style="font-weight:800; margin:16px 0 10px;">Social</div>
-        ${tastiSocial(g)}
+        ${tastiSocial(g, true)}
         ` : ""}
       </div>
     `;
@@ -807,8 +815,8 @@ function renderHome() {
       </div>
       <div style="font-weight:800; margin:16px 0 10px;">Social</div>
       ${tastiSocial(g)}
-      <div class="form-group"><label>📷 Instagram (link)</label><input type="text" id="home-instagram" value="${esc(g.instagram)}" placeholder="https://instagram.com/..."></div>
-      <div class="form-group"><label>📘 Facebook (link)</label><input type="text" id="home-facebook" value="${esc(g.facebook)}" placeholder="https://facebook.com/..."></div>
+      <div class="form-group"><label>📷 Instagram (link)</label><input type="text" id="home-instagram" value="${esc(g.instagram)}" placeholder="https://instagram.com/...">${g.instagram && !linkSicuro(g.instagram) ? `<div class="card-sub" style="color:#b33; margin-top:4px;">Link non riconosciuto: incolla l'indirizzo completo, che inizia con https://</div>` : ""}</div>
+      <div class="form-group"><label>📘 Facebook (link)</label><input type="text" id="home-facebook" value="${esc(g.facebook)}" placeholder="https://facebook.com/...">${g.facebook && !linkSicuro(g.facebook) ? `<div class="card-sub" style="color:#b33; margin-top:4px;">Link non riconosciuto: incolla l'indirizzo completo, che inizia con https://</div>` : ""}</div>
       <button type="button" class="btn block" id="home-save-btn" style="margin-top:6px;">💾 Salva</button>
     </div>
   `;
@@ -970,7 +978,7 @@ function openSocioForm(id) {
   const s = id ? state.socios.find(x => x.id === id) : {
     cognome:"", nome:"", dataNascita:"", luogoNascita:"", provinciaNascita:"", codiceFiscale:"", matricola:"", indirizzo:"", paese:"", provincia:"", cap:"",
     telefono:"", cellulare:"", sms:false, whatsapp:false, chiaviSede:false, privacy:false, haccp:false, haccpDataCorso:"", haccpDataScadenza:"", email:"",
-    dataIscrizione:"", carica:"", grado:"", reparto:"", anniNaja:"", alfiere:false,
+    dataIscrizione:"", carica:"", grado:"", reparto:"", brigataAlpina:"", anniNaja:"", alfiere:false,
     incaricoFeste:"", note:"", andatoAvanti:false, andatoAvantiData:""
   };
 
@@ -1008,10 +1016,11 @@ function openSocioForm(id) {
         <div class="form-group"><label>Telefono</label><input type="tel" id="f-telefono" value="${esc(s.telefono)}"></div>
         <div class="form-group"><label>Cellulare</label><input type="tel" id="f-cellulare" value="${esc(s.cellulare)}"></div>
       </div>
-      <div class="checkbox-row" style="margin-bottom:14px;">
+      <div class="checkbox-row" style="margin-bottom:14px; gap:10px; flex-wrap:nowrap; white-space:nowrap;">
         <label><input type="checkbox" id="f-sms" ${s.sms?"checked":""}> SMS</label>
         <label><input type="checkbox" id="f-whatsapp" ${s.whatsapp?"checked":""}> WhatsApp</label>
         <label><input type="checkbox" id="f-chiavi-sede" ${s.chiaviSede?"checked":""}> 🔑 Chiavi sede</label>
+        <label class="hide-if-simp"><input type="checkbox" id="f-alfiere" ${s.alfiere?"checked":""}> 🎖️ Alfiere</label>
       </div>
       <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px; flex-wrap:wrap;">
         <label style="display:flex; align-items:center; gap:6px; white-space:nowrap;"><input type="checkbox" id="f-privacy" ${s.privacy?"checked":""}> 🔒 Privacy</label>
@@ -1034,27 +1043,22 @@ function openSocioForm(id) {
         <div class="form-group"><label style="font-size:0.8rem;">Scadenza rinnovo</label><input type="text" id="f-haccp-data-scadenza" placeholder="gg-mm-aaaa" value="${esc(s.haccpDataScadenza)}"></div>
       </div>
       <div class="form-group"><label>Email</label><input type="email" id="f-email" value="${esc(s.email)}"></div>
-      <div class="form-group"><label>Taglia vestiario</label><input type="text" id="f-taglia" list="lista-taglie" value="${esc(s.tagliaVestiario)}" placeholder="Es. L, XL, 52...">
-        <datalist id="lista-taglie">${TAGLIE_SUGGERITE.map(t => `<option value="${t}"></option>`).join("")}</datalist></div>
       <div class="two-col">
         <div class="form-group"><label>Data iscrizione al gruppo</label><input type="text" id="f-dataIscrizione" placeholder="gg-mm-aaaa" value="${esc(s.dataIscrizione)}"></div>
         <div class="form-group"><label>Carica/ruolo</label>
           <select id="f-carica"><option value="">-- nessuna --</option>${cariche_opts}</select>
         </div>
       </div>
-      <div class="two-col hide-if-simp" style="align-items:flex-end; margin-bottom:24px;">
-        <div class="form-group" style="flex:0 0 auto;">
-          <label>&nbsp;</label>
-          <label style="display:flex; align-items:center; gap:6px; padding:9px 0;"><input type="checkbox" id="f-alfiere" ${s.alfiere?"checked":""}> 🎖️ Alfiere</label>
-        </div>
-        <div class="form-group"><label>Anni di naja</label><input type="text" id="f-naja" value="${esc(s.anniNaja)}"></div>
-      </div>
       <div class="two-col hide-if-simp">
+        <div class="form-group"><label>Anni di naja</label><input type="text" id="f-naja" value="${esc(s.anniNaja)}"></div>
         <div class="form-group"><label>Grado</label><input type="text" id="f-grado" value="${esc(s.grado)}"></div>
-        <div class="form-group"><label>Reparto</label><input type="text" id="f-reparto" value="${esc(s.reparto)}"></div>
       </div>
-      <div class="form-group"><label>Incarico feste</label>
-        <select id="f-incarico">${incarichi_opts}</select>
+      <div class="form-group hide-if-simp"><label>Brigata Alpina</label><input type="text" id="f-brigata" value="${esc(s.brigataAlpina)}"></div>
+      <div class="form-group hide-if-simp"><label>Reparto</label><input type="text" id="f-reparto" value="${esc(s.reparto)}"></div>
+      <div class="two-col" style="margin-bottom:14px;">
+        <div class="form-group"><label>Incarico feste</label><select id="f-incarico">${incarichi_opts}</select></div>
+        <div class="form-group"><label>Taglia vestiario</label><input type="text" id="f-taglia" list="lista-taglie" value="${esc(s.tagliaVestiario)}" placeholder="Es. L, XL, 52...">
+          <datalist id="lista-taglie">${TAGLIE_SUGGERITE.map(t => `<option value="${t}"></option>`).join("")}</datalist></div>
       </div>
       <div class="form-group" style="display:flex; align-items:center; gap:14px;">
         <label style="display:flex; align-items:center; gap:6px; white-space:nowrap;"><input type="checkbox" id="f-andato-avanti" ${s.andatoAvanti ? "checked" : ""}> 💔 Andato avanti</label>
@@ -1226,6 +1230,7 @@ async function saveSocio() {
     alfiere: document.getElementById("f-alfiere").checked,
     grado: document.getElementById("f-grado").value.trim(),
     reparto: document.getElementById("f-reparto").value.trim(),
+    brigataAlpina: document.getElementById("f-brigata").value.trim(),
     anniNaja: document.getElementById("f-naja").value.trim(),
     incaricoFeste: document.getElementById("f-incarico").value,
     andatoAvanti: document.getElementById("f-andato-avanti").checked,
@@ -4490,6 +4495,7 @@ function handleExcelImport(e) {
           carica: get("Carica","Ruolo"),
           grado: get("Grado"),
           reparto: get("Reparto"),
+          brigataAlpina: get("Brigata Alpina", "Brigata alpina", "Brigata"),
           anniNaja: get("Anni Naja","Anni di naja"),
           incaricoFeste: get("Incarico Feste","Incarico"),
           note: get("Note"),
@@ -4828,6 +4834,7 @@ const REPORT1_COLONNE = [
   { id: "alfiere", label: "Alfiere", get: s => s.alfiere ? "Sì" : "No" },
   { id: "grado", label: "Grado", get: s => s.grado || "" },
   { id: "reparto", label: "Reparto", get: s => s.reparto || "" },
+  { id: "brigata", label: "Brigata alpina", get: s => s.brigataAlpina || "" },
   { id: "anniNaja", label: "Anni naja", get: s => s.anniNaja || "" },
   { id: "incaricoFeste", label: "Incarico feste", get: s => s.incaricoFeste || "" },
   { id: "privacy", label: "Privacy firmata", get: s => s.privacy ? "Sì" : "No" },
@@ -4864,6 +4871,7 @@ function chiaveTaglia(s) {
 }
 const REPORT1_ORDINAMENTI = [
   { id: "taglia", label: "Taglia vestiario", tipo: "num", key: chiaveTaglia },
+  { id: "brigata", label: "Brigata alpina", tipo: "testo", key: s => s.brigataAlpina || "" },
   { id: "cognome", label: "Cognome e nome (alfabetico)", tipo: "testo", key: s => `${s.cognome || ""} ${s.nome || ""}`.trim() },
   { id: "nome", label: "Nome e cognome", tipo: "testo", key: s => `${s.nome || ""} ${s.cognome || ""}`.trim() },
   { id: "dataNascita", label: "Data di nascita", tipo: "data", key: s => parseDataGGMMAAAA(s.dataNascita) },
@@ -5140,7 +5148,7 @@ function vaiASezione(section) {
 // SMS/WhatsApp, chiavi, alfiere, andato avanti, accesso app) restano gestiti dal Direttivo.
 const TAGLIE_SUGGERITE = ["XS", "S", "M", "L", "XL", "XXL", "3XL", "4XL", "5XL"];
 const MIA_SCHEDA_CAMPI = ["cognome", "nome", "dataNascita", "luogoNascita", "provinciaNascita", "codiceFiscale",
-  "indirizzo", "paese", "provincia", "cap", "telefono", "cellulare", "email", "tagliaVestiario", "grado", "reparto", "anniNaja"];
+  "indirizzo", "paese", "provincia", "cap", "telefono", "cellulare", "email", "tagliaVestiario", "grado", "reparto", "brigataAlpina", "anniNaja"];
 
 function validaMiaScheda(input) {
   const campi = {};
@@ -5184,9 +5192,12 @@ function apriMiaScheda() {
     <div class="two-col">${campo("paese", "Paese")}${campo("provincia", "Provincia", { attr: 'maxlength="2" style="text-transform:uppercase"' })}${campo("cap", "CAP", { attr: 'maxlength="5" inputmode="numeric"' })}</div>
     <div class="two-col">${campo("telefono", "Telefono", { tipo: "tel" })}${campo("cellulare", "Cellulare", { tipo: "tel" })}</div>
     ${campo("email", "Email", { tipo: "email" })}
-    <div class="form-group"><label>Taglia vestiario</label><input type="text" id="ms-tagliaVestiario" list="lista-taglie-ms" value="${esc(s.tagliaVestiario)}" placeholder="Es. L, XL, 52...">
-      <datalist id="lista-taglie-ms">${TAGLIE_SUGGERITE.map(t => `<option value="${t}"></option>`).join("")}</datalist></div>
-    ${simp ? "" : `<div class="two-col">${campo("grado", "Grado")}${campo("reparto", "Reparto")}</div>${campo("anniNaja", "Anni di naja")}`}
+    ${simp ? "" : `<div class="two-col">${campo("anniNaja", "Anni di naja")}${campo("grado", "Grado")}</div>${campo("brigataAlpina", "Brigata Alpina")}${campo("reparto", "Reparto")}`}
+    <div class="two-col">
+      <div class="form-group"><label>Incarico feste</label><input type="text" value="${esc(s.incaricoFeste || "Nessuno")}" disabled title="Lo assegna il Direttivo"></div>
+      <div class="form-group"><label>Taglia vestiario</label><input type="text" id="ms-tagliaVestiario" list="lista-taglie-ms" value="${esc(s.tagliaVestiario)}" placeholder="Es. L, XL, 52...">
+        <datalist id="lista-taglie-ms">${TAGLIE_SUGGERITE.map(t => `<option value="${t}"></option>`).join("")}</datalist></div>
+    </div>
     <div class="card-sub" style="margin:4px 0 10px;">Matricola: <strong>${esc(s.matricola) || "-"}</strong> · Iscritto dal: <strong>${esc(s.dataIscrizione) || "-"}</strong> · Categoria: <strong>${esc(s.carica) || "-"}</strong></div>
     <div style="font-size:0.74rem; color:#666; margin-bottom:8px;">Se cambi cognome e nome, per accedere userai quelli nuovi. Se non hai ancora cambiato password, cambiando la data di nascita cambia anche la password iniziale.</div>
     <div id="ms-errore" style="color:var(--red); font-size:0.82rem; min-height:1.1em; margin-bottom:6px;"></div>
@@ -5239,7 +5250,8 @@ async function controllaSincronizzazione() {
   }
   if (!snap.exists) { alert("Sul server non ci sono ancora dati."); return; }
   const cloud = snap.data();
-  const social = g => `Instagram ${g && g.instagram ? "sì" : "no"}, Facebook ${g && g.facebook ? "sì" : "no"}`;
+  const un = (nome, v) => !v ? `${nome} assente` : (linkSicuro(v) ? `${nome} ok` : `${nome} NON riconosciuto («${String(v).slice(0, 45)}»)`);
+  const social = g => `${un("Instagram", g && g.instagram)}; ${un("Facebook", g && g.facebook)}`;
   const quando = m => m && m.ultimaModifica ? new Date(m.ultimaModifica).toLocaleString("it-IT") : "-";
   const kb = Math.round(JSON.stringify(cloud).length / 1024);
   const righe = [

@@ -325,3 +325,7 @@ body.menu-aperto { overflow: hidden; }
 .menu-voce:disabled { opacity: 0.4; }
 .menu-voce .mv-lock { font-size: 0.9rem; }
 .menu-foot { padding: 14px; font-size: 0.72rem; color: #777; text-align: center; }
+
+/* riga SMS / WhatsApp / Chiavi sede / Alfiere: su una riga sola anche sugli schermi stretti */
+#modal-overlay .checkbox-row label { gap: 4px; font-size: 0.8rem; }
+#modal-overlay .checkbox-row input { width: 17px; height: 17px; flex: none; }
