@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "7.99";
+const APP_VERSION = "8.00";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -1033,9 +1033,11 @@ function openSocioForm(id) {
         <div class="form-group"><label>Telefono</label><input type="tel" id="f-telefono" value="${esc(s.telefono)}"></div>
         <div class="form-group"><label>Cellulare</label><input type="tel" id="f-cellulare" value="${esc(s.cellulare)}"></div>
       </div>
-      <div class="checkbox-row" style="margin-bottom:14px; gap:10px; flex-wrap:nowrap; white-space:nowrap;">
+      <div class="checkbox-row" style="margin-bottom:10px; gap:26px;">
         <label><input type="checkbox" id="f-sms" ${s.sms?"checked":""}> SMS</label>
         <label><input type="checkbox" id="f-whatsapp" ${s.whatsapp?"checked":""}> WhatsApp</label>
+      </div>
+      <div class="checkbox-row" style="margin-bottom:14px; gap:26px;">
         <label><input type="checkbox" id="f-chiavi-sede" ${s.chiaviSede?"checked":""}> 🔑 Chiavi sede</label>
         <label class="hide-if-simp"><input type="checkbox" id="f-alfiere" ${s.alfiere?"checked":""}> 🎖️ Alfiere</label>
       </div>
@@ -6148,8 +6150,8 @@ const MENU_GRUPPI = [
   { titolo: "", voci: [["home", "🏠", "Home"]] },
   { titolo: "Soci e tesseramento", voci: [["anagrafica", "👤", "Anagrafica"], ["conv-consiglio", "📋", "Consiglio"], ["bollino", "🎫", "Bollino"], ["bollino-amici", "🤝", "Bollino Amici"]] },
   { titolo: "Eventi", voci: [["cena", "🍽️", "Cena"], ["iniziative", "🎉", "Attività"], ["presenza-adunata", "🎖️", "Adunata"], ["prenotazioni", "🗓️", "Prenotaz. Sede"], ["beneficenza", "🎁", "Panettoni &amp; C"], ["conv-casoncellata", "🥟", "Conv. Casoncellata"]] },
-  { titolo: "Comunicazione", voci: [["bacheca", "📌", "Bacheca"], ["verbali", "📑", "Verbali Consiglio"], ["libretto", "📖", "Preghiera e Canto"], ["canzoni", "🎵", "Canzoni"], ["manuali", "📘", "Manuali"], ["ringraziamenti", "🙏", "Ringraziamenti"], ["sponsor", "💼", "Sponsor"]] },
-  { titolo: "Gestione e report", voci: [["archivio-bui", "🗄️", "Archivio BUI"], ["cassa", "💰", "Cassa"], ["ore-alpine", "⏱️", "Ore Alpine"], ["report", "📊", "Report 1"], ["report2", "📊", "Report 2"], ["log", "📜", "Log"]] }
+  { titolo: "Comunicazione", voci: [["bacheca", "📌", "Bacheca"], ["verbali", "📑", "Verbali Consiglio"], ["libretto", "📖", "Preghiera e Canto"], ["canzoni", "🎵", "Canzoni"]] },
+  { titolo: "Gestione e report", voci: [["archivio-bui", "🗄️", "Archivio BUI"], ["cassa", "💰", "Cassa"], ["ore-alpine", "⏱️", "Ore Alpine"], ["ringraziamenti", "🙏", "Ringraziamenti"], ["sponsor", "💼", "Sponsor"], ["report", "📊", "Report 1"], ["report2", "📊", "Report 2"], ["log", "📜", "Log"]] }
 ];
 
 function isCapogruppo() {
@@ -6193,6 +6195,7 @@ function renderMenuDrawer() {
     <div class="menu-gruppo">Profilo</div>
     ${currentUser && currentUser.startsWith("socio:") ? `<button type="button" class="menu-voce" data-menu-azione="scheda"><span class="mv-ic">👤</span><span class="mv-lb">La mia scheda</span></button>
     <button type="button" class="menu-voce" data-menu-azione="password"><span class="mv-ic">🔑</span><span class="mv-lb">Cambia password</span></button>` : ""}
+    <button type="button" class="menu-voce${currentSection === "manuali" ? " attiva" : ""}" data-menu-sezione="manuali"><span class="mv-ic">📘</span><span class="mv-lb">Manuali</span></button>
     <button type="button" class="menu-voce" data-menu-azione="guide"><span class="mv-ic">🎬</span><span class="mv-lb">Guide video</span></button>
     <button type="button" class="menu-voce" data-menu-azione="esci"><span class="mv-ic">🚪</span><span class="mv-lb">Esci</span></button>
     <div class="menu-foot">🔒 = non disponibile per il tuo profilo · v${APP_VERSION}</div>
