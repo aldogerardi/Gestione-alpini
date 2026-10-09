@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "7.38";
+const APP_VERSION = "7.99";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -301,6 +301,9 @@ function applyStateFields(source) {
   state.prenotazioni = source.prenotazioni || [];
   state.verbali = source.verbali || [];
   state.archivioBui = source.archivioBui || [];
+  state.campagneBeneficenza = source.campagneBeneficenza || [];
+  state.canzoni = source.canzoni || [];
+  state.manuali = source.manuali || [];
 }
 
 const SYNC_STATO = { ok: null, quando: null, errore: "", ricevuto: null, daCache: false };
@@ -414,6 +417,9 @@ let state = {
   prenotazioni: [],
   verbali: [],
   archivioBui: [],
+  campagneBeneficenza: [],
+  canzoni: [],
+  manuali: [],
   meta: { ultimaModifica: null, ultimoImport: null }
 };
 let bollinoAnno = new Date().getFullYear();
@@ -468,7 +474,7 @@ const LOG_CAMPI_NOMI = {
   codiceFiscale: "codice fiscale", utenti: "utenti/password", moduloSedeUrl: "modulo sede", moduloSedeNome: "modulo sede",
   testoPreghiera: "testo preghiera", testoCanto: "testo canto", testoAuguriCompleanno: "testo auguri",
   quotaBollino: "quota bollino", quotaNazionale: "quota nazionale", appName: "nome app", incaricoFeste: "incarico feste",
-  tagliaVestiario: "taglia vestiario", brigataAlpina: "brigata alpina", accessoApp: "accesso app", accessoLivello: "livello accesso", chiaviSede: "chiavi sede", dataIscrizione: "data iscrizione", haccpDataCorso: "data corso HACCP", haccpDataScadenza: "scadenza HACCP"
+  tagliaVestiario: "taglia vestiario", brigataAlpina: "brigata alpina", audioUrl: "file audio", audioNome: "file audio", audioBytes: "file audio", categoria: "categoria", testo: "testo", visibilita: "chi lo vede", accessoApp: "accesso app", accessoLivello: "livello accesso", chiaviSede: "chiavi sede", dataIscrizione: "data iscrizione", haccpDataCorso: "data corso HACCP", haccpDataScadenza: "scadenza HACCP"
 };
 
 function nomeSocioPerLog(id) {
@@ -487,6 +493,8 @@ const LOG_TRACK = [
   { id: "prenotazioni", nome: "Prenotaz. Sede", get: st => st.prenotazioni, label: p => `${p.data || ""} ${FASCIA_LABEL[p.fascia] || p.fascia || ""} ${p.nome || ""}`.trim() },
   { id: "verbali", nome: "Verbali Consiglio", get: st => st.verbali, label: v => v.titolo },
   { id: "archivioBui", nome: "Archivio BUI", get: st => st.archivioBui, label: v => v.titolo },
+  { id: "canzoni", nome: "Canzoni", get: st => st.canzoni, label: c => c.titolo },
+  { id: "manuali", nome: "Manuali", get: st => st.manuali, label: m => m.titolo },
   { id: "bollino", nome: "Bollino", get: st => st.pagamentiBollino, label: p => `${nomeSocioPerLog(p.socioId)} ${p.anno || ""}`.trim() },
   { id: "convocazioni", nome: "Consiglio (convocazione)", get: st => (st.consiglio || {}).storico, label: c => c.data || "" },
   { id: "gruppoInfo", nome: "Home (dati del Gruppo)", obj: true, get: st => st.gruppoInfo },
@@ -680,6 +688,15 @@ function renderSection() {
   } else if (currentSection === "prenotazioni") {
     content.innerHTML = renderPrenotazioni();
     attachPrenotazioniEvents();
+  } else if (currentSection === "canzoni") {
+    content.innerHTML = renderCanzoni();
+    attachCanzoniEvents();
+  } else if (currentSection === "manuali") {
+    content.innerHTML = renderManuali();
+    attachManualiEvents();
+  } else if (currentSection === "beneficenza") {
+    content.innerHTML = renderBeneficenza();
+    attachBeneficenzaEvents();
   } else if (currentSection === "archivio-bui") {
     content.innerHTML = puoVedereArchivioBui() ? renderArchivioBui() : `<div class="card-sub">Sezione riservata.</div>`;
     if (puoVedereArchivioBui()) attachArchivioBuiEvents();
@@ -2645,7 +2662,7 @@ function openSettings() {
   const bloccoGestioneUtenti = ridotto ? "" : `
     <div class="settings-block">
       <h3>🔑 Gestione utenti</h3>
-      <div style="font-size:0.78rem; color:#666; margin-bottom:10px;">Ogni utente può avere una password (lasciala vuota per entrare senza password, come oggi). <b>Admin</b>: accesso completo, incluse Impostazioni avanzate (Gestione utenti, Backup/Ripristino, Zona pericolosa). <b>Direttivo</b>: accesso completo a tutte le sezioni operative, ma Impostazioni ridotte (senza Gestione utenti, Backup/Ripristino, Zona pericolosa). <b>Socio</b>: vede solo Home, Bacheca, Preghiera e Canto, Cena, Presenza Adunata, Attività, Verbali Consiglio (solo consultazione) e Prenotaz. Sede (quest'ultima con modulo, avviso, calendario e richieste in sola visualizzazione, senza poter confermare) — usalo per una password unica da dare a tutti i soci.</div>
+      <div style="font-size:0.78rem; color:#666; margin-bottom:10px;">Ogni utente può avere una password (lasciala vuota per entrare senza password, come oggi). <b>Admin</b>: accesso completo, incluse Impostazioni avanzate (Gestione utenti, Backup/Ripristino, Zona pericolosa). <b>Direttivo</b>: accesso completo a tutte le sezioni operative, ma Impostazioni ridotte (senza Gestione utenti, Backup/Ripristino, Zona pericolosa). <b>Socio</b>: vede solo Home, Bacheca, Preghiera e Canto, Cena, Presenza Adunata, Attività, Manuali (solo quello dei Soci), Verbali Consiglio (solo consultazione) e Prenotaz. Sede (quest'ultima con modulo, avviso, calendario e richieste in sola visualizzazione, senza poter confermare) — usalo per una password unica da dare a tutti i soci.</div>
       <div id="utenti-lista">
         ${(state.settings.utenti || []).map((u, idx) => `
           <div class="card" data-utente-idx="${idx}" style="padding:10px; margin-bottom:8px;">
@@ -3888,6 +3905,800 @@ function eliminaDocumentoBui(id) {
   renderSection();
 }
 
+// ---------- Beneficenza (vendite di prodotti il cui ricavato va in beneficenza) ----------
+// Ogni campagna ha prodotti, prenotazioni (nome + quantità), consegne e incassi. Tutte le scritture passano
+// da una transazione che modifica SOLO l'elenco delle campagne: così un telefono con dati vecchi non può
+// sovrascrivere il resto e due prenotazioni fatte nello stesso momento non si perdono.
+let benCampagnaId = null;
+let benFiltro = "";
+let benProdottiForm = [];
+const BEN_STATI = { aperta: "Prenotazioni aperte", consegna: "Prenotazioni chiuse, in consegna", conclusa: "Conclusa" };
+
+function benNum(v) { const n = parseFloat(String(v === undefined || v === null ? "" : v).replace(",", ".")); return isNaN(n) ? 0 : n; }
+function benEuro(v) { return benNum(v).toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €"; }
+function benOggi() { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+function benGestore() { return currentRole === "admin" || currentRole === "direttivo"; }
+function benMioId() { const s = socioCorrente(); return s ? s.id : null; }
+function benTrova(id) { return (state.campagneBeneficenza || []).find(c => c.id === id); }
+function benPrenotabile(c) { return !!c && c.stato === "aperta" && (!c.chiusuraPrenotazioni || benOggi() <= c.chiusuraPrenotazioni); }
+function benPezzi(r) { return Object.values(r.q || {}).reduce((s, n) => s + (Number(n) || 0), 0); }
+function benImporto(c, r) { return (c.prodotti || []).reduce((s, p) => s + (Number((r.q || {})[p.id]) || 0) * benNum(p.prezzo), 0); }
+function benArticoli(c, r) { return (c.prodotti || []).filter(p => Number((r.q || {})[p.id]) > 0).map(p => `${r.q[p.id]}× ${p.nome}`).join(", "); }
+
+function benTotali(c) {
+  const per = {};
+  (c.prodotti || []).forEach(p => { per[p.id] = { prenotati: 0, consegnati: 0 }; });
+  let dovuto = 0, incassato = 0, nPezzi = 0;
+  (c.prenotazioni || []).forEach(r => {
+    (c.prodotti || []).forEach(p => {
+      const q = Number((r.q || {})[p.id]) || 0;
+      if (q > 0) { per[p.id].prenotati += q; if (r.consegnato) per[p.id].consegnati += q; }
+    });
+    const imp = benImporto(c, r);
+    dovuto += imp; if (r.pagato) incassato += imp; nPezzi += benPezzi(r);
+  });
+  const costo = (c.prodotti || []).reduce((s, p) => s + benNum(p.ricevuti) * benNum(p.costo), 0);
+  return { per, dovuto, incassato, daIncassare: dovuto - incassato, nPren: (c.prenotazioni || []).length, nPezzi, costo, ricavato: incassato - costo };
+}
+
+// Scrive le campagne con una transazione. mutatore(campagne) modifica una copia e può restituire {errore}.
+async function benScrivi(mutatore, evLog) {
+  const copia = x => JSON.parse(JSON.stringify(x || []));
+  let nuove = null, esito = {};
+  if (window.db) {
+    const ref = db.collection(FIRESTORE_COLLECTION).doc(FIRESTORE_DOC);
+    await conTimeout(db.runTransaction(async tx => {
+      const snap = await tx.get(ref);
+      const camp = copia(snap.exists ? snap.data().campagneBeneficenza : state.campagneBeneficenza);
+      esito = mutatore(camp) || {};
+      if (esito.errore) return;
+      nuove = camp;
+      tx.set(ref, { campagneBeneficenza: camp }, { merge: true });
+    }), 15000);
+    if (esito.errore) return esito;
+    state.campagneBeneficenza = nuove;
+    localStorage.setItem("gestione_gruppo_data", JSON.stringify(state));
+    logAggiornaBaseline();
+  } else {
+    const camp = copia(state.campagneBeneficenza);
+    esito = mutatore(camp) || {};
+    if (esito.errore) return esito;
+    state.campagneBeneficenza = camp;
+    saveState();
+  }
+  if (evLog) scriviLog([{ ev: evLog }]);
+  renderSection();
+  return esito;
+}
+
+function benBadgeStato(c) {
+  const aperta = benPrenotabile(c);
+  const testo = c.stato === "aperta" && !aperta ? "Prenotazioni chiuse" : (BEN_STATI[c.stato] || c.stato);
+  return `<span class="badge${aperta ? "" : " badge-warning"}">${aperta ? "🟢 " : ""}${esc(testo)}</span>`;
+}
+
+function renderBeneficenza() {
+  let html;
+  if (benGestore()) {
+    const c = benCampagnaId ? benTrova(benCampagnaId) : null;
+    if (!c) benCampagnaId = null;
+    html = c ? renderBenDettaglio(c) : renderBenElencoGestore();
+  } else {
+    html = renderBenSoci();
+  }
+  return `<div id="ben-root">${html}</div>`;
+}
+
+function renderBenElencoGestore() {
+  const camp = [...(state.campagneBeneficenza || [])].sort((a, b) =>
+    (a.stato === "conclusa") - (b.stato === "conclusa") || (b.creato || "").localeCompare(a.creato || ""));
+  const cards = camp.length ? camp.map(c => {
+    const t = benTotali(c);
+    return `
+    <div class="card" data-ben="apri" data-id="${c.id}" style="cursor:pointer;">
+      <div class="card-name">${esc(c.titolo)}</div>
+      <div class="card-sub">${esc(c.produttore || "")}${c.produttore && c.destinazione ? " · " : ""}${c.destinazione ? "ricavato a: " + esc(c.destinazione) : ""}</div>
+      <div class="badge-row" style="margin-top:6px;">${benBadgeStato(c)}</div>
+      <div class="card-sub" style="margin-top:6px;">${t.nPren} prenotazioni · ${t.nPezzi} pezzi · da incassare ${benEuro(t.dovuto)} · incassati ${benEuro(t.incassato)}</div>
+    </div>`;
+  }).join("") : `<div class="card-sub">Nessuna campagna: creane una con il tasto qui sopra.</div>`;
+  return `
+    <div class="section-title">🎁 Panettoni &amp; C</div>
+    <div class="card-sub" style="margin-bottom:12px;">Prodotti dei produttori il cui ricavato va in beneficenza: prenotazioni dei soci, consegne, incassi e rendiconto finale.</div>
+    <button type="button" class="btn block" data-ben="nuova-campagna" style="margin-bottom:14px;">➕ Nuova campagna</button>
+    ${cards}`;
+}
+
+function benHtmlPrenotazioni(c) {
+  const q = benFiltro.trim().toLowerCase();
+  const lista = [...(c.prenotazioni || [])]
+    .filter(r => !q || `${r.nome} ${r.prenotatoDa || ""}`.toLowerCase().includes(q))
+    .sort((a, b) => (a.nome || "").localeCompare(b.nome || "", "it"));
+  if (!lista.length) return `<div class="card-sub">${(c.prenotazioni || []).length ? "Nessuna prenotazione corrisponde alla ricerca." : "Nessuna prenotazione."}</div>`;
+  return lista.map(r => `
+    <div class="card" style="padding:12px;">
+      <div style="display:flex; justify-content:space-between; gap:8px; align-items:flex-start;">
+        <div>
+          <div class="card-name">${esc(r.nome)}</div>
+          ${r.prenotatoDa && r.prenotatoDa !== r.nome ? `<div class="card-sub">prenotato da ${esc(r.prenotatoDa)}</div>` : ""}
+          <div class="card-sub">${esc(benArticoli(c, r)) || "-"}</div>
+          ${r.note ? `<div class="card-sub">📝 ${esc(r.note)}</div>` : ""}
+          <div class="card-sub" style="font-weight:700;">${benEuro(benImporto(c, r))}</div>
+        </div>
+        <div class="card-actions">
+          <button type="button" data-ben="modifica-pren" data-id="${c.id}" data-pid="${r.id}">✏️</button>
+          <button type="button" data-ben="elimina-pren" data-id="${c.id}" data-pid="${r.id}">🗑️</button>
+        </div>
+      </div>
+      <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
+        <button type="button" class="btn ${r.pagato ? "" : "secondary"}" data-ben="pagato" data-val="${r.pagato ? 0 : 1}" data-id="${c.id}" data-pid="${r.id}" style="padding:6px 12px; font-size:0.82rem;">${r.pagato ? "✅ Pagato" : "💶 Da pagare"}</button>
+        <button type="button" class="btn ${r.consegnato ? "" : "secondary"}" data-ben="consegnato" data-val="${r.consegnato ? 0 : 1}" data-id="${c.id}" data-pid="${r.id}" style="padding:6px 12px; font-size:0.82rem;">${r.consegnato ? "✅ Consegnato" : "📦 Da consegnare"}</button>
+      </div>
+    </div>`).join("");
+}
+
+function renderBenDettaglio(c) {
+  const t = benTotali(c);
+  const righeProd = (c.prodotti || []).map(p => `
+    <tr><td>${esc(p.nome)}</td><td style="text-align:right;">${benEuro(p.prezzo)}</td><td style="text-align:right;">${t.per[p.id].prenotati}</td>
+    <td style="text-align:right;">${benNum(p.ricevuti) || "-"}</td><td style="text-align:right;">${t.per[p.id].consegnati}</td></tr>`).join("");
+  const riga = (et, val, forte) => `<div style="display:flex; justify-content:space-between; padding:3px 0;${forte ? " font-weight:800; border-top:1px solid #ccc; margin-top:4px; padding-top:6px;" : ""}"><span>${et}</span><span>${benEuro(val)}</span></div>`;
+  return `
+    <button type="button" class="btn secondary" data-ben="indietro" style="margin-bottom:10px;">← Tutte le campagne</button>
+    <div class="section-title">🎁 ${esc(c.titolo)}</div>
+    <div class="card">
+      <div class="card-sub">${c.produttore ? "Produttore: <b>" + esc(c.produttore) + "</b><br>" : ""}${c.destinazione ? "Il ricavato va a: <b>" + esc(c.destinazione) + "</b><br>" : ""}${c.chiusuraPrenotazioni ? "Prenotazioni fino al " + fmtDate(c.chiusuraPrenotazioni) + "<br>" : ""}${c.dataConsegna ? "Consegna: " + fmtDate(c.dataConsegna) + "<br>" : ""}${c.note ? "📝 " + esc(c.note) : ""}</div>
+      <div class="form-group" style="margin-top:10px;"><label>Fase della campagna</label>
+        <select id="ben-stato">${Object.keys(BEN_STATI).map(k => `<option value="${k}" ${c.stato === k ? "selected" : ""}>${BEN_STATI[k]}</option>`).join("")}</select>
+      </div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <button type="button" class="btn secondary" data-ben="modifica-campagna" data-id="${c.id}" style="padding:6px 12px;">✏️ Modifica</button>
+        <button type="button" class="btn danger" data-ben="elimina-campagna" data-id="${c.id}" style="padding:6px 12px;">🗑️ Elimina campagna</button>
+      </div>
+    </div>
+    <div class="card">
+      <div style="font-weight:800; margin-bottom:8px;">Riepilogo</div>
+      <div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse; font-size:0.82rem;">
+        <thead><tr style="background:#f7f3e8;"><th style="text-align:left; padding:4px;">Prodotto</th><th style="text-align:right;">Prezzo</th><th style="text-align:right;">Prenot.</th><th style="text-align:right;">Ricev.</th><th style="text-align:right;">Conseg.</th></tr></thead>
+        <tbody>${righeProd}</tbody></table></div>
+      <div style="margin-top:10px; font-size:0.9rem;">
+        ${riga("Totale delle prenotazioni", t.dovuto)}${riga("Incassato", t.incassato)}${riga("Ancora da incassare", t.daIncassare)}
+        ${riga("Costo della merce", t.costo)}${riga("Ricavato per la beneficenza", t.ricavato, true)}
+        ${c.versatoImporto ? riga("Già versato" + (c.destinazione ? " a " + esc(c.destinazione) : ""), c.versatoImporto) : ""}
+      </div>
+      <div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;">
+        <button type="button" class="btn" data-ben="rendiconto" data-id="${c.id}" style="padding:8px 12px;">📄 Rendiconto</button>
+        <button type="button" class="btn secondary" data-ben="elenco" data-id="${c.id}" style="padding:8px 12px;">📋 Elenco consegne</button>
+      </div>
+    </div>
+    <button type="button" class="btn block" data-ben="nuova-pren" data-id="${c.id}" style="margin-bottom:10px;">➕ Nuova prenotazione</button>
+    <input type="text" id="ben-filtro" placeholder="Cerca per nome..." value="${esc(benFiltro)}" style="width:100%; margin-bottom:10px; box-sizing:border-box;">
+    <div id="ben-pren-lista">${benHtmlPrenotazioni(c)}</div>`;
+}
+
+function renderBenSoci() {
+  const mio = benMioId();
+  const attive = [...(state.campagneBeneficenza || [])].filter(c => c.stato !== "conclusa").sort((a, b) => (b.creato || "").localeCompare(a.creato || ""));
+  const concluse = (state.campagneBeneficenza || []).filter(c => c.stato === "conclusa");
+  const cards = attive.length ? attive.map(c => {
+    const mie = mio ? (c.prenotazioni || []).filter(r => r.socioId === mio) : [];
+    const modificabile = r => benPrenotabile(c) && !r.consegnato && !r.pagato;
+    return `
+    <div class="card">
+      <div class="card-name">${esc(c.titolo)}</div>
+      <div class="card-sub">${c.produttore ? "Produttore: " + esc(c.produttore) + "<br>" : ""}${c.destinazione ? "Il ricavato va a: <b>" + esc(c.destinazione) + "</b><br>" : ""}${c.chiusuraPrenotazioni ? "Prenotazioni fino al " + fmtDate(c.chiusuraPrenotazioni) + "<br>" : ""}${c.dataConsegna ? "Consegna: " + fmtDate(c.dataConsegna) : ""}</div>
+      ${c.note ? `<div class="card-sub" style="margin-top:4px;">📝 ${esc(c.note)}</div>` : ""}
+      <div style="margin:8px 0; font-size:0.9rem;">${(c.prodotti || []).map(p => `<div style="display:flex; justify-content:space-between; padding:2px 0;"><span>${esc(p.nome)}</span><b>${benEuro(p.prezzo)}</b></div>`).join("")}</div>
+      <div class="badge-row" style="margin-bottom:8px;">${benBadgeStato(c)}</div>
+      ${benPrenotabile(c) ? `<button type="button" class="btn block" data-ben="prenota" data-id="${c.id}">🎁 Prenota</button>` : `<div class="card-sub">Le prenotazioni sono chiuse.</div>`}
+      ${mie.length ? `<div style="font-weight:800; margin:12px 0 4px;">Le mie prenotazioni</div>` + mie.map(r => `
+        <div class="card" style="padding:10px; margin-bottom:6px;">
+          <div class="card-sub"><b>${esc(r.nome)}</b>: ${esc(benArticoli(c, r))}</div>
+          <div class="card-sub">${benEuro(benImporto(c, r))} · ${r.pagato ? "pagato" : "da pagare"} · ${r.consegnato ? "consegnato" : "da consegnare"}</div>
+          ${modificabile(r) ? `<div style="display:flex; gap:8px; margin-top:6px;"><button type="button" class="btn secondary" data-ben="modifica-pren" data-id="${c.id}" data-pid="${r.id}" style="padding:5px 12px; font-size:0.82rem;">✏️ Modifica</button><button type="button" class="btn danger" data-ben="annulla-pren" data-id="${c.id}" data-pid="${r.id}" style="padding:5px 12px; font-size:0.82rem;">Annulla</button></div>` : ""}
+        </div>`).join("") : ""}
+    </div>`;
+  }).join("") : `<div class="card-sub">Al momento non ci sono campagne aperte.</div>`;
+  const chiuse = concluse.length ? `<div class="section-title" style="font-size:1.05rem; margin-top:22px;">✅ Campagne concluse</div>` + concluse.map(c => `<div class="card"><div class="card-name">${esc(c.titolo)}</div><div class="card-sub">${c.versatoImporto ? "Versati " + benEuro(c.versatoImporto) + (c.destinazione ? " a " + esc(c.destinazione) : "") + (c.versatoData ? " il " + fmtDate(c.versatoData) : "") : (c.destinazione ? "Ricavato a: " + esc(c.destinazione) : "")}</div></div>`).join("") : "";
+  return `
+    <div class="section-title">🎁 Panettoni &amp; C</div>
+    <div class="card-sub" style="margin-bottom:12px;">Prodotti il cui ricavato va in beneficenza: prenota quelli che vuoi e ritirali alla consegna.</div>
+    ${cards}${chiuse}${mio ? "" : `<div class="card-sub" style="margin-top:10px;">Hai effettuato l'accesso con il profilo condiviso: puoi prenotare, ma per modificare o annullare una prenotazione rivolgiti al Direttivo.</div>`}`;
+}
+
+function attachBeneficenzaEvents() {
+  const root = document.getElementById("ben-root");
+  if (!root) return;
+  root.addEventListener("click", e => {
+    const el = e.target.closest("[data-ben]");
+    if (!el) return;
+    const az = el.dataset.ben, id = el.dataset.id, pid = el.dataset.pid;
+    const gestore = benGestore();
+    if (az === "apri" && gestore) { benCampagnaId = id; benFiltro = ""; renderSection(); }
+    else if (az === "indietro") { benCampagnaId = null; renderSection(); }
+    else if (az === "nuova-campagna") benFormCampagna();
+    else if (az === "modifica-campagna") benFormCampagna(id);
+    else if (az === "elimina-campagna") benEliminaCampagna(id);
+    else if (az === "nuova-pren" || az === "prenota") benFormPrenotazione(id);
+    else if (az === "modifica-pren") benFormPrenotazione(id, pid);
+    else if (az === "elimina-pren" || az === "annulla-pren") benEliminaPrenotazione(id, pid);
+    else if (az === "pagato" || az === "consegnato") benImposta(id, pid, az, el.dataset.val === "1");
+    else if (az === "rendiconto") benRendiconto(benTrova(id));
+    else if (az === "elenco") benElencoConsegne(benTrova(id));
+  });
+  const filtro = document.getElementById("ben-filtro");
+  if (filtro) filtro.addEventListener("input", () => {
+    benFiltro = filtro.value;
+    const c = benTrova(benCampagnaId);
+    const lista = document.getElementById("ben-pren-lista");
+    if (c && lista) lista.innerHTML = benHtmlPrenotazioni(c);
+  });
+  const stato = document.getElementById("ben-stato");
+  if (stato) stato.addEventListener("change", async () => {
+    if (!benGestore()) return;
+    const c = benTrova(benCampagnaId);
+    const nuovo = stato.value;
+    const esito = await benScrivi(camp => { const cc = camp.find(x => x.id === benCampagnaId); if (!cc) return { errore: "Campagna non trovata." }; cc.stato = nuovo; }, `🎁 Campagna «${c ? c.titolo : ""}»: ${BEN_STATI[nuovo]}`).catch(() => ({ errore: "Non sono riuscito a salvare: controlla la connessione." }));
+    if (esito && esito.errore) alert(esito.errore);
+  });
+}
+
+async function benImposta(campId, prenId, campo, valore) {
+  if (!benGestore()) return;
+  const c = benTrova(campId);
+  const r = c && (c.prenotazioni || []).find(x => x.id === prenId);
+  const esito = await benScrivi(camp => {
+    const cc = camp.find(x => x.id === campId); const rr = cc && (cc.prenotazioni || []).find(x => x.id === prenId);
+    if (!rr) return { errore: "Prenotazione non trovata." };
+    rr[campo] = valore;
+  }, `🎁 «${c ? c.titolo : ""}»: ${r ? r.nome : ""} ${campo === "pagato" ? (valore ? "ha pagato" : "non ha pagato") : (valore ? "ha ritirato" : "non ha ritirato")}`).catch(() => ({ errore: "Non sono riuscito a salvare: controlla la connessione." }));
+  if (esito && esito.errore) alert(esito.errore);
+}
+
+async function benEliminaPrenotazione(campId, prenId) {
+  const c = benTrova(campId);
+  const r = c && (c.prenotazioni || []).find(x => x.id === prenId);
+  if (!r) return;
+  const gestore = benGestore();
+  if (!gestore && (r.socioId !== benMioId() || !benPrenotabile(c) || r.pagato || r.consegnato)) { alert("Questa prenotazione non si può più annullare: rivolgiti al Direttivo."); return; }
+  if (!confirm(`Eliminare la prenotazione di ${r.nome}?`)) return;
+  const esito = await benScrivi(camp => {
+    const cc = camp.find(x => x.id === campId); if (!cc) return { errore: "Campagna non trovata." };
+    cc.prenotazioni = (cc.prenotazioni || []).filter(x => x.id !== prenId);
+  }, `🎁 «${c.titolo}»: eliminata la prenotazione di ${r.nome}`).catch(() => ({ errore: "Non sono riuscito a salvare: controlla la connessione." }));
+  if (esito && esito.errore) alert(esito.errore);
+}
+
+async function benEliminaCampagna(id) {
+  if (!benGestore()) return;
+  const c = benTrova(id);
+  if (!c) return;
+  if (!confirm(`Eliminare la campagna «${c.titolo}» con tutte le sue prenotazioni? L'operazione non si può annullare.`)) return;
+  benCampagnaId = null;
+  const esito = await benScrivi(camp => { const i = camp.findIndex(x => x.id === id); if (i >= 0) camp.splice(i, 1); }, `🎁 Eliminata la campagna «${c.titolo}»`).catch(() => ({ errore: "Non sono riuscito a salvare: controlla la connessione." }));
+  if (esito && esito.errore) alert(esito.errore);
+}
+
+function benRiscriviProdotti() {
+  const el = document.getElementById("ben-prodotti-form");
+  if (!el) return;
+  el.innerHTML = benProdottiForm.map((p, i) => `
+    <div class="card" style="padding:10px; margin-bottom:8px;">
+      <div class="form-group"><label>Prodotto</label><input type="text" class="bp-nome" value="${esc(p.nome)}" placeholder="Es. Panettone classico 1 kg"></div>
+      <div class="two-col">
+        <div class="form-group"><label>Prezzo di vendita (€)</label><input type="text" inputmode="decimal" class="bp-prezzo" value="${esc(p.prezzo)}"></div>
+        <div class="form-group"><label>Costo d'acquisto (€)</label><input type="text" inputmode="decimal" class="bp-costo" value="${esc(p.costo)}" placeholder="0 se donato"></div>
+      </div>
+      <div class="two-col">
+        <div class="form-group"><label>Massimo prenotabile</label><input type="text" inputmode="numeric" class="bp-max" value="${esc(p.massimo || "")}" placeholder="vuoto = senza limite"></div>
+        <div class="form-group"><label>Pezzi ricevuti</label><input type="text" inputmode="numeric" class="bp-ric" value="${esc(p.ricevuti || "")}" placeholder="a merce arrivata"></div>
+      </div>
+      <button type="button" class="btn danger bp-del" data-i="${i}" style="padding:4px 10px; font-size:0.78rem;">🗑️ Togli prodotto</button>
+    </div>`).join("");
+  el.querySelectorAll(".bp-del").forEach(b => b.addEventListener("click", () => {
+    benLeggiProdotti();
+    benProdottiForm.splice(parseInt(b.dataset.i, 10), 1);
+    if (!benProdottiForm.length) benProdottiForm.push({ id: uid(), nome: "", prezzo: "", costo: "", massimo: "", ricevuti: "" });
+    benRiscriviProdotti();
+  }));
+}
+
+function benLeggiProdotti() {
+  document.querySelectorAll("#ben-prodotti-form > .card").forEach((card, i) => {
+    const p = benProdottiForm[i];
+    if (!p) return;
+    p.nome = card.querySelector(".bp-nome").value.trim();
+    p.prezzo = card.querySelector(".bp-prezzo").value.trim();
+    p.costo = card.querySelector(".bp-costo").value.trim();
+    p.massimo = card.querySelector(".bp-max").value.trim();
+    p.ricevuti = card.querySelector(".bp-ric").value.trim();
+  });
+}
+
+function benFormCampagna(id) {
+  if (!benGestore()) return;
+  const c = id ? benTrova(id) : null;
+  benProdottiForm = c && (c.prodotti || []).length ? JSON.parse(JSON.stringify(c.prodotti)) : [{ id: uid(), nome: "", prezzo: "", costo: "", massimo: "", ricevuti: "" }];
+  showModal(`
+    <div class="modal-title">🎁 ${c ? "Modifica campagna" : "Nuova campagna"}</div>
+    <div class="form-group"><label>Titolo *</label><input type="text" id="ben-titolo" value="${esc(c ? c.titolo : "")}" placeholder="Es. Panettoni di Natale 2026"></div>
+    <div class="form-group"><label>Produttore</label><input type="text" id="ben-produttore" value="${esc(c ? c.produttore : "")}"></div>
+    <div class="form-group"><label>Il ricavato va a</label><input type="text" id="ben-destinazione" value="${esc(c ? c.destinazione : "")}" placeholder="Es. casa di riposo, banco alimentare..."></div>
+    <div class="two-col">
+      <div class="form-group"><label>Prenotazioni fino al</label><input type="date" id="ben-chiusura" value="${esc(c ? c.chiusuraPrenotazioni : "")}"></div>
+      <div class="form-group"><label>Data di consegna</label><input type="date" id="ben-consegna" value="${esc(c ? c.dataConsegna : "")}"></div>
+    </div>
+    <div class="form-group"><label>Note per i soci</label><input type="text" id="ben-note" value="${esc(c ? c.note : "")}" placeholder="Es. ritiro in sede il sabato mattina"></div>
+    <div style="font-weight:800; margin:8px 0;">Prodotti</div>
+    <div id="ben-prodotti-form"></div>
+    <button type="button" class="btn secondary block" id="ben-add-prod" style="margin-bottom:12px;">➕ Aggiungi un altro prodotto</button>
+    ${c ? `<div class="two-col">
+      <div class="form-group"><label>Importo già versato (€)</label><input type="text" inputmode="decimal" id="ben-versato" value="${esc(c.versatoImporto || "")}"></div>
+      <div class="form-group"><label>Data del versamento</label><input type="date" id="ben-versato-data" value="${esc(c.versatoData || "")}"></div>
+    </div>` : ""}
+    <div id="ben-form-errore" style="color:var(--red); font-size:0.82rem; min-height:1.1em; margin-bottom:6px;"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn secondary" id="ben-annulla">Annulla</button>
+      <button type="button" class="btn" id="ben-salva">Salva</button>
+    </div>`);
+  benRiscriviProdotti();
+  document.getElementById("ben-annulla").addEventListener("click", closeModal);
+  document.getElementById("ben-add-prod").addEventListener("click", () => {
+    benLeggiProdotti();
+    benProdottiForm.push({ id: uid(), nome: "", prezzo: "", costo: "", massimo: "", ricevuti: "" });
+    benRiscriviProdotti();
+  });
+  document.getElementById("ben-salva").addEventListener("click", async () => {
+    const err = document.getElementById("ben-form-errore");
+    benLeggiProdotti();
+    const titolo = document.getElementById("ben-titolo").value.trim();
+    if (!titolo) { err.textContent = "Scrivi un titolo per la campagna."; return; }
+    const prodotti = benProdottiForm.filter(p => p.nome).map(p => ({ id: p.id, nome: p.nome, prezzo: benNum(p.prezzo), costo: benNum(p.costo), massimo: Math.floor(benNum(p.massimo)), ricevuti: Math.floor(benNum(p.ricevuti)) }));
+    if (!prodotti.length) { err.textContent = "Aggiungi almeno un prodotto con il nome."; return; }
+    const dati = {
+      titolo, prodotti,
+      produttore: document.getElementById("ben-produttore").value.trim(),
+      destinazione: document.getElementById("ben-destinazione").value.trim(),
+      chiusuraPrenotazioni: document.getElementById("ben-chiusura").value,
+      dataConsegna: document.getElementById("ben-consegna").value,
+      note: document.getElementById("ben-note").value.trim(),
+    };
+    if (c) { dati.versatoImporto = benNum(document.getElementById("ben-versato").value); dati.versatoData = document.getElementById("ben-versato-data").value; }
+    const btn = document.getElementById("ben-salva");
+    btn.disabled = true; err.textContent = "";
+    let esito;
+    try {
+      esito = await benScrivi(camp => {
+        if (c) {
+          const cc = camp.find(x => x.id === c.id);
+          if (!cc) return { errore: "Campagna non trovata." };
+          const restano = new Set(dati.prodotti.map(p => p.id));
+          for (const vecchio of cc.prodotti || []) {
+            if (!restano.has(vecchio.id) && (cc.prenotazioni || []).some(r => Number((r.q || {})[vecchio.id]) > 0)) return { errore: `Il prodotto «${vecchio.nome}» ha già delle prenotazioni: non si può togliere.` };
+          }
+          Object.assign(cc, dati);
+        } else {
+          camp.push(Object.assign({ id: uid(), stato: "aperta", prenotazioni: [], creato: new Date().toISOString() }, dati));
+        }
+        return {};
+      }, `🎁 ${c ? "Modificata" : "Nuova"} campagna «${titolo}»`);
+    } catch (e) { console.error(e); esito = { errore: "Non sono riuscito a salvare: controlla la connessione e riprova." }; }
+    if (esito && esito.errore) { err.textContent = esito.errore; btn.disabled = false; return; }
+    closeModal();
+    toast("Campagna salvata");
+  });
+}
+
+function benFormPrenotazione(campId, prenId) {
+  const c = benTrova(campId);
+  if (!c) return;
+  const gestore = benGestore();
+  const mioId = benMioId();
+  const r = prenId ? (c.prenotazioni || []).find(x => x.id === prenId) : null;
+  if (!gestore) {
+    if (!benPrenotabile(c)) { alert("Le prenotazioni di questa campagna sono chiuse."); return; }
+    if (r && (r.socioId !== mioId || r.pagato || r.consegnato)) { alert("Questa prenotazione non si può più modificare: rivolgiti al Direttivo."); return; }
+  }
+  const sc = socioCorrente();
+  const nomeIniziale = r ? r.nome : (sc && !gestore ? `${sc.cognome || ""} ${sc.nome || ""}`.trim() : "");
+  const righe = (c.prodotti || []).map(p => `
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+      <div style="flex:1;"><div style="font-weight:700;">${esc(p.nome)}</div><div class="card-sub">${benEuro(p.prezzo)}${benNum(p.massimo) > 0 ? " · massimo " + Math.floor(benNum(p.massimo)) : ""}</div></div>
+      <input type="number" min="0" step="1" inputmode="numeric" class="ben-q" data-pid="${p.id}" value="${r && r.q && r.q[p.id] ? r.q[p.id] : 0}" style="width:84px; text-align:center;">
+    </div>`).join("");
+  showModal(`
+    <div class="modal-title">🎁 ${r ? "Modifica prenotazione" : "Prenota"} — ${esc(c.titolo)}</div>
+    <div class="form-group"><label>Nome di chi ritira *</label><input type="text" id="ben-nome" value="${esc(nomeIniziale)}" placeholder="Cognome e nome"></div>
+    <div style="font-weight:800; margin:6px 0 8px;">Quantità</div>
+    ${righe}
+    <div style="font-weight:800; margin-bottom:8px;">Totale: <span id="ben-tot">0,00 €</span></div>
+    <div class="form-group"><label>Note (facoltative)</label><input type="text" id="ben-pnote" value="${esc(r ? r.note : "")}"></div>
+    <div id="ben-form-errore" style="color:var(--red); font-size:0.82rem; min-height:1.1em; margin-bottom:6px;"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn secondary" id="ben-annulla">Annulla</button>
+      <button type="button" class="btn" id="ben-salva">${r ? "Salva" : "Prenota"}</button>
+    </div>`);
+  const leggiQ = () => {
+    const q = {};
+    document.querySelectorAll("#modal-overlay .ben-q").forEach(i => { const n = Math.floor(Number(i.value)); if (n > 0) q[i.dataset.pid] = n; });
+    return q;
+  };
+  const aggiornaTot = () => {
+    const q = leggiQ();
+    document.getElementById("ben-tot").textContent = benEuro((c.prodotti || []).reduce((s, p) => s + (q[p.id] || 0) * benNum(p.prezzo), 0));
+  };
+  document.querySelectorAll("#modal-overlay .ben-q").forEach(i => i.addEventListener("input", aggiornaTot));
+  aggiornaTot();
+  document.getElementById("ben-annulla").addEventListener("click", closeModal);
+  document.getElementById("ben-salva").addEventListener("click", async () => {
+    const err = document.getElementById("ben-form-errore");
+    const nome = document.getElementById("ben-nome").value.trim();
+    const note = document.getElementById("ben-pnote").value.trim();
+    const q = leggiQ();
+    const pezzi = Object.values(q).reduce((s, n) => s + n, 0);
+    if (!nome) { err.textContent = "Scrivi il nome di chi ritira."; return; }
+    if (!pezzi) { err.textContent = "Indica almeno un prodotto da prenotare."; return; }
+    const btn = document.getElementById("ben-salva");
+    btn.disabled = true; err.textContent = "";
+    const chi = sc ? `${sc.cognome || ""} ${sc.nome || ""}`.trim() : "";
+    let esito;
+    try {
+      esito = await benScrivi(camp => {
+        const cc = camp.find(x => x.id === campId);
+        if (!cc) return { errore: "Campagna non trovata." };
+        if (!gestore && !benPrenotabile(cc)) return { errore: "Le prenotazioni di questa campagna sono chiuse." };
+        const altre = (cc.prenotazioni || []).filter(x => x.id !== prenId);
+        for (const p of cc.prodotti || []) {
+          const mass = Math.floor(benNum(p.massimo));
+          if (mass > 0 && (q[p.id] || 0) > 0) {
+            const gia = altre.reduce((s, x) => s + (Number((x.q || {})[p.id]) || 0), 0);
+            if (gia + q[p.id] > mass) return { errore: `Di «${p.nome}» restano ${Math.max(0, mass - gia)} pezzi prenotabili.` };
+          }
+        }
+        cc.prenotazioni = cc.prenotazioni || [];
+        if (prenId) {
+          const rr = cc.prenotazioni.find(x => x.id === prenId);
+          if (!rr) return { errore: "Prenotazione non trovata." };
+          if (!gestore && (rr.socioId !== mioId || rr.pagato || rr.consegnato)) return { errore: "Questa prenotazione non si può più modificare: rivolgiti al Direttivo." };
+          Object.assign(rr, { nome, q, note });
+        } else {
+          cc.prenotazioni.push({ id: uid(), nome, socioId: gestore ? "" : (mioId || ""), prenotatoDa: gestore ? "" : chi, q, note, pagato: false, consegnato: false, creato: new Date().toISOString() });
+        }
+        return {};
+      }, `🎁 «${c.titolo}»: ${prenId ? "modificata la prenotazione di" : "nuova prenotazione di"} ${nome} (${pezzi} ${pezzi === 1 ? "pezzo" : "pezzi"})`);
+    } catch (e) { console.error(e); esito = { errore: "Non sono riuscito a salvare: controlla la connessione e riprova." }; }
+    if (esito && esito.errore) { err.textContent = esito.errore; btn.disabled = false; return; }
+    closeModal();
+    toast(prenId ? "Prenotazione aggiornata" : "Prenotazione registrata");
+  });
+}
+
+function benRendiconto(c) {
+  if (!c) return;
+  const t = benTotali(c);
+  const righe = [], testo = [`Campagna: ${c.titolo}`];
+  if (c.produttore) testo.push(`Produttore: ${c.produttore}`);
+  if (c.destinazione) testo.push(`Il ricavato va a: ${c.destinazione}`);
+  testo.push("");
+  (c.prodotti || []).forEach(p => {
+    const pr = t.per[p.id];
+    righe.push([esc(p.nome), String(pr.prenotati), String(Math.floor(benNum(p.ricevuti))), String(pr.consegnati), esc(benEuro(p.prezzo)), esc(benEuro(pr.prenotati * benNum(p.prezzo)))]);
+    testo.push(`${p.nome}: prenotati ${pr.prenotati}, ricevuti ${Math.floor(benNum(p.ricevuti))}, consegnati ${pr.consegnati}, ${benEuro(p.prezzo)} l'uno`);
+  });
+  const voce = (et, val) => { righe.push([`<b>${esc(et)}</b>`, "", "", "", "", `<b>${esc(benEuro(val))}</b>`]); testo.push(`${et}: ${benEuro(val)}`); };
+  testo.push("");
+  voce("Totale delle prenotazioni", t.dovuto);
+  voce("Incassato", t.incassato);
+  voce("Ancora da incassare", t.daIncassare);
+  voce("Costo della merce", t.costo);
+  voce("Ricavato per la beneficenza", t.ricavato);
+  if (benNum(c.versatoImporto) > 0) voce(`Versato${c.destinazione ? " a " + c.destinazione : ""}${c.versatoData ? " il " + fmtDate(c.versatoData) : ""}`, c.versatoImporto);
+  apriAnteprimaReportGenerico(`Rendiconto - ${c.titolo}`, ["Voce", "Prenotati", "Ricevuti", "Consegnati", "Prezzo", "Importo"], righe, testo);
+}
+
+function benElencoConsegne(c) {
+  if (!c) return;
+  const lista = [...(c.prenotazioni || [])].sort((a, b) => (a.nome || "").localeCompare(b.nome || "", "it"));
+  const righe = lista.map(r => [esc(r.nome), esc(benArticoli(c, r)), esc(benEuro(benImporto(c, r))), r.pagato ? "Sì" : "No", r.consegnato ? "Sì" : "No", esc(r.note || "")]);
+  const testo = lista.map(r => `${r.nome}: ${benArticoli(c, r)} - ${benEuro(benImporto(c, r))} - ${r.pagato ? "pagato" : "da pagare"} - ${r.consegnato ? "consegnato" : "da consegnare"}`);
+  apriAnteprimaReportGenerico(`Elenco consegne - ${c.titolo}`, ["Nome", "Articoli", "Importo", "Pagato", "Consegnato", "Note"], righe, testo);
+}
+
+// ---------- Canzoni (testi e file audio: solo Direttivo e Admin) ----------
+const CANZONI_CATEGORIE = ["Canti alpini", "Canti religiosi", "Canti popolari", "Marce e inni", "Altro"];
+const CANZONI_MAX_BYTES = 15 * 1024 * 1024;
+
+function fmtMB(b) { return ((Number(b) || 0) / (1024 * 1024)).toLocaleString("it-IT", { maximumFractionDigits: 1 }) + " MB"; }
+function eliminaFileStorage(url) {
+  try {
+    if (window.storage && url && /firebasestorage|storage\.googleapis/.test(url)) return storage.refFromURL(url).delete().catch(() => {});
+  } catch (e) { /* se non si riesce, il file resta ma l'app funziona */ }
+  return Promise.resolve();
+}
+function controllaFileAudio(file) {
+  if (!file) return "";
+  if (!(/^audio\//.test(file.type || "") || /\.(mp3|m4a|aac|ogg|wav)$/i.test(file.name || ""))) return "Scegli un file audio (meglio in formato mp3).";
+  if (file.size > CANZONI_MAX_BYTES) return `Il file pesa ${fmtMB(file.size)}: il massimo è ${fmtMB(CANZONI_MAX_BYTES)}. Riducilo (per esempio a 128 kbps) e riprova.`;
+  return "";
+}
+
+function canzoniOrdinate(filtro) {
+  const q = (filtro || "").trim().toLowerCase();
+  return [...(state.canzoni || [])]
+    .filter(c => !q || `${c.titolo} ${c.categoria || ""} ${c.autore || ""} ${c.testo || ""}`.toLowerCase().includes(q))
+    .sort((a, b) => (a.titolo || "").localeCompare(b.titolo || "", "it", { sensitivity: "base" }));
+}
+
+function cardCanzone(c) {
+  return `
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; gap:8px; align-items:flex-start;">
+        <div>
+          <div style="font-weight:800;">${esc(c.titolo)}</div>
+          <div class="card-sub">${esc(c.categoria || "")}${c.autore ? " · " + esc(c.autore) : ""}${c.audioBytes ? " · " + fmtMB(c.audioBytes) : ""}</div>
+        </div>
+        <div class="card-actions">
+          <button type="button" data-cz="modifica" data-id="${c.id}">✏️</button>
+          <button type="button" data-cz="elimina" data-id="${c.id}">🗑️</button>
+        </div>
+      </div>
+      ${c.audioUrl ? `<audio controls preload="none" src="${esc(c.audioUrl)}" style="width:100%; margin-top:8px;"></audio>` : ""}
+      ${c.testo ? `<details style="margin-top:8px;"><summary style="cursor:pointer; font-weight:700;">Testo</summary><div style="white-space:pre-wrap; margin-top:6px; font-size:0.95rem;">${esc(c.testo)}</div></details>` : ""}
+    </div>`;
+}
+
+function renderCanzoni() {
+  const tutte = state.canzoni || [];
+  const lista = canzoniOrdinate("");
+  const byte = tutte.reduce((s, c) => s + (Number(c.audioBytes) || 0), 0);
+  const nAudio = tutte.filter(c => c.audioUrl).length;
+  return `
+  <div id="cz-root">
+    <div class="section-title">🎵 Canzoni</div>
+    <div class="card-sub" style="margin-bottom:12px;">Testi e file audio dei canti. Sezione riservata a Direttivo e Admin. Spazio occupato dai file audio: <b>${fmtMB(byte)}</b> (${nAudio} ${nAudio === 1 ? "file" : "file"}).</div>
+    <div class="card">
+      <div style="font-weight:800; margin-bottom:10px;">Nuova canzone</div>
+      <div class="form-group"><label>Titolo *</label><input type="text" id="cz-titolo" placeholder="Es. Il Testamento del Capitano"></div>
+      <div class="two-col">
+        <div class="form-group"><label>Categoria</label><select id="cz-categoria">${CANZONI_CATEGORIE.map(k => `<option value="${esc(k)}">${esc(k)}</option>`).join("")}</select></div>
+        <div class="form-group"><label>Autore o note</label><input type="text" id="cz-autore" placeholder="facoltativo"></div>
+      </div>
+      <div class="form-group"><label>Testo (facoltativo)</label><textarea id="cz-testo" rows="5" placeholder="Incolla qui il testo della canzone"></textarea></div>
+      <div class="form-group"><label>File audio mp3 (facoltativo, massimo ${fmtMB(CANZONI_MAX_BYTES)})</label><input type="file" id="cz-file" accept="audio/*,.mp3"></div>
+      <button type="button" class="btn block" data-cz="crea" style="margin-top:6px;">➕ Aggiungi la canzone</button>
+    </div>
+    <div class="section-title" style="font-size:1.05rem; margin-top:22px;">🎶 Elenco (${tutte.length})</div>
+    <input type="text" id="cz-filtro" placeholder="Cerca per titolo, categoria o testo..." style="width:100%; margin-bottom:10px; box-sizing:border-box;">
+    <div id="cz-lista">${lista.length ? lista.map(cardCanzone).join("") : `<div class="card-sub">Nessuna canzone inserita.</div>`}</div>
+  </div>`;
+}
+
+function attachCanzoniEvents() {
+  const root = document.getElementById("cz-root");
+  if (!root) return;
+  root.addEventListener("click", e => {
+    const el = e.target.closest("[data-cz]");
+    if (!el) return;
+    if (el.dataset.cz === "crea") creaCanzone();
+    else if (el.dataset.cz === "modifica") apriModificaCanzone(el.dataset.id);
+    else if (el.dataset.cz === "elimina") eliminaCanzone(el.dataset.id);
+  });
+  const f = document.getElementById("cz-filtro");
+  if (f) f.addEventListener("input", () => {
+    const l = canzoniOrdinate(f.value);
+    document.getElementById("cz-lista").innerHTML = l.length ? l.map(cardCanzone).join("") : `<div class="card-sub">Nessuna canzone corrisponde alla ricerca.</div>`;
+  });
+}
+
+async function creaCanzone() {
+  if (!(currentRole === "admin" || currentRole === "direttivo")) return;
+  const titolo = document.getElementById("cz-titolo").value.trim();
+  const file = document.getElementById("cz-file").files[0];
+  if (!titolo) { alert("Inserisci il titolo della canzone"); return; }
+  const problema = controllaFileAudio(file);
+  if (problema) { alert(problema); return; }
+  const id = uid();
+  const nuova = { id, titolo, categoria: document.getElementById("cz-categoria").value, autore: document.getElementById("cz-autore").value.trim(),
+    testo: document.getElementById("cz-testo").value.trim(), audioUrl: "", audioNome: "", audioBytes: 0, creato: new Date().toISOString() };
+  if (file) {
+    if (!window.storage) { alert("Firebase non configurato: il file audio non può essere caricato su questo dispositivo."); return; }
+    try {
+      toast("Caricamento del file audio...");
+      nuova.audioUrl = await uploadDocumento(file, `canzoni/${id}`);
+      nuova.audioNome = file.name; nuova.audioBytes = file.size;
+    } catch (err) { console.error(err); alert("Errore nel caricamento del file audio. Riprova."); return; }
+  }
+  state.canzoni = state.canzoni || [];
+  state.canzoni.push(nuova);
+  saveState();
+  renderSection();
+  toast("Canzone aggiunta");
+}
+
+function apriModificaCanzone(id) {
+  const c = (state.canzoni || []).find(x => x.id === id);
+  if (!c) return;
+  showModal(`
+    <div class="modal-title">✏️ Modifica canzone</div>
+    <div class="form-group"><label>Titolo *</label><input type="text" id="czm-titolo" value="${esc(c.titolo)}"></div>
+    <div class="two-col">
+      <div class="form-group"><label>Categoria</label><select id="czm-categoria">${CANZONI_CATEGORIE.map(k => `<option value="${esc(k)}" ${k === c.categoria ? "selected" : ""}>${esc(k)}</option>`).join("")}</select></div>
+      <div class="form-group"><label>Autore o note</label><input type="text" id="czm-autore" value="${esc(c.autore)}"></div>
+    </div>
+    <div class="form-group"><label>Testo</label><textarea id="czm-testo" rows="6">${esc(c.testo)}</textarea></div>
+    <div class="form-group"><label>${c.audioUrl ? "Sostituisci il file audio (lascia vuoto per tenere quello attuale)" : "Aggiungi un file audio"}</label><input type="file" id="czm-file" accept="audio/*,.mp3"></div>
+    <div id="czm-errore" style="color:var(--red); font-size:0.82rem; min-height:1.1em; margin-bottom:6px;"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn secondary" id="czm-annulla">Annulla</button>
+      <button type="button" class="btn" id="czm-salva">Salva</button>
+    </div>`);
+  document.getElementById("czm-annulla").addEventListener("click", closeModal);
+  document.getElementById("czm-salva").addEventListener("click", async () => {
+    const err = document.getElementById("czm-errore");
+    const titolo = document.getElementById("czm-titolo").value.trim();
+    const file = document.getElementById("czm-file").files[0];
+    if (!titolo) { err.textContent = "Il titolo è obbligatorio."; return; }
+    const problema = controllaFileAudio(file);
+    if (problema) { err.textContent = problema; return; }
+    const btn = document.getElementById("czm-salva"); btn.disabled = true; err.textContent = "";
+    const nuovo = { titolo, categoria: document.getElementById("czm-categoria").value, autore: document.getElementById("czm-autore").value.trim(), testo: document.getElementById("czm-testo").value.trim() };
+    if (file) {
+      if (!window.storage) { err.textContent = "Firebase non configurato: impossibile caricare il file."; btn.disabled = false; return; }
+      try {
+        nuovo.audioUrl = await uploadDocumento(file, `canzoni/${id}`);
+        nuovo.audioNome = file.name; nuovo.audioBytes = file.size;
+      } catch (e) { console.error(e); err.textContent = "Errore nel caricamento del file: riprova."; btn.disabled = false; return; }
+    }
+    Object.assign(c, nuovo);
+    saveState();
+    closeModal();
+    renderSection();
+    toast("Canzone aggiornata");
+  });
+}
+
+function eliminaCanzone(id) {
+  const c = (state.canzoni || []).find(x => x.id === id);
+  if (!c) return;
+  if (!confirm(`Eliminare la canzone «${c.titolo}»${c.audioUrl ? " e il suo file audio" : ""}?`)) return;
+  eliminaFileStorage(c.audioUrl);
+  state.canzoni = state.canzoni.filter(x => x.id !== id);
+  saveState();
+  renderSection();
+}
+
+// ---------- Manuali (PDF caricati dall'Admin; ognuno ha chi lo può vedere) ----------
+const MANUALI_VISIBILITA = { tutti: "Tutti i soci", direttivo: "Solo Direttivo e Admin" };
+
+function manualiVisibili() {
+  const tutti = [...(state.manuali || [])];
+  const v = currentRole === "socio" ? tutti.filter(m => m.visibilita === "tutti") : tutti;
+  return v.sort((a, b) => (a.visibilita === "tutti") - (b.visibilita === "tutti") || (a.titolo || "").localeCompare(b.titolo || "", "it"));
+}
+
+function renderManuali() {
+  const admin = currentRole === "admin";
+  const gestore = currentRole !== "socio";
+  const lista = manualiVisibili();
+  const cards = lista.length ? lista.map(m => `
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; gap:8px; align-items:flex-start;">
+        <div>
+          <div style="font-weight:800;">📘 ${esc(m.titolo)}</div>
+          ${gestore ? `<div class="card-sub">Lo vede: <b>${esc(MANUALI_VISIBILITA[m.visibilita] || m.visibilita)}</b></div>` : ""}
+          ${m.nota ? `<div class="card-sub">${esc(m.nota)}</div>` : ""}
+          <div class="card-sub">Aggiornato il ${m.caricato ? fmtDate(m.caricato.slice(0, 10)) : "-"}${m.bytes ? " · " + fmtMB(m.bytes) : ""}</div>
+        </div>
+        ${admin ? `<div class="card-actions"><button type="button" data-mn="modifica" data-id="${m.id}">✏️</button><button type="button" data-mn="elimina" data-id="${m.id}">🗑️</button></div>` : ""}
+      </div>
+      ${m.allegatoThumbUrl ? `<img src="${esc(m.allegatoThumbUrl)}" style="max-width:100%; border-radius:8px; margin-top:8px; border:1px solid #ccc;">` : ""}
+      ${m.allegatoUrl ? `<a href="${esc(m.allegatoUrl)}" target="_blank" rel="noopener" class="btn block" style="margin-top:10px; text-decoration:none; text-align:center;">📄 Apri il manuale</a>` : ""}
+    </div>`).join("")
+    : `<div class="card-sub">${currentRole === "socio" ? "Il manuale non è ancora disponibile: rivolgiti al Direttivo." : "Nessun manuale caricato: li carica l'Admin da questa pagina."}</div>`;
+  const form = !admin ? "" : `
+    <div class="card">
+      <div style="font-weight:800; margin-bottom:10px;">Nuovo manuale</div>
+      <div class="form-group"><label>Titolo *</label><input type="text" id="mn-titolo" placeholder="Es. Manuale per i Soci"></div>
+      <div class="form-group"><label>Chi lo può vedere</label><select id="mn-visibilita"><option value="tutti">${MANUALI_VISIBILITA.tutti}</option><option value="direttivo">${MANUALI_VISIBILITA.direttivo}</option></select></div>
+      <div class="form-group"><label>Nota (facoltativa, es. versione dell'app)</label><input type="text" id="mn-nota" placeholder="Es. aggiornato alla versione 7.99"></div>
+      <div class="form-group"><label>File PDF *</label><input type="file" id="mn-file" accept=".pdf,application/pdf"></div>
+      <button type="button" class="btn block" data-mn="crea" style="margin-top:6px;">➕ Carica il manuale</button>
+    </div>`;
+  return `
+  <div id="mn-root">
+    <div class="section-title">📘 Manuali</div>
+    <div class="card-sub" style="margin-bottom:12px;">${currentRole === "socio" ? "Il manuale d'uso dell'app." : "I manuali d'uso dell'app. I soci vedono solo quello pensato per loro."}</div>
+    ${form}${cards}
+  </div>`;
+}
+
+function attachManualiEvents() {
+  const root = document.getElementById("mn-root");
+  if (!root) return;
+  root.addEventListener("click", e => {
+    const el = e.target.closest("[data-mn]");
+    if (!el) return;
+    if (el.dataset.mn === "crea") creaManuale();
+    else if (el.dataset.mn === "modifica") apriModificaManuale(el.dataset.id);
+    else if (el.dataset.mn === "elimina") eliminaManuale(el.dataset.id);
+  });
+}
+
+async function caricaPdfManuale(file, id) {
+  const out = { allegatoUrl: await uploadDocumento(file, `manuali/${id}`), allegatoNome: file.name, bytes: file.size, allegatoThumbUrl: "" };
+  try {
+    const mini = await generaMiniaturaPdf(file);
+    if (mini) out.allegatoThumbUrl = await uploadDocumento(mini, `manuali/${id}_thumb`);
+  } catch (e) { console.warn("Anteprima del manuale non generata", e); }
+  return out;
+}
+
+async function creaManuale() {
+  if (currentRole !== "admin") return;
+  const titolo = document.getElementById("mn-titolo").value.trim();
+  const file = document.getElementById("mn-file").files[0];
+  if (!titolo) { alert("Inserisci un titolo per il manuale"); return; }
+  if (!file) { alert("Seleziona il file PDF del manuale"); return; }
+  if (!(file.name.toLowerCase().endsWith(".pdf") || file.type === "application/pdf")) { alert("Il manuale deve essere un file PDF"); return; }
+  if (!window.storage) { alert("Firebase non configurato: il manuale non può essere caricato su questo dispositivo."); return; }
+  const id = uid();
+  let allegato;
+  try { toast("Caricamento del manuale..."); allegato = await caricaPdfManuale(file, id); }
+  catch (e) { console.error(e); alert("Errore nel caricamento del manuale. Riprova."); return; }
+  state.manuali = state.manuali || [];
+  state.manuali.push(Object.assign({ id, titolo, visibilita: document.getElementById("mn-visibilita").value, nota: document.getElementById("mn-nota").value.trim(), caricato: new Date().toISOString() }, allegato));
+  saveState();
+  renderSection();
+  toast("Manuale caricato");
+}
+
+function apriModificaManuale(id) {
+  const m = (state.manuali || []).find(x => x.id === id);
+  if (!m || currentRole !== "admin") return;
+  showModal(`
+    <div class="modal-title">✏️ Modifica manuale</div>
+    <div class="form-group"><label>Titolo *</label><input type="text" id="mnm-titolo" value="${esc(m.titolo)}"></div>
+    <div class="form-group"><label>Chi lo può vedere</label><select id="mnm-visibilita"><option value="tutti" ${m.visibilita === "tutti" ? "selected" : ""}>${MANUALI_VISIBILITA.tutti}</option><option value="direttivo" ${m.visibilita === "direttivo" ? "selected" : ""}>${MANUALI_VISIBILITA.direttivo}</option></select></div>
+    <div class="form-group"><label>Nota</label><input type="text" id="mnm-nota" value="${esc(m.nota)}"></div>
+    <div class="form-group"><label>Sostituisci il PDF (lascia vuoto per tenere quello attuale)</label><input type="file" id="mnm-file" accept=".pdf,application/pdf"></div>
+    <div id="mnm-errore" style="color:var(--red); font-size:0.82rem; min-height:1.1em; margin-bottom:6px;"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn secondary" id="mnm-annulla">Annulla</button>
+      <button type="button" class="btn" id="mnm-salva">Salva</button>
+    </div>`);
+  document.getElementById("mnm-annulla").addEventListener("click", closeModal);
+  document.getElementById("mnm-salva").addEventListener("click", async () => {
+    const err = document.getElementById("mnm-errore");
+    const titolo = document.getElementById("mnm-titolo").value.trim();
+    const file = document.getElementById("mnm-file").files[0];
+    if (!titolo) { err.textContent = "Il titolo è obbligatorio."; return; }
+    if (file && !(file.name.toLowerCase().endsWith(".pdf") || file.type === "application/pdf")) { err.textContent = "Il manuale deve essere un file PDF."; return; }
+    const btn = document.getElementById("mnm-salva"); btn.disabled = true; err.textContent = "";
+    const nuovo = { titolo, visibilita: document.getElementById("mnm-visibilita").value, nota: document.getElementById("mnm-nota").value.trim() };
+    if (file) {
+      if (!window.storage) { err.textContent = "Firebase non configurato."; btn.disabled = false; return; }
+      try { Object.assign(nuovo, await caricaPdfManuale(file, id), { caricato: new Date().toISOString() }); }
+      catch (e) { console.error(e); err.textContent = "Errore nel caricamento: riprova."; btn.disabled = false; return; }
+    }
+    Object.assign(m, nuovo);
+    saveState();
+    closeModal();
+    renderSection();
+    toast("Manuale aggiornato");
+  });
+}
+
+function eliminaManuale(id) {
+  const m = (state.manuali || []).find(x => x.id === id);
+  if (!m || currentRole !== "admin") return;
+  if (!confirm(`Eliminare il manuale «${m.titolo}»?`)) return;
+  eliminaFileStorage(m.allegatoUrl);
+  eliminaFileStorage(m.allegatoThumbUrl);
+  state.manuali = state.manuali.filter(x => x.id !== id);
+  saveState();
+  renderSection();
+}
+
 // ---------- Sezione Log ----------
 let logMese = null;
 let logCache = [];
@@ -5111,7 +5922,7 @@ function setupScrollHide() {
 }
 
 // ---------- Init ----------
-const SECTION_ORDER = ["home","anagrafica","conv-consiglio","bollino","bollino-amici","ringraziamenti","sponsor","cena","iniziative","ore-alpine","report","report2","conv-casoncellata","presenza-adunata","prenotazioni","cassa","bacheca","verbali","libretto","archivio-bui","log"];
+const SECTION_ORDER = ["home","anagrafica","conv-consiglio","bollino","bollino-amici","ringraziamenti","sponsor","cena","iniziative","ore-alpine","report","report2","conv-casoncellata","presenza-adunata","prenotazioni","beneficenza","canzoni","manuali","cassa","bacheca","verbali","libretto","archivio-bui","log"];
 
 function vaiASezione(section) {
   if (!sezionePermessa(section)) return;
@@ -5336,8 +6147,8 @@ function apriCambioPassword(primoAccesso) {
 const MENU_GRUPPI = [
   { titolo: "", voci: [["home", "🏠", "Home"]] },
   { titolo: "Soci e tesseramento", voci: [["anagrafica", "👤", "Anagrafica"], ["conv-consiglio", "📋", "Consiglio"], ["bollino", "🎫", "Bollino"], ["bollino-amici", "🤝", "Bollino Amici"]] },
-  { titolo: "Eventi", voci: [["cena", "🍽️", "Cena"], ["iniziative", "🎉", "Attività"], ["presenza-adunata", "🎖️", "Adunata"], ["prenotazioni", "🗓️", "Prenotaz. Sede"], ["conv-casoncellata", "🥟", "Conv. Casoncellata"]] },
-  { titolo: "Comunicazione", voci: [["bacheca", "📌", "Bacheca"], ["verbali", "📑", "Verbali Consiglio"], ["libretto", "📖", "Preghiera e Canto"], ["ringraziamenti", "🙏", "Ringraziamenti"], ["sponsor", "💼", "Sponsor"]] },
+  { titolo: "Eventi", voci: [["cena", "🍽️", "Cena"], ["iniziative", "🎉", "Attività"], ["presenza-adunata", "🎖️", "Adunata"], ["prenotazioni", "🗓️", "Prenotaz. Sede"], ["beneficenza", "🎁", "Panettoni &amp; C"], ["conv-casoncellata", "🥟", "Conv. Casoncellata"]] },
+  { titolo: "Comunicazione", voci: [["bacheca", "📌", "Bacheca"], ["verbali", "📑", "Verbali Consiglio"], ["libretto", "📖", "Preghiera e Canto"], ["canzoni", "🎵", "Canzoni"], ["manuali", "📘", "Manuali"], ["ringraziamenti", "🙏", "Ringraziamenti"], ["sponsor", "💼", "Sponsor"]] },
   { titolo: "Gestione e report", voci: [["archivio-bui", "🗄️", "Archivio BUI"], ["cassa", "💰", "Cassa"], ["ore-alpine", "⏱️", "Ore Alpine"], ["report", "📊", "Report 1"], ["report2", "📊", "Report 2"], ["log", "📜", "Log"]] }
 ];
 
@@ -5347,6 +6158,9 @@ function isCapogruppo() {
   return !!(s && s.carica === "Capogruppo");
 }
 function puoVedereArchivioBui() { return currentRole === "admin" || isCapogruppo(); }
+
+// Sezioni che a chi non le può usare non compaiono nemmeno (grigie con il lucchetto) nel Menù
+const SEZIONI_NASCOSTE_SE_NON_PERMESSE = ["archivio-bui", "beneficenza", "canzoni"];
 
 function sezionePermessa(sezione) {
   if (sezione === "archivio-bui") return puoVedereArchivioBui();
@@ -5360,7 +6174,7 @@ function renderMenuDrawer() {
   if (!drawer) return;
   const gruppi = MENU_GRUPPI.map(g => `
     ${g.titolo ? `<div class="menu-gruppo">${g.titolo}</div>` : ""}
-    ${g.voci.filter(([sez]) => sez !== "archivio-bui" || puoVedereArchivioBui()).map(([sez, icona, label]) => {
+    ${g.voci.filter(([sez]) => !SEZIONI_NASCOSTE_SE_NON_PERMESSE.includes(sez) || sezionePermessa(sez)).map(([sez, icona, label]) => {
       const permessa = sezionePermessa(sez);
       return `<button type="button" class="menu-voce${sez === currentSection ? " attiva" : ""}" data-menu-sezione="${sez}"${permessa ? "" : ' disabled aria-disabled="true"'}>
         <span class="mv-ic">${icona}</span><span class="mv-lb">${label}</span>${permessa ? "" : '<span class="mv-lock" title="Non disponibile per il tuo profilo">🔒</span>'}
@@ -5469,7 +6283,7 @@ function init() {
   }
 }
 
-const SOCIO_SEZIONI = ["home", "bacheca", "libretto", "cena", "presenza-adunata", "iniziative", "prenotazioni", "verbali"];
+const SOCIO_SEZIONI = ["home", "bacheca", "libretto", "cena", "presenza-adunata", "iniziative", "prenotazioni", "verbali", "manuali"];
 const SEZIONI_SOLO_ADMIN = ["cassa", "conv-casoncellata", "log"];
 
 function sezioniAttive() {
