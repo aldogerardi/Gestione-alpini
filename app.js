@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "8.01";
+const APP_VERSION = "8.02";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -519,10 +519,20 @@ function logSnapshotStato() {
 }
 function logAggiornaBaseline() { try { logBaseline = logSnapshotStato(); } catch (e) { logBaseline = null; } }
 
+// Come JSON.stringify, ma con i campi sempre nello stesso ordine e senza badare ai campi vuoti:
+// due schede con gli stessi dati risultano uguali anche se i campi sono in ordine diverso o se uno è
+// "mancante" in una e "vuoto" nell'altra (succede quando l'app aggiunge un campo nuovo).
+function valoreVuoto(v) { return v === undefined || v === null || v === "" || v === false || (Array.isArray(v) && v.length === 0); }
+function jsonStabile(v) {
+  return JSON.stringify(valoreVuoto(v) ? null : v, (k, val) => (val && typeof val === "object" && !Array.isArray(val))
+    ? Object.keys(val).sort().reduce((o, key) => { if (!valoreVuoto(val[key]) && !(key === "accessoLivello" && val[key] === "socio")) o[key] = val[key]; return o; }, {}) : val);
+}
+
 function logCampiCambiati(a, b) {
   const nomi = new Set();
   new Set([...Object.keys(a || {}), ...Object.keys(b || {})]).forEach(k => {
-    if (JSON.stringify((a || {})[k]) !== JSON.stringify((b || {})[k])) nomi.add(LOG_CAMPI_NOMI[k] || k);
+    const dv = v => (k === "accessoLivello" && v === "socio") ? null : v;   // "socio" è il livello di partenza: come non impostato
+    if (jsonStabile(dv((a || {})[k])) !== jsonStabile(dv((b || {})[k]))) nomi.add(LOG_CAMPI_NOMI[k] || k);
   });
   const lista = Array.from(nomi);
   return lista.length > 6 ? lista.slice(0, 6).join(", ") + "…" : lista.join(", ");
@@ -534,7 +544,7 @@ function logCalcolaEventi(prev, curr) {
     const p = prev[t.id], n = curr[t.id];
     if (t.obj) {
       const chiavi = new Set([...Object.keys(p || {}), ...Object.keys(n || {})]);
-      const cambiate = Array.from(chiavi).filter(k => JSON.stringify((p || {})[k]) !== JSON.stringify((n || {})[k]));
+      const cambiate = Array.from(chiavi).filter(k => jsonStabile((p || {})[k]) !== jsonStabile((n || {})[k]));
       if (!cambiate.length) return;
       const nomiCampi = t.chiave
         ? cambiate.slice(0, 5).map(t.chiave).join(", ")
@@ -542,11 +552,15 @@ function logCalcolaEventi(prev, curr) {
       eventi.push(`✏️ Modificato ${t.nome} (${nomiCampi}${cambiate.length > 6 ? "…" : ""})`);
       return;
     }
-    const pm = new Map((p || []).map(x => [x.id, x]));
-    const nm = new Map((n || []).map(x => [x.id, x]));
-    const aggiunti = (n || []).filter(x => !pm.has(x.id));
-    const rimossi = (p || []).filter(x => !nm.has(x.id));
-    const modificati = (n || []).filter(x => pm.has(x.id) && JSON.stringify(pm.get(x.id)) !== JSON.stringify(x));
+    // Le voci si abbinano per identificativo e, tra quelle con lo stesso identificativo, per posizione:
+    // due schede con lo stesso id non si scambiano tra loro.
+    const conChiave = arr => { const cont = {}; return (arr || []).map(x => { const k = String(x && x.id); cont[k] = (cont[k] || 0) + 1; return [k + "#" + cont[k], x]; }); };
+    const pc = conChiave(p), nc = conChiave(n);
+    const pm = new Map(pc), nm = new Map(nc);
+    const aggiunti = nc.filter(([k]) => !pm.has(k)).map(([, x]) => x);
+    const rimossi = pc.filter(([k]) => !nm.has(k)).map(([, x]) => x);
+    const vecchia = new Map();
+    const modificati = nc.filter(([k, x]) => pm.has(k) && jsonStabile(pm.get(k)) !== jsonStabile(x)).map(([k, x]) => { vecchia.set(x, pm.get(k)); return x; });
     const gruppo = (lista, icona, verbo, prep, fmt) => {
       if (!lista.length) return;
       if (lista.length > 5) eventi.push(`${icona} ${verbo} ${lista.length} elementi ${prep} ${t.nome}`);
@@ -554,7 +568,7 @@ function logCalcolaEventi(prev, curr) {
     };
     gruppo(aggiunti, "➕", "Aggiunti", "in", x => `➕ Aggiunto in ${t.nome}: ${t.label(x) || "(senza nome)"}`);
     gruppo(modificati, "✏️", "Modificati", "in", x => {
-      const campi = logCampiCambiati(pm.get(x.id), x);
+      const campi = logCampiCambiati(vecchia.get(x), x);
       return `✏️ Modificato in ${t.nome}: ${t.label(x) || "(senza nome)"}${campi ? " (" + campi + ")" : ""}`;
     });
     gruppo(rimossi, "🗑️", "Eliminati", "da", x => `🗑️ Eliminato da ${t.nome}: ${t.label(x) || "(senza nome)"}`);
@@ -638,7 +652,8 @@ window.addEventListener("error", e => registraErrore(e.message || (e.error && e.
 window.addEventListener("unhandledrejection", e => registraErrore(e.reason && (e.reason.message || e.reason)));
 
 // ---------- Utils ----------
-function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+let _uidContatore = 0;
+function uid() { return Date.now().toString(36) + (++_uidContatore).toString(36) + Math.random().toString(36).slice(2,7); }
 function esc(s) { return (s || "").toString().replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 function toast(msg) {
   const t = document.createElement("div");
@@ -919,6 +934,11 @@ function inviaAuguriWhatsapp(socioId) {
 }
 
 function renderAnagrafica() {
+  const avviso = avvisoSchedeDoppie();
+  return (avviso || "") + renderAnagraficaBase();
+}
+
+function renderAnagraficaBase() {
   let list = state.socios.slice();
   if (searchTerm) {
     const q = searchTerm.toLowerCase();
@@ -1010,6 +1030,10 @@ function attachAnagraficaEvents() {
 function deleteSocio(id) {
   const s = state.socios.find(x => x.id === id);
   if (!s) return;
+  if (state.socios.filter(x => x.id === id).length > 1) {
+    alert(`La scheda di ${s.cognome} ${s.nome} è doppia (stesso identificativo di un'altra): eliminarla cancellerebbe tutte le copie.\n\n${currentRole === "admin" ? "Usa Impostazioni > Controllo dati per tenerne una sola." : "Avvisa l'Admin: la sistema da Impostazioni > Controllo dati."}`);
+    return;
+  }
   if (confirm(`Eliminare ${s.cognome} ${s.nome}?`)) {
     state.socios = state.socios.filter(x => x.id !== id);
     saveState();
@@ -1255,7 +1279,14 @@ function refreshHaccpChip() {
   }
 }
 
+let salvataggioSocioInCorso = false;
 async function saveSocio() {
+  if (salvataggioSocioInCorso) return;       // un secondo tocco su "Salva" durante il caricamento di un allegato non crea un doppione
+  salvataggioSocioInCorso = true;
+  try { return await saveSocioInterno(); } finally { salvataggioSocioInCorso = false; }
+}
+
+async function saveSocioInterno() {
   const data = {
     cognome: document.getElementById("f-cognome").value.trim(),
     nome: document.getElementById("f-nome").value.trim(),
@@ -2695,6 +2726,7 @@ function openSettings() {
   const sociAttivi = (state.socios || []).filter(socioIdoneoApp);
   const nAbilitati = sociAttivi.filter(s => s.accessoApp).length;
   const nIdonei = sociAttivi.filter(s => passwordInizialeSocio(s)).length;
+  const nDoppie = schedeDoppie().length;
   const nSenzaData = sociAttivi.length - nIdonei;
   const bloccoGestioneUtenti = ridotto ? "" : `
     <div class="settings-block">
@@ -2719,6 +2751,13 @@ function openSettings() {
         `).join("")}
       </div>
       <button type="button" class="btn secondary block" id="aggiungi-utente-btn" style="margin-top:4px;">➕ Aggiungi utente</button>
+    </div>
+
+    <div class="settings-block">
+      <h3>🔎 Controllo dati</h3>
+      <div class="card-sub" style="margin-bottom:8px;">Cerca le schede dei soci doppie (stesso identificativo): fanno comparire falsi "Modificato" nel Log e rendono pericolosa l'eliminazione di una scheda.</div>
+      ${nDoppie ? `<div class="card-sub" style="color:#b33; font-weight:700; margin-bottom:8px;">⚠️ Trovati ${nDoppie} gruppi di schede doppie</div>` : `<div class="card-sub" style="color:#1a6b3c; margin-bottom:8px;">Nessuna scheda doppia trovata.</div>`}
+      <button type="button" class="btn block" id="controllo-dati-btn">🔎 Apri il controllo dati</button>
     </div>
 
     <div class="settings-block">
@@ -2856,6 +2895,8 @@ function openSettings() {
     closeModal();
     showLoginScreen(() => { location.reload(); });
   });
+  const controlloDatiBtn = document.getElementById("controllo-dati-btn");
+  if (controlloDatiBtn) controlloDatiBtn.addEventListener("click", apriControlloDati);
   const abilitaTuttiBtn = document.getElementById("accesso-abilita-tutti-btn");
   if (abilitaTuttiBtn) abilitaTuttiBtn.addEventListener("click", () => {
     const target = state.socios.filter(s => socioIdoneoApp(s) && passwordInizialeSocio(s) && !s.accessoApp);
@@ -4733,6 +4774,118 @@ function eliminaManuale(id) {
   eliminaFileStorage(m.allegatoThumbUrl);
   state.manuali = state.manuali.filter(x => x.id !== id);
   saveState();
+  renderSection();
+}
+
+// ---------- Controllo dati: schede dei soci doppie ----------
+function hashTesto(s) { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return String(h); }
+function nomeSocioCompleto(s) { return `${(s && s.cognome) || ""} ${(s && s.nome) || ""}`.trim() || "(senza nome)"; }
+
+// Gruppi di schede con lo stesso identificativo, più quelle senza identificativo.
+function schedeDoppie() {
+  const g = {};
+  (state.socios || []).forEach(s => { const k = s && s.id ? String(s.id) : ""; (g[k] = g[k] || []).push(s); });
+  return Object.keys(g).filter(k => g[k].length > 1 || k === "").map(k => ({ id: k, copie: g[k] }));
+}
+
+// Stesso nome e stessa data di nascita ma identificativi diversi: può essere un doppione o un omonimo.
+function possibiliOmonimi() {
+  const g = {};
+  (state.socios || []).forEach(s => {
+    if (!s || !s.id) return;
+    const k = `${(s.cognome || "").trim().toLowerCase()} ${(s.nome || "").trim().toLowerCase()}|${s.dataNascita || ""}`;
+    (g[k] = g[k] || []).push(s);
+  });
+  return Object.values(g).filter(l => l.length > 1 && new Set(l.map(s => s.id)).size > 1);
+}
+
+function avvisoSchedeDoppie() {
+  if (currentRole === "socio") return "";
+  const d = schedeDoppie();
+  if (!d.length) return "";
+  const nomi = d.map(x => x.id ? `${nomeSocioCompleto(x.copie[0])} (×${x.copie.length})` : `${x.copie.length} schede senza identificativo`).join(", ");
+  return `<div class="card" style="background:#fff4d6; border:1px solid #e0b84a;"><b>⚠️ Schede doppie in Anagrafica:</b> ${esc(nomi)}.<br>Non eliminare nessuna delle copie: l'app le cancellerebbe tutte. ${currentRole === "admin" ? "Usa Impostazioni > Controllo dati per tenerne una sola." : "Avvisa l'Admin: le sistema da Impostazioni > Controllo dati."}</div>`;
+}
+
+function apriControlloDati() {
+  if (currentRole !== "admin") return;
+  const doppie = schedeDoppie(), omonimi = possibiliOmonimi();
+  const compilati = s => Object.keys(s).filter(k => k !== "id" && s[k] !== "" && s[k] !== false && s[k] !== null && s[k] !== undefined && !(Array.isArray(s[k]) && !s[k].length)).length;
+  const riga = (et, v) => v ? `<div class="card-sub">${et}: ${esc(v)}</div>` : "";
+  const blocchi = doppie.map(g => {
+    if (!g.id) {
+      return `<div class="card"><div class="card-name">${g.copie.length} ${g.copie.length === 1 ? "scheda" : "schede"} senza identificativo</div>
+        <div class="card-sub">${esc(g.copie.map(nomeSocioCompleto).join(", "))}</div>
+        <button type="button" class="btn block" data-cd="assegna" style="margin-top:8px;">Assegna un identificativo a ognuna</button></div>`;
+    }
+    const nBol = (state.pagamentiBollino || []).filter(r => r.socioId === g.id).length;
+    return `<div class="card"><div class="card-name">${esc(nomeSocioCompleto(g.copie[0]))} — ${g.copie.length} copie con lo stesso identificativo</div>
+      ${nBol ? `<div class="card-sub">Bollini registrati per questo identificativo: ${nBol} (restano con la copia che tieni)</div>` : ""}
+      ${g.copie.map((s, i) => `<div class="card" style="padding:10px; margin-top:8px;">
+        <div style="font-weight:700;">Copia ${i + 1} · ${compilati(s)} campi compilati</div>
+        ${riga("Cellulare", s.cellulare)}${riga("Telefono", s.telefono)}${riga("Email", s.email)}${riga("Nato il", s.dataNascita)}${riga("Categoria", s.carica)}${riga("Matricola", s.matricola)}${riga("Iscritto dal", s.dataIscrizione)}
+        ${s.andatoAvanti ? '<div class="card-sub">💔 Andato avanti</div>' : ""}${s.accessoApp ? '<div class="card-sub">📲 Accesso all\'app abilitato</div>' : ""}
+        <button type="button" class="btn" data-cd="tieni" data-id="${esc(g.id)}" data-i="${i}" data-fp="${hashTesto(jsonStabile(s))}" style="margin-top:8px; padding:7px 12px;">Tieni solo questa copia</button>
+      </div>`).join("")}
+      <button type="button" class="btn secondary block" data-cd="separa" data-id="${esc(g.id)}" style="margin-top:10px;">Tieni tutte (le altre ricevono un identificativo nuovo)</button>
+    </div>`;
+  }).join("");
+  const om = omonimi.length ? `<div style="font-weight:800; margin:16px 0 6px;">Da controllare a occhio</div><div class="card-sub" style="margin-bottom:6px;">Stesso nome e stessa data di nascita ma identificativi diversi: può essere un doppione o un omonimo. Non faccio nulla da solo: controlla in Anagrafica.</div>${omonimi.map(l => `<div class="card" style="padding:10px;"><b>${esc(nomeSocioCompleto(l[0]))}</b>${l[0].dataNascita ? " · " + esc(l[0].dataNascita) : ""} — ${l.length} schede</div>`).join("")}` : "";
+  showModal(`<div id="cd-root">
+    <div class="modal-title">🔎 Controllo dati</div>
+    ${doppie.length ? `<div class="card-sub" style="margin-bottom:8px;">Trovate schede doppie. Scegli per ognuna quale copia tenere. Le altre vengono eliminate e i bollini restano con la copia scelta.</div>${blocchi}` : `<div class="card"><b>✅ Nessuna scheda doppia.</b><div class="card-sub">Ogni socio ha un identificativo suo.</div></div>`}
+    ${om}
+    <div class="modal-actions" style="margin-top:14px;"><button type="button" class="btn secondary block" data-cd="chiudi">Chiudi</button></div>
+  </div>`);
+  document.getElementById("cd-root").addEventListener("click", e => {
+    const el = e.target.closest("[data-cd]");
+    if (!el) return;
+    const az = el.dataset.cd;
+    if (az === "chiudi") closeModal();
+    else if (az === "tieni") controlloTieniSolo(el.dataset.id, parseInt(el.dataset.i, 10), el.dataset.fp);
+    else if (az === "separa") controlloSepara(el.dataset.id);
+    else if (az === "assegna") controlloAssegna();
+  });
+}
+
+function controlloTieniSolo(id, indice, fp) {
+  const copie = state.socios.filter(s => String(s.id) === id);
+  const scelta = copie[indice];
+  if (!scelta || hashTesto(jsonStabile(scelta)) !== fp) { alert("I dati sono cambiati nel frattempo: riapro il controllo."); apriControlloDati(); return; }
+  const nome = nomeSocioCompleto(scelta);
+  if (!confirm(`Tenere solo questa copia di ${nome} ed eliminare le altre ${copie.length - 1}?`)) return;
+  state.socios = state.socios.filter(s => String(s.id) !== id || s === scelta);
+  logAggiornaBaseline();   // la riga "Controllo dati" qui sotto racconta già tutto: niente "Modificato" ingannevole
+  saveState();
+  scriviLog([{ ev: `🔧 Controllo dati: scheda doppia di ${nome} sistemata (tenuta una copia, eliminate ${copie.length - 1})` }]);
+  toast("Scheda doppia sistemata");
+  apriControlloDati();
+  renderSection();
+}
+
+function controlloSepara(id) {
+  const copie = state.socios.filter(s => String(s.id) === id);
+  if (copie.length < 2) { apriControlloDati(); return; }
+  const nome = nomeSocioCompleto(copie[0]);
+  if (!confirm(`Tenere tutte e ${copie.length} le schede di ${nome}? Le copie dopo la prima ricevono un identificativo nuovo e diventano soci separati.`)) return;
+  copie.slice(1).forEach(s => { s.id = uid(); });
+  logAggiornaBaseline();
+  saveState();
+  scriviLog([{ ev: `🔧 Controllo dati: schede di ${nome} separate (identificativi nuovi)` }]);
+  toast("Schede separate");
+  apriControlloDati();
+  renderSection();
+}
+
+function controlloAssegna() {
+  const senza = state.socios.filter(s => !s.id);
+  if (!senza.length) { apriControlloDati(); return; }
+  senza.forEach(s => { s.id = uid(); });
+  logAggiornaBaseline();
+  saveState();
+  scriviLog([{ ev: `🔧 Controllo dati: assegnato un identificativo a ${senza.length} ${senza.length === 1 ? "scheda" : "schede"}` }]);
+  toast("Identificativi assegnati");
+  apriControlloDati();
   renderSection();
 }
 
