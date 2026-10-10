@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "8.02";
+const APP_VERSION = "8.03";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -2731,7 +2731,7 @@ function openSettings() {
   const bloccoGestioneUtenti = ridotto ? "" : `
     <div class="settings-block">
       <h3>🔑 Gestione utenti</h3>
-      <div style="font-size:0.78rem; color:#666; margin-bottom:10px;">Ogni utente può avere una password (lasciala vuota per entrare senza password, come oggi). <b>Admin</b>: accesso completo, incluse Impostazioni avanzate (Gestione utenti, Backup/Ripristino, Zona pericolosa). <b>Direttivo</b>: accesso completo a tutte le sezioni operative, ma Impostazioni ridotte (senza Gestione utenti, Backup/Ripristino, Zona pericolosa). <b>Socio</b>: vede solo Home, Bacheca, Preghiera e Canto, Cena, Presenza Adunata, Attività, Manuali (solo quello dei Soci), Verbali Consiglio (solo consultazione) e Prenotaz. Sede (quest'ultima con modulo, avviso, calendario e richieste in sola visualizzazione, senza poter confermare) — usalo per una password unica da dare a tutti i soci.</div>
+      <div style="font-size:0.78rem; color:#666; margin-bottom:10px;">Ogni utente può avere una password (lasciala vuota per entrare senza password, come oggi). <b>Admin</b>: accesso completo, incluse Impostazioni avanzate (Gestione utenti, Backup/Ripristino, Zona pericolosa). <b>Direttivo</b>: accesso completo a tutte le sezioni operative, ma Impostazioni ridotte (senza Gestione utenti, Backup/Ripristino, Zona pericolosa). <b>Socio</b>: vede solo Home, Bacheca, Preghiera e Canto, Cena, Presenza Adunata, Attività, Panettoni &amp; C (prenotazione dei prodotti), Manuali (solo quello dei Soci), Verbali Consiglio (solo consultazione) e Prenotaz. Sede (quest'ultima con modulo, avviso, calendario e richieste in sola visualizzazione, senza poter confermare) — usalo per una password unica da dare a tutti i soci.</div>
       <div id="utenti-lista">
         ${(state.settings.utenti || []).map((u, idx) => `
           <div class="card" data-utente-idx="${idx}" style="padding:10px; margin-bottom:8px;">
@@ -6350,7 +6350,7 @@ function isCapogruppo() {
 function puoVedereArchivioBui() { return currentRole === "admin" || isCapogruppo(); }
 
 // Sezioni che a chi non le può usare non compaiono nemmeno (grigie con il lucchetto) nel Menù
-const SEZIONI_NASCOSTE_SE_NON_PERMESSE = ["archivio-bui", "beneficenza", "canzoni"];
+const SEZIONI_NASCOSTE_SE_NON_PERMESSE = ["archivio-bui", "canzoni"];
 
 function sezionePermessa(sezione) {
   if (sezione === "archivio-bui") return puoVedereArchivioBui();
@@ -6474,7 +6474,7 @@ function init() {
   }
 }
 
-const SOCIO_SEZIONI = ["home", "bacheca", "libretto", "cena", "presenza-adunata", "iniziative", "prenotazioni", "verbali", "manuali"];
+const SOCIO_SEZIONI = ["home", "bacheca", "libretto", "cena", "presenza-adunata", "iniziative", "prenotazioni", "verbali", "beneficenza", "manuali"];
 const SEZIONI_SOLO_ADMIN = ["cassa", "conv-casoncellata", "log"];
 
 function sezioniAttive() {
