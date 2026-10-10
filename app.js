@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "8.00";
+const APP_VERSION = "8.01";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -593,14 +593,49 @@ function scriviLog(voci, utenteForzato) {
   }
 }
 
+// Sistema, browser e modalità (app installata o nel browser): niente altro del dispositivo.
+function infoDispositivo() {
+  const ua = navigator.userAgent || "";
+  const ios = /iPhone|iPad|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const sistema = ios ? "iPhone/iPad" : /Android/.test(ua) ? "Android" : /Windows/.test(ua) ? "Windows" : /Mac OS X|Macintosh/.test(ua) ? "Mac" : /Linux|X11/.test(ua) ? "Linux" : "sistema sconosciuto";
+  const browser = /SamsungBrowser/.test(ua) ? "Samsung Internet" : /Edg\//.test(ua) ? "Edge" : /OPR\/|Opera/.test(ua) ? "Opera" : /Firefox|FxiOS/.test(ua) ? "Firefox" : /CriOS|Chrome/.test(ua) ? "Chrome" : /Safari/.test(ua) ? "Safari" : "browser sconosciuto";
+  const installata = (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true;
+  return `${sistema}, ${browser}, ${installata ? "app installata" : "nel browser"}`;
+}
+
 function logAccesso(nuovoLogin) {
   const kTs = "gestione_gruppo_ultimo_log_accesso";
+  const kVer = "gestione_gruppo_ultima_versione";
   const ultimo = parseInt(localStorage.getItem(kTs) || "0", 10);
+  const verPrec = localStorage.getItem(kVer);
+  localStorage.setItem(kVer, APP_VERSION);
+  const info = infoDispositivo();
+  // Aggiornamento: la versione è cambiata. Una versione precedente alla 8.01 non salvava il numero,
+  // ma lasciava l'orario dell'ultima apertura: da quello si riconosce un telefono già usato.
+  if (verPrec ? verPrec !== APP_VERSION : ultimo > 0) {
+    scriviLog([{ ev: `🔄 App aggiornata: ${verPrec ? "v" + verPrec : "versione precedente"} → v${APP_VERSION} · ${info}` }]);
+  }
   const adesso = Date.now();
   if (!nuovoLogin && adesso - ultimo < 10 * 60 * 1000) return; // evita rumore: max 1 apertura ogni 10 minuti
   localStorage.setItem(kTs, String(adesso));
-  scriviLog([{ ev: nuovoLogin ? "🔑 Accesso (login)" : "🔑 Apertura app" }]);
+  scriviLog([{ ev: `${nuovoLogin ? "🔑 Accesso (login)" : "🔑 Apertura app"} · v${APP_VERSION} · ${info}` }]);
 }
+
+// Errori imprevisti dell'app: al massimo 3 per apertura, senza ripetizioni, solo il messaggio (nessun dato dei soci).
+const ERR_LOG = { n: 0, visti: new Set() };
+function registraErrore(msg) {
+  try {
+    if (!currentUser || navigator.onLine === false) return;
+    const testo = String(msg || "errore").replace(/^Uncaught\s+/i, "").replace(/\s+/g, " ").trim().slice(0, 140);
+    if (!testo || /^Script error\.?$/i.test(testo) || /ResizeObserver/i.test(testo)) return;
+    const chiave = testo + "|" + currentSection;
+    if (ERR_LOG.n >= 3 || ERR_LOG.visti.has(chiave)) return;
+    ERR_LOG.visti.add(chiave); ERR_LOG.n++;
+    scriviLog([{ ev: `⚠️ Errore nell'app (v${APP_VERSION}, sezione ${currentSection || "-"}, ${infoDispositivo()}): ${testo}` }]);
+  } catch (e) { /* un errore nel registro degli errori non deve causarne altri */ }
+}
+window.addEventListener("error", e => registraErrore(e.message || (e.error && e.error.message)));
+window.addEventListener("unhandledrejection", e => registraErrore(e.reason && (e.reason.message || e.reason)));
 
 // ---------- Utils ----------
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
@@ -4713,7 +4748,7 @@ function renderLog() {
   const [a, m] = logMese.split("-").map(Number);
   return `
     <div class="section-title">📜 Log attività</div>
-    <div class="card-sub" style="margin-bottom:12px;">Registro di accessi, inserimenti, modifiche ed eliminazioni. Per tutelare la privacy vengono registrati solo cosa è cambiato e chi l'ha fatto, non i valori dei campi.</div>
+    <div class="card-sub" style="margin-bottom:12px;">Registro di accessi, inserimenti, modifiche ed eliminazioni. Per tutelare la privacy vengono registrati solo cosa è cambiato e chi l'ha fatto, non i valori dei campi. Le aperture riportano anche la versione dell'app e il tipo di dispositivo.</div>
     <div class="card">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
         <button type="button" class="btn secondary" id="log-prev-btn" style="padding:4px 12px;">◀</button>

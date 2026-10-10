@@ -1,4 +1,4 @@
-const VER = "8.00";
+const VER = "8.01";
 const CACHE_NAME = "gestione-gruppo-v" + VER.replace(".", "-");
 // I file principali hanno ?v=<versione> nel nome: così a ogni versione il telefono li scarica di nuovo
 // e non può riusare una copia vecchia conservata dal browser (GitHub Pages la tiene fino a 10 minuti).
