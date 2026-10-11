@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "8.04";
+const APP_VERSION = "8.05";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -4012,22 +4012,40 @@ function benTrova(id) { return (state.campagneBeneficenza || []).find(c => c.id 
 function benPrenotabile(c) { return !!c && c.stato === "aperta" && (!c.chiusuraPrenotazioni || benOggi() <= c.chiusuraPrenotazioni); }
 function benPezzi(r) { return Object.values(r.q || {}).reduce((s, n) => s + (Number(n) || 0), 0); }
 function benImporto(c, r) { return (c.prodotti || []).reduce((s, p) => s + (Number((r.q || {})[p.id]) || 0) * benNum(p.prezzo), 0); }
+// Incasso = soldi realmente ricevuti. Le prenotazioni segnate "pagato" prima della 8.05 valgono l'importo dovuto.
+function benIncassato(c, r) {
+  if (r.importoPagato !== undefined && r.importoPagato !== null && r.importoPagato !== "") return Math.max(0, benNum(r.importoPagato));
+  return r.pagato ? benImporto(c, r) : 0;
+}
+function benHaIncasso(c, r) { return benIncassato(c, r) > 0.004; }
+function benStatoPagamento(c, r) {
+  const inc = benIncassato(c, r), dov = benImporto(c, r);
+  const stato = inc <= 0.004 ? "da pagare" : (inc < dov - 0.004 ? "parziale" : "pagato");
+  return { stato, inc, dov, diff: inc - dov };
+}
+function benTestoDifferenza(diff) { return diff > 0.004 ? "+" + benEuro(diff) + " in più" : (diff < -0.004 ? "mancano " + benEuro(-diff) : ""); }
+
 function benArticoli(c, r) { return (c.prodotti || []).filter(p => Number((r.q || {})[p.id]) > 0).map(p => `${r.q[p.id]}× ${p.nome}`).join(", "); }
 
 function benTotali(c) {
   const per = {};
   (c.prodotti || []).forEach(p => { per[p.id] = { prenotati: 0, consegnati: 0 }; });
-  let dovuto = 0, incassato = 0, nPezzi = 0;
+  let dovuto = 0, incassato = 0, inPiu = 0, mancante = 0, nPezzi = 0;
   (c.prenotazioni || []).forEach(r => {
     (c.prodotti || []).forEach(p => {
       const q = Number((r.q || {})[p.id]) || 0;
       if (q > 0) { per[p.id].prenotati += q; if (r.consegnato) per[p.id].consegnati += q; }
     });
-    const imp = benImporto(c, r);
-    dovuto += imp; if (r.pagato) incassato += imp; nPezzi += benPezzi(r);
+    const imp = benImporto(c, r), inc = benIncassato(c, r);
+    dovuto += imp; incassato += inc; inPiu += Math.max(0, inc - imp); mancante += Math.max(0, imp - inc); nPezzi += benPezzi(r);
+  });
+  (c.prodotti || []).forEach(p => {
+    const mass = Math.floor(benNum(p.massimo));
+    per[p.id].massimo = mass;
+    per[p.id].disponibili = mass > 0 ? Math.max(0, mass - per[p.id].prenotati) : null;   // null = nessun limite
   });
   const costo = (c.prodotti || []).reduce((s, p) => s + benNum(p.ricevuti) * benNum(p.costo), 0);
-  return { per, dovuto, incassato, daIncassare: dovuto - incassato, nPren: (c.prenotazioni || []).length, nPezzi, costo, ricavato: incassato - costo };
+  return { per, dovuto, incassato, inPiu, daIncassare: mancante, nPren: (c.prenotazioni || []).length, nPezzi, costo, ricavato: incassato - costo };
 }
 
 // Scrive le campagne con una transazione. mutatore(campagne) modifica una copia e può restituire {errore}.
@@ -4104,7 +4122,11 @@ function benHtmlPrenotazioni(c) {
     .filter(r => !q || `${r.nome} ${r.prenotatoDa || ""}`.toLowerCase().includes(q))
     .sort((a, b) => (a.nome || "").localeCompare(b.nome || "", "it"));
   if (!lista.length) return `<div class="card-sub">${(c.prenotazioni || []).length ? "Nessuna prenotazione corrisponde alla ricerca." : "Nessuna prenotazione."}</div>`;
-  return lista.map(r => `
+  return lista.map(r => {
+    const sp = benStatoPagamento(c, r);
+    const diff = benTestoDifferenza(sp.diff);
+    const etichetta = sp.stato === "pagato" ? (sp.diff > 0.004 ? "✅ Pagato (+" + benEuro(sp.diff) + ")" : "✅ Pagato") : (sp.stato === "parziale" ? "🟡 Parziale" : "💶 Da pagare");
+    return `
     <div class="card" style="padding:12px;">
       <div style="display:flex; justify-content:space-between; gap:8px; align-items:flex-start;">
         <div>
@@ -4112,7 +4134,7 @@ function benHtmlPrenotazioni(c) {
           ${r.prenotatoDa && r.prenotatoDa !== r.nome ? `<div class="card-sub">prenotato da ${esc(r.prenotatoDa)}</div>` : ""}
           <div class="card-sub">${esc(benArticoli(c, r)) || "-"}</div>
           ${r.note ? `<div class="card-sub">📝 ${esc(r.note)}</div>` : ""}
-          <div class="card-sub" style="font-weight:700;">${benEuro(benImporto(c, r))}</div>
+          <div class="card-sub" style="font-weight:700;">${benEuro(sp.dov)}${sp.inc > 0.004 ? ` · incassati ${benEuro(sp.inc)}${diff ? " (" + diff + ")" : ""}` : ""}</div>
         </div>
         <div class="card-actions">
           <button type="button" data-ben="modifica-pren" data-id="${c.id}" data-pid="${r.id}">✏️</button>
@@ -4120,17 +4142,23 @@ function benHtmlPrenotazioni(c) {
         </div>
       </div>
       <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
-        <button type="button" class="btn ${r.pagato ? "" : "secondary"}" data-ben="pagato" data-val="${r.pagato ? 0 : 1}" data-id="${c.id}" data-pid="${r.id}" style="padding:6px 12px; font-size:0.82rem;">${r.pagato ? "✅ Pagato" : "💶 Da pagare"}</button>
+        <button type="button" class="btn ${sp.stato === "da pagare" ? "secondary" : ""}" data-ben="incasso" data-id="${c.id}" data-pid="${r.id}" style="padding:6px 12px; font-size:0.82rem;">${etichetta}</button>
         <button type="button" class="btn ${r.consegnato ? "" : "secondary"}" data-ben="consegnato" data-val="${r.consegnato ? 0 : 1}" data-id="${c.id}" data-pid="${r.id}" style="padding:6px 12px; font-size:0.82rem;">${r.consegnato ? "✅ Consegnato" : "📦 Da consegnare"}</button>
       </div>
-    </div>`).join("");
+    </div>`;
+  }).join("");
 }
 
 function renderBenDettaglio(c) {
   const t = benTotali(c);
-  const righeProd = (c.prodotti || []).map(p => `
-    <tr><td>${esc(p.nome)}</td><td style="text-align:right;">${benEuro(p.prezzo)}</td><td style="text-align:right;">${t.per[p.id].prenotati}</td>
-    <td style="text-align:right;">${benNum(p.ricevuti) || "-"}</td><td style="text-align:right;">${t.per[p.id].consegnati}</td></tr>`).join("");
+  const righeProd = (c.prodotti || []).map(p => {
+    const pr = t.per[p.id];
+    const disp = pr.disponibili === null ? "-" : (pr.disponibili === 0 ? "<b style=\"color:#b33;\">esaurito</b>" : String(pr.disponibili));
+    return `
+    <tr><td>${esc(p.nome)}</td><td style="text-align:right;">${benEuro(p.prezzo)}</td><td style="text-align:right;">${pr.prenotati}</td>
+    <td style="text-align:right;">${pr.massimo > 0 ? pr.massimo : "-"}</td><td style="text-align:right;">${disp}</td>
+    <td style="text-align:right;">${benNum(p.ricevuti) || "-"}</td><td style="text-align:right;">${pr.consegnati}</td></tr>`;
+  }).join("");
   const riga = (et, val, forte) => `<div style="display:flex; justify-content:space-between; padding:3px 0;${forte ? " font-weight:800; border-top:1px solid #ccc; margin-top:4px; padding-top:6px;" : ""}"><span>${et}</span><span>${benEuro(val)}</span></div>`;
   return `
     <button type="button" class="btn secondary" data-ben="indietro" style="margin-bottom:10px;">← Tutte le campagne</button>
@@ -4148,10 +4176,10 @@ function renderBenDettaglio(c) {
     <div class="card">
       <div style="font-weight:800; margin-bottom:8px;">Riepilogo</div>
       <div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse; font-size:0.82rem;">
-        <thead><tr style="background:#f7f3e8;"><th style="text-align:left; padding:4px;">Prodotto</th><th style="text-align:right;">Prezzo</th><th style="text-align:right;">Prenot.</th><th style="text-align:right;">Ricev.</th><th style="text-align:right;">Conseg.</th></tr></thead>
+        <thead><tr style="background:#f7f3e8;"><th style="text-align:left; padding:4px;">Prodotto</th><th style="text-align:right;">Prezzo</th><th style="text-align:right;">Prenot.</th><th style="text-align:right;">Max</th><th style="text-align:right;">Disp.</th><th style="text-align:right;">Ricev.</th><th style="text-align:right;">Conseg.</th></tr></thead>
         <tbody>${righeProd}</tbody></table></div>
       <div style="margin-top:10px; font-size:0.9rem;">
-        ${riga("Totale delle prenotazioni", t.dovuto)}${riga("Incassato", t.incassato)}${riga("Ancora da incassare", t.daIncassare)}
+        ${riga("Totale delle prenotazioni", t.dovuto)}${riga("Incassato", t.incassato)}${t.inPiu > 0.004 ? riga("&nbsp;&nbsp;di cui in più del dovuto", t.inPiu) : ""}${riga("Ancora da incassare", t.daIncassare)}
         ${riga("Costo della merce", t.costo)}${riga("Ricavato per la beneficenza", t.ricavato, true)}
         ${c.versatoImporto ? riga("Già versato" + (c.destinazione ? " a " + esc(c.destinazione) : ""), c.versatoImporto) : ""}
       </div>
@@ -4171,19 +4199,20 @@ function renderBenSoci() {
   const concluse = (state.campagneBeneficenza || []).filter(c => c.stato === "conclusa");
   const cards = attive.length ? attive.map(c => {
     const mie = mio ? (c.prenotazioni || []).filter(r => r.socioId === mio) : [];
-    const modificabile = r => benPrenotabile(c) && !r.consegnato && !r.pagato;
+    const modificabile = r => benPrenotabile(c) && !r.consegnato && !benHaIncasso(c, r);
+    const tc = benTotali(c);
     return `
     <div class="card">
       <div class="card-name">${esc(c.titolo)}</div>
       <div class="card-sub">${c.produttore ? "Produttore: " + esc(c.produttore) + "<br>" : ""}${c.destinazione ? "Il ricavato va a: <b>" + esc(c.destinazione) + "</b><br>" : ""}${c.chiusuraPrenotazioni ? "Prenotazioni fino al " + fmtDate(c.chiusuraPrenotazioni) + "<br>" : ""}${c.dataConsegna ? "Consegna: " + fmtDate(c.dataConsegna) : ""}</div>
       ${c.note ? `<div class="card-sub" style="margin-top:4px;">📝 ${esc(c.note)}</div>` : ""}
-      <div style="margin:8px 0; font-size:0.9rem;">${(c.prodotti || []).map(p => `<div style="display:flex; justify-content:space-between; padding:2px 0;"><span>${esc(p.nome)}</span><b>${benEuro(p.prezzo)}</b></div>`).join("")}</div>
+      <div style="margin:8px 0; font-size:0.9rem;">${(c.prodotti || []).map(p => { const d = tc.per[p.id].disponibili; return `<div style="display:flex; justify-content:space-between; gap:8px; padding:2px 0;"><span>${esc(p.nome)}${d === null ? "" : (d === 0 ? ` <span style="color:#b33; font-size:0.8rem;">· esaurito</span>` : ` <span style="color:#666; font-size:0.8rem;">· restano ${d}</span>`)}</span><b>${benEuro(p.prezzo)}</b></div>`; }).join("")}</div>
       <div class="badge-row" style="margin-bottom:8px;">${benBadgeStato(c)}</div>
       ${benPrenotabile(c) ? `<button type="button" class="btn block" data-ben="prenota" data-id="${c.id}">🎁 Prenota</button>` : `<div class="card-sub">Le prenotazioni sono chiuse.</div>`}
       ${mie.length ? `<div style="font-weight:800; margin:12px 0 4px;">Le mie prenotazioni</div>` + mie.map(r => `
         <div class="card" style="padding:10px; margin-bottom:6px;">
           <div class="card-sub"><b>${esc(r.nome)}</b>: ${esc(benArticoli(c, r))}</div>
-          <div class="card-sub">${benEuro(benImporto(c, r))} · ${r.pagato ? "pagato" : "da pagare"} · ${r.consegnato ? "consegnato" : "da consegnare"}</div>
+          <div class="card-sub">${(() => { const sp = benStatoPagamento(c, r); return benEuro(sp.dov) + " · " + (sp.stato === "pagato" ? "pagato" : (sp.stato === "parziale" ? "pagato in parte (" + benEuro(sp.inc) + " su " + benEuro(sp.dov) + ")" : "da pagare")); })()} · ${r.consegnato ? "consegnato" : "da consegnare"}</div>
           ${modificabile(r) ? `<div style="display:flex; gap:8px; margin-top:6px;"><button type="button" class="btn secondary" data-ben="modifica-pren" data-id="${c.id}" data-pid="${r.id}" style="padding:5px 12px; font-size:0.82rem;">✏️ Modifica</button><button type="button" class="btn danger" data-ben="annulla-pren" data-id="${c.id}" data-pid="${r.id}" style="padding:5px 12px; font-size:0.82rem;">Annulla</button></div>` : ""}
         </div>`).join("") : ""}
     </div>`;
@@ -4211,6 +4240,7 @@ function attachBeneficenzaEvents() {
     else if (az === "nuova-pren" || az === "prenota") benFormPrenotazione(id);
     else if (az === "modifica-pren") benFormPrenotazione(id, pid);
     else if (az === "elimina-pren" || az === "annulla-pren") benEliminaPrenotazione(id, pid);
+    else if (az === "incasso") benFormIncasso(id, pid);
     else if (az === "pagato" || az === "consegnato") benImposta(id, pid, az, el.dataset.val === "1");
     else if (az === "rendiconto") benRendiconto(benTrova(id));
     else if (az === "elenco") benElencoConsegne(benTrova(id));
@@ -4244,12 +4274,72 @@ async function benImposta(campId, prenId, campo, valore) {
   if (esito && esito.errore) alert(esito.errore);
 }
 
+// Finestra dell'incasso: si scrive quanto è stato davvero versato (anche più o meno del dovuto) e si vede la differenza.
+function benFormIncasso(campId, prenId) {
+  if (!benGestore()) return;
+  const c = benTrova(campId);
+  const r = c && (c.prenotazioni || []).find(x => x.id === prenId);
+  if (!r) return;
+  const sp = benStatoPagamento(c, r);
+  const iniziale = sp.inc > 0.004 ? sp.inc : sp.dov;
+  showModal(`
+    <div class="modal-title">💶 Incasso di ${esc(r.nome)}</div>
+    <div class="card-sub" style="margin-bottom:6px;">${esc(benArticoli(c, r))}</div>
+    <div style="font-weight:800; margin-bottom:10px;">Dovuto: ${benEuro(sp.dov)}</div>
+    <div class="form-group"><label>Importo incassato (€)</label><input type="text" inputmode="decimal" id="ben-inc-importo" value="${iniziale.toFixed(2).replace(".", ",")}"></div>
+    <div id="ben-inc-diff" style="font-weight:700; min-height:1.3em; margin-bottom:6px;"></div>
+    <div id="ben-form-errore" style="color:var(--red); font-size:0.82rem; min-height:1.1em; margin-bottom:6px;"></div>
+    <div class="modal-actions" style="flex-wrap:wrap;">
+      <button type="button" class="btn secondary" id="ben-annulla">Annulla</button>
+      ${sp.inc > 0.004 ? `<button type="button" class="btn danger" id="ben-inc-togli">Togli l'incasso</button>` : ""}
+      <button type="button" class="btn" id="ben-inc-salva">Segna incassato</button>
+    </div>`);
+  // Solo numeri veri (45, 45,50, 45.5): qualsiasi altra cosa non è un importo e non deve mai finire per valere zero.
+  const leggi = () => {
+    const v = (document.getElementById("ben-inc-importo").value || "").replace(/[\s€]/g, "");
+    return /^\d+([.,]\d{1,2})?$/.test(v) ? Math.round(benNum(v) * 100) / 100 : NaN;
+  };
+  const aggiorna = () => {
+    const v = leggi(), el = document.getElementById("ben-inc-diff");
+    if (isNaN(v)) { el.textContent = ""; return; }
+    const d = Math.round((v - sp.dov) * 100) / 100;
+    el.textContent = d > 0.004 ? `+${benEuro(d)} in più del dovuto` : (d < -0.004 ? `Mancano ${benEuro(-d)}: la prenotazione resta "parziale"` : "Importo esatto");
+    el.style.color = d > 0.004 ? "#1a6b3c" : (d < -0.004 ? "#b36b00" : "#555");
+  };
+  document.getElementById("ben-inc-importo").addEventListener("input", aggiorna);
+  aggiorna();
+  document.getElementById("ben-annulla").addEventListener("click", closeModal);
+  const registra = async (valore, evLog) => {
+    const err = document.getElementById("ben-form-errore");
+    let esito;
+    try {
+      esito = await benScrivi(camp => {
+        const cc = camp.find(x => x.id === campId); const rr = cc && (cc.prenotazioni || []).find(x => x.id === prenId);
+        if (!rr) return { errore: "Prenotazione non trovata." };
+        rr.importoPagato = valore;
+        rr.pagato = valore > 0.004 && valore >= benImporto(cc, rr) - 0.004;
+        return {};
+      }, evLog);
+    } catch (e) { console.error(e); esito = { errore: "Non sono riuscito a salvare: controlla la connessione e riprova." }; }
+    if (esito && esito.errore) { err.textContent = esito.errore; return; }
+    closeModal();
+    toast(valore > 0.004 ? "Incasso registrato" : "Incasso tolto");
+  };
+  document.getElementById("ben-inc-salva").addEventListener("click", () => {
+    const v = leggi();
+    if (isNaN(v) || v < 0) { document.getElementById("ben-form-errore").textContent = "Scrivi l'importo incassato (un numero, per esempio 50 o 45,50)."; return; }
+    registra(v, `🎁 «${c.titolo}»: ${r.nome} ha versato ${benEuro(v)} (dovuto ${benEuro(sp.dov)})`);
+  });
+  const togli = document.getElementById("ben-inc-togli");
+  if (togli) togli.addEventListener("click", () => registra(0, `🎁 «${c.titolo}»: tolto l'incasso di ${r.nome}`));
+}
+
 async function benEliminaPrenotazione(campId, prenId) {
   const c = benTrova(campId);
   const r = c && (c.prenotazioni || []).find(x => x.id === prenId);
   if (!r) return;
   const gestore = benGestore();
-  if (!gestore && (r.socioId !== benMioId() || !benPrenotabile(c) || r.pagato || r.consegnato)) { alert("Questa prenotazione non si può più annullare: rivolgiti al Direttivo."); return; }
+  if (!gestore && (r.socioId !== benMioId() || !benPrenotabile(c) || benHaIncasso(c, r) || r.consegnato)) { alert("Questa prenotazione non si può più annullare: rivolgiti al Direttivo."); return; }
   if (!confirm(`Eliminare la prenotazione di ${r.nome}?`)) return;
   const esito = await benScrivi(camp => {
     const cc = camp.find(x => x.id === campId); if (!cc) return { errore: "Campagna non trovata." };
@@ -4386,14 +4476,23 @@ function benFormPrenotazione(campId, prenId) {
   const r = prenId ? (c.prenotazioni || []).find(x => x.id === prenId) : null;
   if (!gestore) {
     if (!benPrenotabile(c)) { alert("Le prenotazioni di questa campagna sono chiuse."); return; }
-    if (r && (r.socioId !== mioId || r.pagato || r.consegnato)) { alert("Questa prenotazione non si può più modificare: rivolgiti al Direttivo."); return; }
+    if (r && (r.socioId !== mioId || benHaIncasso(c, r) || r.consegnato)) { alert("Questa prenotazione non si può più modificare: rivolgiti al Direttivo."); return; }
   }
   const sc = socioCorrente();
   const nomeIniziale = r ? r.nome : (sc && !gestore ? `${sc.cognome || ""} ${sc.nome || ""}`.trim() : "");
+  // Quanti pezzi restano per ogni prodotto (esclusa la prenotazione che si sta modificando)
+  const restano = {};
+  (c.prodotti || []).forEach(p => {
+    const mass = Math.floor(benNum(p.massimo));
+    if (mass > 0) restano[p.id] = Math.max(0, mass - (c.prenotazioni || []).filter(x => x.id !== prenId).reduce((s, x) => s + (Number((x.q || {})[p.id]) || 0), 0));
+  });
   const righe = (c.prodotti || []).map(p => `
-    <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
-      <div style="flex:1;"><div style="font-weight:700;">${esc(p.nome)}</div><div class="card-sub">${benEuro(p.prezzo)}${benNum(p.massimo) > 0 ? " · massimo " + Math.floor(benNum(p.massimo)) : ""}</div></div>
-      <input type="number" min="0" step="1" inputmode="numeric" class="ben-q" data-pid="${p.id}" value="${r && r.q && r.q[p.id] ? r.q[p.id] : 0}" style="width:84px; text-align:center;">
+    <div style="margin-bottom:10px;">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <div style="flex:1;"><div style="font-weight:700;">${esc(p.nome)}</div><div class="card-sub">${benEuro(p.prezzo)}${restano[p.id] === undefined ? "" : (restano[p.id] === 0 ? ` · <b style="color:#b33;">esaurito</b>` : ` · restano <b>${restano[p.id]}</b> su ${Math.floor(benNum(p.massimo))}`)}</div></div>
+        <input type="number" min="0" step="1" inputmode="numeric" class="ben-q" data-pid="${p.id}" value="${r && r.q && r.q[p.id] ? r.q[p.id] : 0}" style="width:84px; text-align:center;">
+      </div>
+      <div class="ben-avviso" data-pid="${p.id}" style="color:var(--red); font-size:0.8rem; min-height:0;"></div>
     </div>`).join("");
   showModal(`
     <div class="modal-title">🎁 ${r ? "Modifica prenotazione" : "Prenota"} — ${esc(c.titolo)}</div>
@@ -4414,6 +4513,10 @@ function benFormPrenotazione(campId, prenId) {
   };
   const aggiornaTot = () => {
     const q = leggiQ();
+    (c.prodotti || []).forEach(p => {
+      const av = document.querySelector(`#modal-overlay .ben-avviso[data-pid="${p.id}"]`);
+      if (av) av.textContent = (restano[p.id] !== undefined && (q[p.id] || 0) > restano[p.id]) ? `Puoi prenotarne al massimo ${restano[p.id]}.` : "";
+    });
     document.getElementById("ben-tot").textContent = benEuro((c.prodotti || []).reduce((s, p) => s + (q[p.id] || 0) * benNum(p.prezzo), 0));
   };
   document.querySelectorAll("#modal-overlay .ben-q").forEach(i => i.addEventListener("input", aggiornaTot));
@@ -4448,7 +4551,7 @@ function benFormPrenotazione(campId, prenId) {
         if (prenId) {
           const rr = cc.prenotazioni.find(x => x.id === prenId);
           if (!rr) return { errore: "Prenotazione non trovata." };
-          if (!gestore && (rr.socioId !== mioId || rr.pagato || rr.consegnato)) return { errore: "Questa prenotazione non si può più modificare: rivolgiti al Direttivo." };
+          if (!gestore && (rr.socioId !== mioId || benHaIncasso(cc, rr) || rr.consegnato)) return { errore: "Questa prenotazione non si può più modificare: rivolgiti al Direttivo." };
           Object.assign(rr, { nome, q, note });
         } else {
           cc.prenotazioni.push({ id: uid(), nome, socioId: gestore ? "" : (mioId || ""), prenotatoDa: gestore ? "" : chi, q, note, pagato: false, consegnato: false, creato: new Date().toISOString() });
@@ -4478,6 +4581,7 @@ function benRendiconto(c) {
   testo.push("");
   voce("Totale delle prenotazioni", t.dovuto);
   voce("Incassato", t.incassato);
+  if (t.inPiu > 0.004) voce("di cui in più del dovuto (resti non dati)", t.inPiu);
   voce("Ancora da incassare", t.daIncassare);
   voce("Costo della merce", t.costo);
   voce("Ricavato per la beneficenza", t.ricavato);
@@ -4488,9 +4592,10 @@ function benRendiconto(c) {
 function benElencoConsegne(c) {
   if (!c) return;
   const lista = [...(c.prenotazioni || [])].sort((a, b) => (a.nome || "").localeCompare(b.nome || "", "it"));
-  const righe = lista.map(r => [esc(r.nome), esc(benArticoli(c, r)), esc(benEuro(benImporto(c, r))), r.pagato ? "Sì" : "No", r.consegnato ? "Sì" : "No", esc(r.note || "")]);
-  const testo = lista.map(r => `${r.nome}: ${benArticoli(c, r)} - ${benEuro(benImporto(c, r))} - ${r.pagato ? "pagato" : "da pagare"} - ${r.consegnato ? "consegnato" : "da consegnare"}`);
-  apriAnteprimaReportGenerico(`Elenco consegne - ${c.titolo}`, ["Nome", "Articoli", "Importo", "Pagato", "Consegnato", "Note"], righe, testo);
+  const segno = d => d > 0.004 ? "+" + benEuro(d) : (d < -0.004 ? "-" + benEuro(-d) : "");
+  const righe = lista.map(r => { const sp = benStatoPagamento(c, r); return [esc(r.nome), esc(benArticoli(c, r)), esc(benEuro(sp.dov)), sp.inc > 0.004 ? esc(benEuro(sp.inc)) : "-", esc(segno(sp.diff)), r.consegnato ? "Sì" : "No", esc(r.note || "")]; });
+  const testo = lista.map(r => { const sp = benStatoPagamento(c, r); return `${r.nome}: ${benArticoli(c, r)} - dovuto ${benEuro(sp.dov)}${sp.inc > 0.004 ? " - incassato " + benEuro(sp.inc) + (benTestoDifferenza(sp.diff) ? " (" + benTestoDifferenza(sp.diff) + ")" : "") : " - da pagare"} - ${r.consegnato ? "consegnato" : "da consegnare"}`; });
+  apriAnteprimaReportGenerico(`Elenco consegne - ${c.titolo}`, ["Nome", "Articoli", "Importo", "Incassato", "Differenza", "Consegnato", "Note"], righe, testo);
 }
 
 // ---------- Canzoni (testi e file audio: solo Direttivo e Admin) ----------
