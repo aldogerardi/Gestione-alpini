@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "8.03";
+const APP_VERSION = "8.04";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -825,16 +825,27 @@ function linkSicuro(u) {
   return /^https?:\/\/[^\s\/]+\.[^\s\/]+/i.test(v) ? v : "";
 }
 
+const LINK_ANA = "https://www.ana.it";
+
+// Loghi di Instagram e Facebook (forme vettoriali, senza immagini esterne).
+const LOGO_INSTAGRAM = '<svg class="logo-social" viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="igSfumato" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#FEDA75"/><stop offset=".25" stop-color="#FA7E1E"/><stop offset=".5" stop-color="#D62976"/><stop offset=".75" stop-color="#962FBF"/><stop offset="1" stop-color="#4F5BD5"/></linearGradient></defs><rect width="24" height="24" rx="6.2" fill="url(#igSfumato)"/><rect x="4.6" y="4.6" width="14.8" height="14.8" rx="4.4" fill="none" stroke="#fff" stroke-width="1.7"/><circle cx="12" cy="12" r="3.6" fill="none" stroke="#fff" stroke-width="1.7"/><circle cx="16.6" cy="7.4" r="1" fill="#fff"/></svg>';
+const LOGO_FACEBOOK = '<svg class="logo-social" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="12" fill="#1877F2"/><path fill="#fff" d="M16.671 15.469l.532-3.469h-3.328v-2.25c0-.949.465-1.875 1.956-1.875h1.513V4.922s-1.373-.234-2.686-.234c-2.741 0-4.533 1.662-4.533 4.669V12H7.078v3.469h3.047v8.385a12.1 12.1 0 0 0 3.75 0v-8.385h2.796z"/></svg>';
+
+// Tre tasti sulla stessa riga: Instagram, Facebook (se i link sono salvati) e il logo dell'app che porta al sito dell'ANA.
+// Sui telefoni stretti il logo sta sopra il nome (vedi .social-riga in styles.css), così le scritte non escono mai dai tasti.
 function tastiSocial(g, conTesto) {
-  const stile = "display:block; text-align:center; text-decoration:none; padding:12px; border-radius:10px; font-weight:700; margin-bottom:8px;";
-  const parte = (icona, nome, raw) => {
-    const link = linkSicuro(raw);
-    if (link) return `<a href="${esc(link)}" target="_blank" rel="noopener" class="btn block" style="${stile}">${icona} Apri la pagina ${nome}</a>`;
-    // link non riconosciuto: ai soci resta visibile come testo (come nella 7.35), nel modulo c'è l'avviso rosso
+  const tasto = (href, icona, nome, titolo) => `<a href="${esc(href)}" target="_blank" rel="noopener" class="btn" title="${esc(titolo)}">${icona}<span>${nome}</span></a>`;
+  const tasti = [];
+  const ig = linkSicuro(g.instagram), fb = linkSicuro(g.facebook);
+  if (ig) tasti.push(tasto(ig, LOGO_INSTAGRAM, "Instagram", "Pagina Instagram del Gruppo"));
+  if (fb) tasti.push(tasto(fb, LOGO_FACEBOOK, "Facebook", "Pagina Facebook del Gruppo"));
+  tasti.push(tasto(LINK_ANA, '<img class="logo" src="icon-192.png" alt="">', "ANA", "Sito dell'Associazione Nazionale Alpini"));
+  // link non riconosciuti: ai soci restano visibili come testo (come nella 7.35); nel modulo c'è l'avviso rosso
+  const testo = (icona, nome, raw) => {
     const t = String(raw || "").trim();
-    return (conTesto && t) ? `<div class="card-sub" style="margin-bottom:8px;">${icona} ${nome}: ${esc(t)}</div>` : "";
+    return (conTesto && t && !linkSicuro(raw)) ? `<div class="card-sub" style="margin-bottom:8px;">${icona} ${nome}: ${esc(t)}</div>` : "";
   };
-  return parte("📷", "Instagram", g.instagram) + parte("📘", "Facebook", g.facebook);
+  return `<div class="social-riga">${tasti.join("")}</div>` + testo("📷", "Instagram", g.instagram) + testo("📘", "Facebook", g.facebook);
 }
 
 function renderHome() {

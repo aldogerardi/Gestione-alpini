@@ -326,3 +326,14 @@ body.menu-aperto { overflow: hidden; }
 .menu-voce .mv-lock { font-size: 0.9rem; }
 .menu-foot { padding: 14px; font-size: 0.72rem; color: #777; text-align: center; }
 
+
+/* Home: tasti Instagram, Facebook e ANA sulla stessa riga */
+.social-riga { display: flex; gap: 8px; margin-bottom: 8px; }
+.social-riga a.btn { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  text-align: center; text-decoration: none; padding: 9px 4px; border-radius: 10px; font-weight: 700; font-size: 0.82rem; line-height: 1.15; }
+.social-riga .logo-social { width: 30px; height: 30px; flex: none; }
+.social-riga .logo { width: 30px; height: 30px; border-radius: 7px; flex: none; }
+@media (min-width: 460px) {
+  .social-riga a.btn { flex-direction: row; gap: 8px; padding: 11px 8px; font-size: 0.95rem; }
+  .social-riga .logo-social, .social-riga .logo { width: 26px; height: 26px; }
+}
