@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "8.05";
+const APP_VERSION = "8.06";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -776,6 +776,8 @@ function estraiGiornoMese(str) {
   return { giorno: parseInt(m[1], 10), mese: parseInt(m[2], 10) };
 }
 
+function puoInviareAuguri() { return currentRole === "admin" || isCapogruppo(); }
+
 function renderNotizieDelGiorno() {
   const oggi = new Date();
   const g = oggi.getDate(), m = oggi.getMonth() + 1;
@@ -793,10 +795,12 @@ function renderNotizieDelGiorno() {
 
   if (compleanni.length === 0 && anniversari.length === 0) return "";
 
+  // Il tasto WhatsApp per gli auguri lo vedono solo l'Admin e il Capogruppo: così non partono messaggi doppi o "per conto di altri".
+  const puoAuguri = puoInviareAuguri();
   const nomiCompleanni = compleanni.map(s => `
     <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; padding:3px 0;">
       <span>${esc(s.cognome)} ${esc(s.nome)}</span>
-      <button type="button" class="btn" data-wa-auguri="${s.id}" style="background:#25D366; color:#fff; padding:4px 10px; font-size:0.78rem; flex-shrink:0;">${WA_ICON}</button>
+      ${puoAuguri ? `<button type="button" class="btn" data-wa-auguri="${s.id}" style="background:#25D366; color:#fff; padding:4px 10px; font-size:0.78rem; flex-shrink:0;">${WA_ICON}</button>` : ""}
     </div>`).join("");
   const nomiAnniversari = anniversari.map(s => `${esc(s.cognome)} ${esc(s.nome)}`).join(", ");
 
@@ -901,8 +905,11 @@ function renderHome() {
 }
 
 function attachHomeEvents() {
+  document.querySelectorAll("[data-wa-auguri]").forEach(btn => {
+    btn.addEventListener("click", () => inviaAuguriWhatsapp(btn.dataset.waAuguri));
+  });
   const saveBtn = document.getElementById("home-save-btn");
-  if (!saveBtn) return; // vista sola lettura (socio): niente da agganciare
+  if (!saveBtn) return; // vista sola lettura (socio): niente altro da agganciare
   saveBtn.addEventListener("click", () => {
     state.gruppoInfo = {
       denominazione: document.getElementById("home-denominazione").value.trim(),
@@ -919,9 +926,6 @@ function attachHomeEvents() {
     toast("Dati del gruppo salvati");
     renderSection();
   });
-  document.querySelectorAll("[data-wa-auguri]").forEach(btn => {
-    btn.addEventListener("click", () => inviaAuguriWhatsapp(btn.dataset.waAuguri));
-  });
 }
 
 function pulisciNumeroWhatsapp(numero) {
@@ -933,6 +937,7 @@ function pulisciNumeroWhatsapp(numero) {
 }
 
 function inviaAuguriWhatsapp(socioId) {
+  if (!puoInviareAuguri()) return;   // anche forzando la chiamata, solo Admin e Capogruppo
   const s = state.socios.find(x => x.id === socioId);
   if (!s) return;
   const template = state.settings.testoAuguriCompleanno || "Tanti auguri di buon compleanno! 🎂";
