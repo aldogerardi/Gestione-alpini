@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "8.07";
+const APP_VERSION = "8.27";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -3214,11 +3214,17 @@ function renderCena() {
         ${soloLettura ? "" : `<button type="button" class="btn danger" data-elimina-cena="${c.id}" style="padding:5px 10px; font-size:0.8rem;">🗑️</button>`}
       </div>
       <div class="card-sub" data-tally="${c.id}" style="margin-top:8px;">Caricamento risposte...</div>
+      ${c.scadenza ? `<div class="card-sub" style="margin-top:4px;">${cenaChiusa(c.scadenza) ? "Iscrizioni chiuse (scadenza il " + fmtDate(c.scadenza) + ")" : "Iscrizioni aperte fino al " + fmtDate(c.scadenza)}</div>` : ""}
+      <div data-iscr="${c.id}"></div>
       <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
         <button type="button" class="btn secondary" data-copia-link="${c.id}" style="font-size:0.82rem; padding:7px 10px;">🔗 Copia link</button>
         ${soloLettura ? "" : `<button type="button" class="btn" data-wa-link="${c.id}" style="background:#25D366; color:#fff; font-size:0.82rem; padding:7px 10px;">${WA_ICON} Invia su WhatsApp</button>`}
         <button type="button" class="btn secondary" data-report-cena="${c.id}" style="font-size:0.82rem; padding:7px 10px;">📋 Report nomi</button>
       </div>
+      ${soloLettura ? "" : `<div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
+        <button type="button" class="btn" data-cena-aggiungi="${c.id}" style="font-size:0.82rem; padding:7px 10px;">➕ Aggiungi adesione</button>
+        <button type="button" class="btn secondary" data-cena-scadenza="${c.id}" style="font-size:0.82rem; padding:7px 10px;">📅 Scadenza iscrizioni</button>
+      </div>`}
     </div>
   `).join("") : `<div class="card-sub">Nessuna cena creata finora.</div>`;
 
@@ -3236,6 +3242,7 @@ function renderCena() {
         </div>
       </div>
       <div class="form-group"><label>Luogo</label><input type="text" id="cena-luogo" value="Sede Gruppo Alpini Bottonaga"></div>
+      <div class="form-group"><label>Iscrizioni fino al (facoltativo)</label><input type="date" id="cena-scadenza"><div style="font-size:0.75rem; color:#666; margin-top:4px;">Dopo questa data nessuno può più iscriversi, né dall'app né dal link. Il Direttivo può comunque aggiungere adesioni a mano.</div></div>
       <div class="form-group"><label>Testo del messaggio</label>
         <textarea id="cena-testo" rows="5" placeholder="Scrivi qui il messaggio da mandare nel gruppo...">Ciao a tutti, ci sarà la solita cena di fine mese.
 Siamo diventati tecnologicamente evoluti quindi cliccate qua sotto per confermare.
@@ -3302,6 +3309,12 @@ function attachCenaEvents() {
   document.querySelectorAll("[data-report-cena]").forEach(btn => {
     btn.addEventListener("click", () => apriReportCena(btn.dataset.reportCena));
   });
+  document.querySelectorAll("[data-cena-aggiungi]").forEach(btn => {
+    btn.addEventListener("click", () => apriAggiungiAdesioneCena(btn.dataset.cenaAggiungi));
+  });
+  document.querySelectorAll("[data-cena-scadenza]").forEach(btn => {
+    btn.addEventListener("click", () => apriScadenzaCena(btn.dataset.cenaScadenza));
+  });
 }
 
 async function creaCena() {
@@ -3311,15 +3324,18 @@ async function creaCena() {
   const m = document.getElementById("cena-ora-m").value || "00";
   const luogo = document.getElementById("cena-luogo").value.trim();
   const testo = document.getElementById("cena-testo").value.trim();
+  const scadenza = document.getElementById("cena-scadenza").value;
   if (!data) { alert("Inserisci la data della cena"); return; }
+  if (scadenza && scadenza > data) { alert("La data limite per iscriversi non può essere dopo la cena."); return; }
   const id = uid();
   const ora = h ? `${h}:${m}` : "";
   const nuova = { id, titolo, data, ora, luogo, testo };
+  if (scadenza) nuova.scadenza = scadenza;
   state.cene.push(nuova);
   saveState();
   if (window.db) {
     try {
-      await db.collection(FIRESTORE_COLLECTION).doc(`cena_${id}`).set({ titolo, data, ora, luogo, testo, risposte: {} });
+      await db.collection(FIRESTORE_COLLECTION).doc(`cena_${id}`).set(Object.assign({ titolo, data, ora, luogo, testo, risposte: {} }, scadenza ? { scadenza } : {}));
     } catch (err) {
       console.error(err);
       alert("La cena è stata creata ma c'è stato un problema nel predisporre il link su Firebase. Riprova a crearla se il link non dovesse funzionare.");
@@ -3343,9 +3359,11 @@ async function caricaTallyCena(cenaId, el) {
   if (!window.db) { el.textContent = "Sincronizzazione non disponibile"; return; }
   try {
     const doc = await db.collection(FIRESTORE_COLLECTION).doc(`cena_${cenaId}`).get();
-    if (!doc.exists) { el.textContent = "Nessuna conferma ancora"; return; }
-    const risposte = doc.data().risposte || {};
-    const totale = Object.values(risposte).reduce((sum, r) => sum + (r.persone || 1), 0);
+    const dati = doc.exists ? doc.data() : null;
+    const blocco = document.querySelector(`[data-iscr="${cenaId}"]`);
+    if (blocco) disegnaIscrizioneCena(cenaId, blocco, dati);
+    if (!dati) { el.textContent = "Nessuna conferma ancora"; return; }
+    const totale = risposteCenaUniche(dati.risposte).reduce((sum, r) => sum + (r.persone || 1), 0);
     el.innerHTML = totale > 0 ? `✅ <strong>${totale}</strong> persone confermate` : "Nessuna conferma ancora";
   } catch (err) {
     console.error(err);
@@ -3360,7 +3378,7 @@ async function apriReportCena(cenaId) {
   try {
     const doc = await db.collection(FIRESTORE_COLLECTION).doc(`cena_${cenaId}`).get();
     const risposte = doc.exists ? (doc.data().risposte || {}) : {};
-    const elenco = Object.values(risposte).sort((a, b) => (a.nome || "").localeCompare(b.nome || ""));
+    const elenco = risposteCenaUniche(risposte);
     const totale = elenco.reduce((sum, r) => sum + (r.persone || 1), 0);
     const righeHtml = elenco.length
       ? elenco.map(r => `<div style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid #eee;"><span>${esc(r.nome || "Anonimo")}</span><strong>${r.persone || 1}</strong></div>`).join("")
@@ -3408,6 +3426,222 @@ async function apriReportCena(cenaId) {
   }
 }
 
+// ---------- Cena: iscrizione dall'app, data limite, adesioni a mano ----------
+// Per confrontare i nomi senza badare a maiuscole, accenti e ordine ("Rossi Mario" = "mario rossi").
+function chiaveNomeCena(n) {
+  return String(n || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim().split(" ").filter(Boolean).sort().join(" ");
+}
+
+// Elenco delle adesioni senza doppioni: se un socio è iscritto dall'app, la stessa persona arrivata anche dal link non conta due volte.
+function risposteCenaUniche(risposte) {
+  const tutte = Object.keys(risposte || {}).map(id => Object.assign({ id }, risposte[id]));
+  const conSocio = tutte.filter(e => e.socioId);
+  const nomi = new Set(conSocio.map(e => chiaveNomeCena(e.nome)));
+  return conSocio.concat(tutte.filter(e => !e.socioId && !nomi.has(chiaveNomeCena(e.nome))))
+    .sort((x, y) => (x.nome || "").localeCompare(y.nome || "", "it", { sensitivity: "base" }));
+}
+
+// L'ultimo giorno utile per iscriversi è la data limite stessa (compresa).
+function cenaChiusa(scadenza) { return !!scadenza && benOggi() > scadenza; }
+
+// Scrive (o toglie, con valore null) una adesione. La data limite e la data della cena si controllano sul database,
+// così un telefono con dati vecchi non può aggirarle. Il Direttivo (opzioni.gestore) può sempre.
+async function scriviRispostaCena(cenaId, entryId, valore, opzioni) {
+  const opz = opzioni || {};
+  if (!window.db) return { errore: "Non sono collegato: controlla la connessione e riprova." };
+  const ref = db.collection(FIRESTORE_COLLECTION).doc(`cena_${cenaId}`);
+  let esito = {};
+  try {
+    await conTimeout(db.runTransaction(async tx => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) { esito = { errore: "Questo invito non è più valido." }; return; }
+      const dati = snap.data();
+      if (!opz.gestore && cenaChiusa(dati.scadenza)) { esito = { errore: `Le iscrizioni sono chiuse dal ${fmtDate(dati.scadenza)}.`, chiuse: true }; return; }
+      if (opz.controllaData && !opz.gestore && dati.data && dati.data < benOggi()) { esito = { errore: "La cena si è già svolta." }; return; }
+      tx.update(ref, { [`risposte.${entryId}`]: valore === null ? firebase.firestore.FieldValue.delete() : valore });
+    }), 15000);
+  } catch (err) {
+    console.error(err);
+    return { errore: "Non sono riuscito a salvare: controlla la connessione e riprova." };
+  }
+  return esito;
+}
+
+function blocchiPersone(n) { return `${n} ${n === 1 ? "persona" : "persone"}`; }
+
+// Riquadro dell'iscrizione dentro la scheda della cena (per chi è entrato con il proprio nome).
+function disegnaIscrizioneCena(cenaId, el, dati) {
+  const c = state.cene.find(x => x.id === cenaId);
+  if (!c || !el) return;
+  const mio = benMioId(), s = mio ? socioCorrente() : null;
+  if (!s) {
+    el.innerHTML = currentRole === "socio" ? `<div class="iscr info">Per iscriverti dall'app entra con il tuo nome e la tua data di nascita. Oppure usa il <b>link</b> ricevuto su WhatsApp.</div>` : "";
+    return;
+  }
+  const scadenza = (dati && dati.scadenza) || c.scadenza || "";
+  const chiusa = cenaChiusa(scadenza);
+  const unici = risposteCenaUniche(dati ? dati.risposte : {});
+  const mioNome = `${s.cognome} ${s.nome}`.trim();
+  const miaApp = unici.find(e => e.socioId === mio);
+  const miaLink = miaApp ? null : unici.find(e => !e.socioId && chiaveNomeCena(e.nome) === chiaveNomeCena(mioNome));
+  const attuale = miaApp || miaLink || null;
+  const ricarica = () => { const t = document.querySelector(`[data-tally="${cenaId}"]`); if (t) caricaTallyCena(cenaId, t); };
+
+  if (c.data && c.data < benOggi()) {
+    el.innerHTML = `<div class="iscr passata">🕒 Cena già svolta${attuale ? ` · risultavi iscritto: ${blocchiPersone(attuale.persone || 1)}` : ""}</div>`;
+    return;
+  }
+  const mostraForm = (n, titolo, etichetta, conAnnulla) => {
+    el.innerHTML = `<div class="iscr nuova">
+      <div class="iscr-t">${titolo}</div>
+      ${scadenza ? `<div class="card-sub" style="margin:-4px 0 8px;">Iscrizioni aperte fino al ${fmtDate(scadenza)}</div>` : ""}
+      <div class="iscr-q"><span>Quanti siete,<br>te compreso</span><div class="stp"><button type="button" data-i="meno" aria-label="Meno">−</button><b data-i="num">${n}</b><button type="button" data-i="piu" aria-label="Più">+</button></div></div>
+      <div class="iscr-az"><button type="button" class="btn" data-i="salva">${etichetta}</button>${conAnnulla ? `<button type="button" class="btn secondary" data-i="annulla">Annulla</button>` : ""}</div>
+    </div>`;
+    let corrente = n;
+    el.onclick = async e => {
+      const b = e.target.closest("[data-i]");
+      if (!b) return;
+      const az = b.dataset.i;
+      if (az === "meno" && corrente > 1) { corrente--; el.querySelector('[data-i="num"]').textContent = corrente; }
+      else if (az === "piu") { corrente++; el.querySelector('[data-i="num"]').textContent = corrente; }
+      else if (az === "annulla") disegnaIscrizioneCena(cenaId, el, dati);
+      else if (az === "salva") {
+        b.disabled = true;
+        const esito = await scriviRispostaCena(cenaId, "socio_" + mio, { nome: mioNome, persone: corrente, socioId: mio, ts: new Date().toISOString(), da: "app" }, { controllaData: true });
+        if (esito.errore) { alert(esito.errore); ricarica(); return; }
+        if (miaLink) await scriviRispostaCena(cenaId, miaLink.id, null, { gestore: true });   // la risposta del link viene sostituita da quella dell'app
+        scriviLog([{ ev: `🍽️ «${c.titolo || "Cena"}»: ${mioNome} ${attuale ? "ha cambiato l'iscrizione" : "si è iscritto"} (${blocchiPersone(corrente)})` }]);
+        toast(attuale ? "Iscrizione aggiornata" : "Iscrizione registrata ✅");
+        ricarica();
+      }
+    };
+  };
+  if (attuale) {
+    el.innerHTML = `<div class="iscr fatto">
+      <div class="iscr-ok">✅ Sei iscritto: ${blocchiPersone(attuale.persone || 1)}${miaLink ? ` <span style="font-weight:600; font-size:0.8rem;">(dal link)</span>` : ""}</div>
+      ${chiusa ? `<div class="card-sub">Iscrizioni chiuse: per cambiare rivolgiti al Direttivo.</div>` : `<div class="iscr-az"><button type="button" class="btn secondary" data-i="cambia">Cambia</button><button type="button" class="btn secondary" data-i="togli">Togli</button></div>`}
+    </div>`;
+    el.onclick = async e => {
+      const b = e.target.closest("[data-i]");
+      if (!b) return;
+      if (b.dataset.i === "cambia") mostraForm(attuale.persone || 1, "Cambia l'iscrizione", "Salva", true);
+      else if (b.dataset.i === "togli") {
+        if (!confirm("Togliere la tua iscrizione alla cena?")) return;
+        const esito = await scriviRispostaCena(cenaId, attuale.id, null, { controllaData: true });
+        if (esito.errore) { alert(esito.errore); ricarica(); return; }
+        scriviLog([{ ev: `🍽️ «${c.titolo || "Cena"}»: ${mioNome} ha tolto l'iscrizione` }]);
+        toast("Iscrizione tolta");
+        ricarica();
+      }
+    };
+  } else if (chiusa) {
+    el.innerHTML = `<div class="iscr info">Le iscrizioni sono chiuse (scadenza il ${fmtDate(scadenza)}). Per partecipare rivolgiti al Direttivo.</div>`;
+  } else {
+    mostraForm(1, "Ci sei alla cena?", "✅ Ci sono", false);
+  }
+}
+
+// Direttivo e Admin: aggiungere, cambiare o togliere l'adesione di un socio (per chi non usa l'app).
+async function apriAggiungiAdesioneCena(cenaId) {
+  if (currentRole === "socio") return;
+  const c = state.cene.find(x => x.id === cenaId);
+  if (!c || !window.db) { alert("Sincronizzazione non disponibile."); return; }
+  let dati = null;
+  try { const doc = await db.collection(FIRESTORE_COLLECTION).doc(`cena_${cenaId}`).get(); dati = doc.exists ? doc.data() : null; } catch (e) { console.error(e); }
+  if (!dati) { alert("Non riesco a leggere le adesioni di questa cena: controlla la connessione e riprova."); return; }
+  const unici = risposteCenaUniche(dati.risposte);
+  const trova = s => unici.find(x => x.socioId === s.id) || unici.find(x => !x.socioId && chiaveNomeCena(x.nome) === chiaveNomeCena(`${s.cognome} ${s.nome}`));
+  const soci = state.socios.filter(s => !s.andatoAvanti).sort((x, y) => `${x.cognome} ${x.nome}`.localeCompare(`${y.cognome} ${y.nome}`, "it", { sensitivity: "base" }));
+  let sel = null, n = 1;
+  showModal(`<div id="ac-root">
+    <div class="modal-title">➕ Aggiungi adesione</div>
+    <div class="card-sub" style="margin-bottom:8px;">${esc(c.titolo || "Cena")}. Per i soci senza app o che hanno risposto a voce.</div>
+    <input type="text" id="ac-cerca" placeholder="Cerca un socio..." style="width:100%; box-sizing:border-box; margin-bottom:6px;">
+    <div id="ac-lista" style="max-height:34vh; overflow-y:auto;">${soci.map(s => { const e = trova(s); return `<div class="sg-riga" data-id="${s.id}" data-nome="${esc(`${s.cognome} ${s.nome}`.toLowerCase())}"><span style="width:22px;" data-spunta></span><span>${esc(s.cognome)} ${esc(s.nome)}</span>${e ? `<span class="card-sub" style="margin-left:auto;">iscritto: ${e.persone || 1}</span>` : ""}</div>`; }).join("")}</div>
+    <div class="iscr-q" style="margin-top:12px;"><span>Quanti sono,<br>compreso il socio</span><div class="stp"><button type="button" data-ac="meno">−</button><b id="ac-num">1</b><button type="button" data-ac="piu">+</button></div></div>
+    <div id="ac-errore" style="color:var(--red); font-size:0.82rem; min-height:1.1em; margin-bottom:6px;"></div>
+    <div class="modal-actions" style="flex-wrap:wrap;">
+      <button type="button" class="btn secondary" data-ac="chiudi">Annulla</button>
+      <button type="button" class="btn danger" data-ac="togli" id="ac-togli" style="display:none;">Togli adesione</button>
+      <button type="button" class="btn" data-ac="salva" id="ac-salva" disabled>Aggiungi</button>
+    </div></div>`);
+  const aggiorna = () => {
+    document.getElementById("ac-num").textContent = n;
+    document.querySelectorAll("#ac-lista .sg-riga").forEach(r => { const su = r.dataset.id === (sel && sel.id); r.classList.toggle("sel", su); r.querySelector("[data-spunta]").textContent = su ? "✅" : ""; });
+    const e = sel ? trova(sel) : null;
+    document.getElementById("ac-salva").disabled = !sel;
+    document.getElementById("ac-salva").textContent = e ? "Aggiorna" : "Aggiungi";
+    document.getElementById("ac-togli").style.display = e ? "" : "none";
+  };
+  document.getElementById("ac-cerca").addEventListener("input", ev => {
+    const q = ev.target.value.trim().toLowerCase();
+    document.querySelectorAll("#ac-lista .sg-riga").forEach(r => { r.style.display = !q || r.dataset.nome.includes(q) ? "" : "none"; });
+  });
+  document.getElementById("ac-root").addEventListener("click", async ev => {
+    const riga = ev.target.closest(".sg-riga");
+    if (riga) { sel = soci.find(s => s.id === riga.dataset.id); const e = trova(sel); n = e ? (e.persone || 1) : 1; document.getElementById("ac-errore").textContent = ""; aggiorna(); return; }
+    const b = ev.target.closest("[data-ac]");
+    if (!b) return;
+    const az = b.dataset.ac, err = document.getElementById("ac-errore");
+    if (az === "meno") { if (n > 1) n--; aggiorna(); }
+    else if (az === "piu") { n++; aggiorna(); }
+    else if (az === "chiudi") closeModal();
+    else if ((az === "salva" || az === "togli") && sel) {
+      b.disabled = true;
+      const nome = `${sel.cognome} ${sel.nome}`.trim(), e = trova(sel);
+      let esito;
+      if (az === "salva") {
+        esito = await scriviRispostaCena(cenaId, "socio_" + sel.id, { nome, persone: n, socioId: sel.id, ts: new Date().toISOString(), da: "direttivo" }, { gestore: true });
+        if (!esito.errore && e && e.id !== "socio_" + sel.id) await scriviRispostaCena(cenaId, e.id, null, { gestore: true });
+      } else {
+        esito = await scriviRispostaCena(cenaId, e.id, null, { gestore: true });
+      }
+      if (esito.errore) { err.textContent = esito.errore; b.disabled = false; return; }
+      scriviLog([{ ev: `🍽️ «${c.titolo || "Cena"}»: ${az === "salva" ? `adesione di ${nome} ${e ? "aggiornata" : "aggiunta"} dal Direttivo (${blocchiPersone(n)})` : `adesione di ${nome} tolta dal Direttivo`}` }]);
+      closeModal();
+      toast(az === "salva" ? "Adesione registrata" : "Adesione tolta");
+      const t = document.querySelector(`[data-tally="${cenaId}"]`); if (t) caricaTallyCena(cenaId, t);
+    }
+  });
+  aggiorna();
+}
+
+// Direttivo e Admin: data limite per iscriversi (facoltativa), valida per l'app e per il link.
+function apriScadenzaCena(cenaId) {
+  if (currentRole === "socio") return;
+  const c = state.cene.find(x => x.id === cenaId);
+  if (!c) return;
+  showModal(`
+    <div class="modal-title">📅 Scadenza iscrizioni</div>
+    <div class="card-sub" style="margin-bottom:8px;">${esc(c.titolo || "Cena")} · cena del ${fmtDate(c.data)}. Dopo la data limite nessuno può più iscriversi o cambiare, né dall'app né dal link. Il Direttivo può comunque aggiungere adesioni a mano.</div>
+    <div class="form-group"><label>Iscrizioni fino al (compreso)</label><input type="date" id="sc-data" value="${esc(c.scadenza || "")}"></div>
+    <div id="sc-errore" style="color:var(--red); font-size:0.82rem; min-height:1.1em; margin-bottom:6px;"></div>
+    <div class="modal-actions" style="flex-wrap:wrap;">
+      <button type="button" class="btn secondary" id="sc-annulla">Annulla</button>
+      ${c.scadenza ? `<button type="button" class="btn danger" id="sc-togli">Togli la scadenza</button>` : ""}
+      <button type="button" class="btn" id="sc-salva">Salva</button>
+    </div>`);
+  document.getElementById("sc-annulla").addEventListener("click", closeModal);
+  const applica = async valore => {
+    const err = document.getElementById("sc-errore");
+    if (valore && c.data && valore > c.data) { err.textContent = "La data limite non può essere dopo la cena."; return; }
+    if (valore) c.scadenza = valore; else delete c.scadenza;
+    saveState();
+    if (window.db) {
+      try { await db.collection(FIRESTORE_COLLECTION).doc(`cena_${cenaId}`).update({ scadenza: valore ? valore : firebase.firestore.FieldValue.delete() }); }
+      catch (e) { console.error(e); alert("La scadenza è salvata nell'app, ma non sono riuscito ad aggiornare il link. Riprova tra poco."); }
+    }
+    scriviLog([{ ev: `🍽️ «${c.titolo || "Cena"}»: ${valore ? "iscrizioni fino al " + fmtDate(valore) : "scadenza delle iscrizioni tolta"}` }]);
+    closeModal();
+    renderSection();
+    toast(valore ? "Scadenza salvata" : "Scadenza tolta");
+  };
+  document.getElementById("sc-salva").addEventListener("click", () => applica(document.getElementById("sc-data").value));
+  const togli = document.getElementById("sc-togli");
+  if (togli) togli.addEventListener("click", () => applica(""));
+}
+
 // ---------- Pagina pubblica di conferma Cena (nome + numero persone, senza login) ----------
 async function renderCenaRisposta(cenaId) {
   document.body.innerHTML = `<div id="cena-risposta-root" style="max-width:420px; margin:0 auto; padding:24px 16px; font-family:inherit; text-align:center;"></div>`;
@@ -3430,16 +3664,18 @@ async function renderCenaRisposta(cenaId) {
     return;
   }
   const c = cenaDoc.data();
+  const chiusa = cenaChiusa(c.scadenza);
   const intestazione = `
     <div style="margin-bottom:18px;">
       <div style="font-weight:900; font-size:1.3rem; color:#1a6b3c;">🍽️ ${esc(c.titolo || "Cena")}</div>
       ${(c.data || c.ora || c.luogo) ? `<div style="color:#555; margin-top:4px;">${c.data ? fmtDate(c.data) : ""}${c.ora ? " ore " + esc(c.ora) : ""}${c.luogo ? " - " + esc(c.luogo) : ""}</div>` : ""}
+      ${c.scadenza ? `<div style="color:#b36b00; margin-top:8px; font-weight:700;">${chiusa ? "Iscrizioni chiuse (scadenza il " + fmtDate(c.scadenza) + ")" : "Iscrizioni aperte fino al " + fmtDate(c.scadenza)}</div>` : ""}
       ${c.testo ? `<div style="color:#333; margin-top:10px; white-space:pre-wrap; text-align:left; background:#f5f5f0; border-radius:8px; padding:10px;">${esc(c.testo)}</div>` : ""}
     </div>
     <div id="cr-elenco" style="text-align:left; background:#fff; border:1px solid #ddd; border-radius:10px; padding:10px; margin-bottom:18px;"></div>`;
 
   function renderElenco(risposte) {
-    const elenco = Object.values(risposte || {}).sort((a, b) => (a.nome || "").localeCompare(b.nome || ""));
+    const elenco = risposteCenaUniche(risposte);
     const totale = elenco.reduce((sum, r) => sum + (r.persone || 1), 0);
     const el = document.getElementById("cr-elenco");
     if (!el) return;
@@ -3460,7 +3696,9 @@ async function renderCenaRisposta(cenaId) {
   // Ogni conferma è una voce a sé (id nuovo ogni volta): così, se dallo stesso
   // telefono si conferma per più persone (es. un familiare aiuta un anziano
   // del gruppo), la seconda risposta si aggiunge senza cancellare la prima.
+  const messaggioChiuso = testo => `<div style="font-size:1.05rem; font-weight:700; color:#b36b00; padding-top:6px;">${esc(testo)}<div style="font-size:0.9rem; font-weight:400; color:#555; margin-top:6px;">Per informazioni rivolgiti al Direttivo del Gruppo.</div></div>`;
   const disegnaForm = () => {
+    if (chiusa) { root.innerHTML = `${intestazione}${messaggioChiuso("Le iscrizioni a questa cena sono chiuse.")}`; return; }
     root.innerHTML = `
       ${intestazione}
       <div class="form-group" style="text-align:left;"><label>Nome della persona</label><input type="text" id="cr-nome" placeholder="Nome e cognome" style="width:100%; padding:10px; font-size:1rem;"></div>
@@ -3477,7 +3715,7 @@ async function renderCenaRisposta(cenaId) {
     let n = 1;
     const num = document.getElementById("cr-numero");
     document.getElementById("cr-meno").addEventListener("click", () => { if (n > 1) { n--; num.textContent = n; } });
-    document.getElementById("cr-piu").addEventListener("click", () => { if (n < 20) { n++; num.textContent = n; } });
+    document.getElementById("cr-piu").addEventListener("click", () => { n++; num.textContent = n; });
     document.getElementById("cr-conferma").addEventListener("click", async () => {
       const nome = document.getElementById("cr-nome").value.trim();
       if (!nome) { document.getElementById("cr-msg").textContent = "Inserisci il nome."; return; }
@@ -3485,10 +3723,11 @@ async function renderCenaRisposta(cenaId) {
       btn.disabled = true;
       document.getElementById("cr-msg").textContent = "Invio in corso...";
       try {
-        const entryId = uid();
-        await db.collection(FIRESTORE_COLLECTION).doc(`cena_${cenaId}`).update({
-          [`risposte.${entryId}`]: { nome, persone: n, ts: new Date().toISOString() }
-        });
+        const esito = await scriviRispostaCena(cenaId, uid(), { nome, persone: n, ts: new Date().toISOString() }, {});
+        if (esito.errore) {
+          if (esito.chiuse) { root.innerHTML = `${intestazione}${messaggioChiuso(esito.errore)}`; return; }
+          btn.disabled = false; document.getElementById("cr-msg").textContent = esito.errore; return;
+        }
         scriviLog([{ ev: `🍽️ Risposta alla cena "${c.titolo || ""}": ${nome} (${n} ${n === 1 ? "persona" : "persone"})` }], "__pubblico__");
         root.innerHTML = `${intestazione}<div style="font-size:1.1rem; font-weight:700; color:#1a6b3c; padding-top:10px;">✅ Grazie! Confermate ${n} ${n === 1 ? "persona" : "persone"} per ${esc(nome)}.</div><button type="button" id="cr-altra" style="width:100%; margin-top:18px; padding:14px; font-size:1rem; font-weight:700; background:#eee; border:none; border-radius:12px;">➕ Conferma un'altra persona</button>`;
         document.getElementById("cr-altra").addEventListener("click", disegnaForm);

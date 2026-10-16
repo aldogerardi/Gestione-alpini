@@ -347,3 +347,21 @@ body.menu-aperto { overflow: hidden; }
 .tab-ben th, .tab-ben td { padding: 4px 3px; white-space: nowrap; }
 .tab-ben th:first-child, .tab-ben td:first-child { white-space: normal; text-align: left; }
 @media (max-width: 340px) { .tab-ben { font-size: 0.74rem; } .tab-ben th, .tab-ben td { padding: 4px 2px; } }
+
+/* Cena: iscrizione dall'app */
+.iscr { margin-top: 12px; padding: 12px; border-radius: 14px; border: 2px solid; }
+.iscr.nuova { background: #fff; border-color: #1a6b3c; }
+.iscr.fatto { background: #e3f4e8; border-color: #1a6b3c; }
+.iscr.passata { background: #f4f4f1; border-color: #e2e2dd; color: #9a9a94; font-weight: 600; text-align: center; }
+.iscr.info { background: #f8f3e4; border: 2px dashed #d8cdaa; color: #7a6d3a; font-size: .9rem; }
+.iscr-t { font-weight: 800; font-size: 1.02rem; margin-bottom: 8px; }
+.iscr-q { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.iscr-q > span { font-size: .92rem; color: #444; }
+.stp { display: flex; align-items: center; gap: 10px; flex: none; }
+.stp button { width: 42px; height: 42px; border-radius: 50%; border: 2px solid #1a6b3c; background: #fff; color: #1a6b3c; font-size: 1.4rem; font-weight: 800; line-height: 1; cursor: pointer; padding: 0; }
+.stp b { min-width: 26px; text-align: center; font-size: 1.25rem; }
+.iscr-ok { font-size: 1.08rem; font-weight: 800; color: #1a6b3c; margin-bottom: 10px; }
+.iscr-az { display: flex; gap: 8px; }
+.iscr-az .btn { flex: 1 1 0; padding: 8px 6px; font-size: .9rem; }
+.sg-riga { display: flex; align-items: center; gap: 10px; padding: 9px 6px; border-bottom: 1px solid #eee; cursor: pointer; }
+.sg-riga.sel { background: #e3f4e8; border-radius: 10px; font-weight: 800; }
