@@ -337,3 +337,13 @@ body.menu-aperto { overflow: hidden; }
   .social-riga a.btn { flex-direction: row; gap: 8px; padding: 11px 8px; font-size: 0.95rem; }
   .social-riga .logo-social, .social-riga .logo { width: 26px; height: 26px; }
 }
+
+/* Panettoni & C: coppie di tasti sempre affiancate, a mezza larghezza ciascuno */
+.ben-tasti { display: flex; gap: 8px; }
+.ben-tasti .btn { flex: 1 1 0; min-width: 0; padding: 7px 6px; font-size: 0.85rem; white-space: nowrap; text-align: center; }
+
+/* Panettoni & C: tabella Riepilogo che sta intera anche sugli schermi stretti */
+.tab-ben { font-size: 0.78rem; }
+.tab-ben th, .tab-ben td { padding: 4px 3px; white-space: nowrap; }
+.tab-ben th:first-child, .tab-ben td:first-child { white-space: normal; text-align: left; }
+@media (max-width: 340px) { .tab-ben { font-size: 0.74rem; } .tab-ben th, .tab-ben td { padding: 4px 2px; } }

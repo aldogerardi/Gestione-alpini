@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "8.06";
+const APP_VERSION = "8.07";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -4158,13 +4158,13 @@ function renderBenDettaglio(c) {
   const t = benTotali(c);
   const righeProd = (c.prodotti || []).map(p => {
     const pr = t.per[p.id];
-    const disp = pr.disponibili === null ? "-" : (pr.disponibili === 0 ? "<b style=\"color:#b33;\">esaurito</b>" : String(pr.disponibili));
+    const disp = pr.disponibili === null ? "-" : (pr.disponibili === 0 ? "<b style=\"color:#b33;\" title=\"esaurito\">0</b>" : String(pr.disponibili));
     return `
-    <tr><td>${esc(p.nome)}</td><td style="text-align:right;">${benEuro(p.prezzo)}</td><td style="text-align:right;">${pr.prenotati}</td>
+    <tr><td>${esc(p.nome)}</td><td style="text-align:right;">${benNum(p.prezzo).toFixed(2).replace(".", ",")}</td><td style="text-align:right;">${pr.prenotati}</td>
     <td style="text-align:right;">${pr.massimo > 0 ? pr.massimo : "-"}</td><td style="text-align:right;">${disp}</td>
     <td style="text-align:right;">${benNum(p.ricevuti) || "-"}</td><td style="text-align:right;">${pr.consegnati}</td></tr>`;
   }).join("");
-  const riga = (et, val, forte) => `<div style="display:flex; justify-content:space-between; padding:3px 0;${forte ? " font-weight:800; border-top:1px solid #ccc; margin-top:4px; padding-top:6px;" : ""}"><span>${et}</span><span>${benEuro(val)}</span></div>`;
+  const riga = (et, val, forte) => `<div style="display:flex; justify-content:space-between; padding:3px 0;${forte ? " font-weight:800; border-top:1px solid #ccc; margin-top:4px; padding-top:6px;" : ""}"><span>${et}</span><span style="white-space:nowrap;">${benEuro(val)}</span></div>`;
   return `
     <button type="button" class="btn secondary" data-ben="indietro" style="margin-bottom:10px;">← Tutte le campagne</button>
     <div class="section-title">🎁 ${esc(c.titolo)}</div>
@@ -4173,24 +4173,24 @@ function renderBenDettaglio(c) {
       <div class="form-group" style="margin-top:10px;"><label>Fase della campagna</label>
         <select id="ben-stato">${Object.keys(BEN_STATI).map(k => `<option value="${k}" ${c.stato === k ? "selected" : ""}>${BEN_STATI[k]}</option>`).join("")}</select>
       </div>
-      <div style="display:flex; gap:8px; flex-wrap:wrap;">
-        <button type="button" class="btn secondary" data-ben="modifica-campagna" data-id="${c.id}" style="padding:6px 12px;">✏️ Modifica</button>
-        <button type="button" class="btn danger" data-ben="elimina-campagna" data-id="${c.id}" style="padding:6px 12px;">🗑️ Elimina campagna</button>
+      <div class="ben-tasti">
+        <button type="button" class="btn secondary" data-ben="modifica-campagna" data-id="${c.id}" title="Modifica la campagna">✏️ Modifica</button>
+        <button type="button" class="btn danger" data-ben="elimina-campagna" data-id="${c.id}" title="Elimina la campagna">🗑️ Elimina</button>
       </div>
     </div>
     <div class="card">
       <div style="font-weight:800; margin-bottom:8px;">Riepilogo</div>
-      <div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse; font-size:0.82rem;">
-        <thead><tr style="background:#f7f3e8;"><th style="text-align:left; padding:4px;">Prodotto</th><th style="text-align:right;">Prezzo</th><th style="text-align:right;">Prenot.</th><th style="text-align:right;">Max</th><th style="text-align:right;">Disp.</th><th style="text-align:right;">Ricev.</th><th style="text-align:right;">Conseg.</th></tr></thead>
+      <div style="overflow-x:auto;"><table class="tab-ben" style="width:100%; border-collapse:collapse;">
+        <thead><tr style="background:#f7f3e8;"><th style="text-align:left;">Prodotto</th><th style="text-align:right;">€</th><th style="text-align:right;">Pren.</th><th style="text-align:right;">Max</th><th style="text-align:right;">Disp.</th><th style="text-align:right;">Ric.</th><th style="text-align:right;">Cons.</th></tr></thead>
         <tbody>${righeProd}</tbody></table></div>
       <div style="margin-top:10px; font-size:0.9rem;">
         ${riga("Totale delle prenotazioni", t.dovuto)}${riga("Incassato", t.incassato)}${t.inPiu > 0.004 ? riga("&nbsp;&nbsp;di cui in più del dovuto", t.inPiu) : ""}${riga("Ancora da incassare", t.daIncassare)}
         ${riga("Costo della merce", t.costo)}${riga("Ricavato per la beneficenza", t.ricavato, true)}
         ${c.versatoImporto ? riga("Già versato" + (c.destinazione ? " a " + esc(c.destinazione) : ""), c.versatoImporto) : ""}
       </div>
-      <div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;">
-        <button type="button" class="btn" data-ben="rendiconto" data-id="${c.id}" style="padding:8px 12px;">📄 Rendiconto</button>
-        <button type="button" class="btn secondary" data-ben="elenco" data-id="${c.id}" style="padding:8px 12px;">📋 Elenco consegne</button>
+      <div class="ben-tasti" style="margin-top:12px;">
+        <button type="button" class="btn" data-ben="rendiconto" data-id="${c.id}" title="Rendiconto della campagna">📄 Rendiconto</button>
+        <button type="button" class="btn secondary" data-ben="elenco" data-id="${c.id}" title="Elenco consegne">📋 Consegne</button>
       </div>
     </div>
     <button type="button" class="btn block" data-ben="nuova-pren" data-id="${c.id}" style="margin-bottom:10px;">➕ Nuova prenotazione</button>
