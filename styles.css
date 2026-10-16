@@ -365,3 +365,12 @@ body.menu-aperto { overflow: hidden; }
 .iscr-az .btn { flex: 1 1 0; padding: 8px 6px; font-size: .9rem; }
 .sg-riga { display: flex; align-items: center; gap: 10px; padding: 9px 6px; border-bottom: 1px solid #eee; cursor: pointer; }
 .sg-riga.sel { background: #e3f4e8; border-radius: 10px; font-weight: 800; }
+
+/* Pallini delle novità: rosso (soci) e azzurro (Direttivo e Admin) */
+#navbar .pall { position: absolute; width: 11px; height: 11px; border-radius: 50%; border: 2px solid #263a28; box-sizing: content-box; pointer-events: none; z-index: 2; }
+.pall.rosso, .pall-v.rosso { background: #e53935; }
+.pall.azzurro, .pall-v.azzurro { background: #29a8e0; }
+.pall-v { display: inline-block; width: 13px; height: 13px; border-radius: 50%; margin-left: auto; flex: none; }
+.menu-voce { display: flex; align-items: center; }
+.chip-az { display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; padding: 3px 10px; border-radius: 12px; background: #e1f3fb; border: 1.5px solid #29a8e0; color: #17709a; font-size: .78rem; font-weight: 700; }
+.chip-az i { width: 10px; height: 10px; border-radius: 50%; background: #29a8e0; display: inline-block; }

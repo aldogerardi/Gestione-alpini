@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "8.27";
+const APP_VERSION = "8.47";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -343,6 +343,7 @@ function initFirebaseSync() {
     localStorage.setItem("gestione_gruppo_data", JSON.stringify(state));
     updateTopbar();
     renderSection();
+    controllaPallinoCena();
   }, err => console.error("Errore sincronizzazione Firestore", err));
 }
 
@@ -474,7 +475,7 @@ const LOG_CAMPI_NOMI = {
   codiceFiscale: "codice fiscale", utenti: "utenti/password", moduloSedeUrl: "modulo sede", moduloSedeNome: "modulo sede",
   testoPreghiera: "testo preghiera", testoCanto: "testo canto", testoAuguriCompleanno: "testo auguri",
   quotaBollino: "quota bollino", quotaNazionale: "quota nazionale", appName: "nome app", incaricoFeste: "incarico feste",
-  tagliaVestiario: "taglia vestiario", brigataAlpina: "brigata alpina", audioUrl: "file audio", audioNome: "file audio", audioBytes: "file audio", categoria: "categoria", testo: "testo", visibilita: "chi lo vede", accessoApp: "accesso app", accessoLivello: "livello accesso", chiaviSede: "chiavi sede", dataIscrizione: "data iscrizione", haccpDataCorso: "data corso HACCP", haccpDataScadenza: "scadenza HACCP"
+  tagliaVestiario: "taglia vestiario", brigataAlpina: "brigata alpina", aggiornatoDaSocio: "scheda aggiornata dal socio", aggiornato: "aggiornato", daSocio: "ordine del socio", audioUrl: "file audio", audioNome: "file audio", audioBytes: "file audio", categoria: "categoria", testo: "testo", visibilita: "chi lo vede", accessoApp: "accesso app", accessoLivello: "livello accesso", chiaviSede: "chiavi sede", dataIscrizione: "data iscrizione", haccpDataCorso: "data corso HACCP", haccpDataScadenza: "scadenza HACCP"
 };
 
 function nomeSocioPerLog(id) {
@@ -690,6 +691,8 @@ function setActiveNav() {
 
 function renderSection() {
   setActiveNav();
+  segnaSezioneVista();
+  aggiornaPallini();
   const content = document.getElementById("app-content");
   if (currentSection === "home") {
     content.innerHTML = renderHome();
@@ -1007,6 +1010,7 @@ function renderAnagraficaBase() {
             </div>
           </div>
           <div class="badge-row">${badges.join("")}</div>
+          ${chipAggiornatoDalSocio(s)}
         </div>`;
     }).join("");
   }
@@ -3329,7 +3333,7 @@ async function creaCena() {
   if (scadenza && scadenza > data) { alert("La data limite per iscriversi non può essere dopo la cena."); return; }
   const id = uid();
   const ora = h ? `${h}:${m}` : "";
-  const nuova = { id, titolo, data, ora, luogo, testo };
+  const nuova = { id, titolo, data, ora, luogo, testo, creato: new Date().toISOString() };
   if (scadenza) nuova.scadenza = scadenza;
   state.cene.push(nuova);
   saveState();
@@ -4796,9 +4800,9 @@ function benFormPrenotazione(campId, prenId) {
           const rr = cc.prenotazioni.find(x => x.id === prenId);
           if (!rr) return { errore: "Prenotazione non trovata." };
           if (!gestore && (rr.socioId !== mioId || benHaIncasso(cc, rr) || rr.consegnato)) return { errore: "Questa prenotazione non si può più modificare: rivolgiti al Direttivo." };
-          Object.assign(rr, { nome, q, note });
+          Object.assign(rr, { nome, q, note, aggiornato: new Date().toISOString(), daSocio: !gestore });
         } else {
-          cc.prenotazioni.push({ id: uid(), nome, socioId: gestore ? "" : (mioId || ""), prenotatoDa: gestore ? "" : chi, q, note, pagato: false, consegnato: false, creato: new Date().toISOString() });
+          cc.prenotazioni.push({ id: uid(), nome, socioId: gestore ? "" : (mioId || ""), prenotatoDa: gestore ? "" : chi, q, note, pagato: false, consegnato: false, creato: new Date().toISOString(), aggiornato: new Date().toISOString(), daSocio: !gestore });
         }
         return {};
       }, `🎁 «${c.titolo}»: ${prenId ? "modificata la prenotazione di" : "nuova prenotazione di"} ${nome} (${pezzi} ${pezzi === 1 ? "pezzo" : "pezzi"})`);
@@ -6533,7 +6537,7 @@ async function salvaMiaSchedaRemoto(socioId, campi) {
     const socios = (snap.data().socios || []).slice();
     const idx = socios.findIndex(s => s.id === socioId);
     if (idx < 0) throw new Error("socio non trovato");
-    socios[idx] = Object.assign({}, socios[idx], campi);
+    socios[idx] = Object.assign({}, socios[idx], campi, { aggiornatoDaSocio: new Date().toISOString() });
     tx.update(ref, { socios });
   }), 15000);
 }
@@ -6719,6 +6723,139 @@ function sezionePermessa(sezione) {
   return true;
 }
 
+// ---------- Pallini delle novità ----------
+// Rosso (ai soci): c'è una pubblicazione nuova nella sezione, o la sezione è nuova.
+// Azzurro (a Direttivo e Admin): un socio ha fatto qualcosa (scheda aggiornata, ordine, iscrizione alla cena).
+// Si ragiona per telefono: ogni telefono si ricorda quando è stata aperta l'ultima volta ogni sezione.
+const PALLINI_SEZIONI_ROSSO = ["bacheca", "iniziative", "cena", "presenza-adunata", "verbali", "beneficenza", "manuali"];
+const PALLINI_SEZIONI_AZZURRO = ["anagrafica", "beneficenza", "cena"];
+let pallinoCenaTs = "";        // ultima iscrizione alla cena fatta da un socio (letta dai documenti delle cene)
+let vistoPrima = {};           // com'era "l'ultima apertura" prima di entrare nella sezione (serve per le etichette azzurre)
+let ultimaSezioneVista = "";
+let pallinoCenaTimer = null;
+
+function chiaveVisto() { return "gestione_gruppo_visto_" + (currentUser || "anon"); }
+function leggiVisto() {
+  if (!currentUser) return null;
+  try { return JSON.parse(localStorage.getItem(chiaveVisto()) || "null"); } catch (e) { return null; }
+}
+function salvaVisto(v) { try { localStorage.setItem(chiaveVisto(), JSON.stringify(v)); } catch (e) { /* senza memoria locale niente pallini, ma l'app funziona */ } }
+// Primo avvio su questo telefono per questo utente: parte tutto pulito, niente pallini.
+function inizializzaVisto() {
+  const adesso = new Date().toISOString();
+  const tutte = SECTION_ORDER.filter(s => sezionePermessa(s));
+  const v = { sez: {}, conosciute: tutte.slice(), creato: adesso };
+  tutte.forEach(s => { v.sez[s] = adesso; });
+  salvaVisto(v);
+  return v;
+}
+
+function ultimoTesto(lista) { return lista.reduce((m, x) => (x && x > m ? x : m), ""); }
+// Data dell'ultima cosa pubblicata dal Direttivo/Admin in una sezione (per il rosso dei soci).
+function ultimaPubblicazione(sez) {
+  switch (sez) {
+    case "bacheca": return ultimoTesto((state.bacheca || []).map(x => x.creato));
+    case "iniziative": return ultimoTesto((state.iniziativeStorico || []).map(x => x.creato));
+    case "cena": return ultimoTesto((state.cene || []).map(x => x.creato));
+    case "presenza-adunata": return ultimoTesto((state.adunate || []).map(x => x.creato));
+    case "verbali": return ultimoTesto((state.verbali || []).map(x => x.creato));
+    case "beneficenza": return ultimoTesto((state.campagneBeneficenza || []).filter(c => c.stato === "aperta").map(x => x.creato));
+    case "manuali": return ultimoTesto((state.manuali || []).filter(m => m.visibilita === "tutti").map(x => x.caricato));
+  }
+  return "";
+}
+// Data dell'ultima cosa fatta da un socio in una sezione (per l'azzurro di chi gestisce).
+function ultimaAzioneSoci(sez) {
+  switch (sez) {
+    case "anagrafica": return ultimoTesto((state.socios || []).map(s => s.aggiornatoDaSocio));
+    case "beneficenza": return ultimoTesto((state.campagneBeneficenza || []).reduce((acc, c) => acc.concat((c.prenotazioni || []).filter(r => r.daSocio).map(r => r.aggiornato || r.creato)), []));
+    case "cena": return pallinoCenaTs;
+  }
+  return "";
+}
+
+// "rosso", "azzurro" oppure null.
+function haPallino(sez) {
+  const v = leggiVisto();
+  if (!v || !sezionePermessa(sez)) return null;
+  const visto = (v.sez && v.sez[sez]) || "";
+  if (currentRole === "socio") {
+    if (!(v.conosciute || []).includes(sez)) return "rosso";           // sezione nuova mai aperta su questo telefono
+    if (!PALLINI_SEZIONI_ROSSO.includes(sez)) return null;
+    const u = ultimaPubblicazione(sez);
+    return u && u > visto ? "rosso" : null;
+  }
+  if (!PALLINI_SEZIONI_AZZURRO.includes(sez)) return null;
+  const u = ultimaAzioneSoci(sez);
+  return u && u > visto ? "azzurro" : null;
+}
+function pallinoVoce(sez) { const c = haPallino(sez); return c ? `<i class="pall-v ${c}" aria-hidden="true" title="${c === "rosso" ? "Novità" : "Qualcuno ha fatto qualcosa"}"></i>` : ""; }
+
+// Quando si apre una sezione, la si segna come vista (e il pallino sparisce).
+function segnaSezioneVista() {
+  if (!currentUser || !currentSection) return;
+  const sez = currentSection;
+  const v = leggiVisto() || inizializzaVisto();
+  v.sez = v.sez || {}; v.conosciute = v.conosciute || [];
+  if (ultimaSezioneVista !== sez) { vistoPrima[sez] = v.sez[sez] || ""; ultimaSezioneVista = sez; }
+  // si segna la più recente tra "adesso" e l'ultima pubblicazione: un telefono con l'orologio indietro non si lascia pallini fantasma
+  const adesso = new Date().toISOString();
+  const u = currentRole === "socio" ? ultimaPubblicazione(sez) : ultimaAzioneSoci(sez);
+  v.sez[sez] = u && u > adesso ? u : adesso;
+  if (!v.conosciute.includes(sez)) v.conosciute.push(sez);
+  salvaVisto(v);
+}
+
+// Disegna i pallini sulla barra in basso (fuori dai tasti, così non sbiadiscono) e sul tasto Menù.
+function aggiornaPallini() {
+  const barra = document.getElementById("navbar");
+  if (!barra) return;
+  barra.querySelectorAll(".pall").forEach(e => e.remove());
+  if (!currentUser) return;
+  const mappa = {};
+  SECTION_ORDER.forEach(s => { const c = haPallino(s); if (c) mappa[s] = c; });
+  const nr = barra.getBoundingClientRect();
+  const metti = (el, colore) => {
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    if (!r.width) return;
+    const i = document.createElement("i");
+    i.className = "pall " + colore; i.setAttribute("aria-hidden", "true");
+    i.style.left = (r.left - nr.left + r.width / 2 + 9) + "px"; i.style.top = (r.top - nr.top + 7) + "px";
+    barra.appendChild(i);
+  };
+  const nellaBarra = new Set();
+  barra.querySelectorAll(".nav-btn[data-section]").forEach(b => { nellaBarra.add(b.dataset.section); if (mappa[b.dataset.section]) metti(b, mappa[b.dataset.section]); });
+  const dentro = Object.keys(mappa).filter(s => !nellaBarra.has(s));   // pallini su sezioni che stanno nel Menù
+  if (dentro.length) metti(document.getElementById("menu-btn"), dentro.some(s => mappa[s] === "rosso") ? "rosso" : "azzurro");
+}
+
+// Etichetta azzurra sulla scheda di un socio che ha aggiornato i suoi dati dopo l'ultima volta che chi gestisce ha aperto l'Anagrafica.
+function chipAggiornatoDalSocio(s) {
+  if (currentRole === "socio" || !s.aggiornatoDaSocio) return "";
+  if (s.aggiornatoDaSocio <= (vistoPrima.anagrafica || "")) return "";
+  return `<div><span class="chip-az"><i></i>Scheda aggiornata dal socio · ${s.aggiornatoDaSocio.slice(8, 10)}/${s.aggiornatoDaSocio.slice(5, 7)}</span></div>`;
+}
+
+// Iscrizioni alla cena fatte da soci (dall'app o dal link), lette dai documenti delle cene recenti. Solo per chi gestisce.
+function controllaPallinoCena() {
+  if (!window.db || !currentUser || currentRole === "socio") return;
+  clearTimeout(pallinoCenaTimer);
+  pallinoCenaTimer = setTimeout(async () => {
+    try {
+      const limite = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+      const cene = (state.cene || []).filter(c => !c.data || c.data >= limite);
+      const docs = await Promise.all(cene.map(c => db.collection(FIRESTORE_COLLECTION).doc(`cena_${c.id}`).get().catch(() => null)));
+      let max = "";
+      docs.forEach(d => { if (d && d.exists) Object.values(d.data().risposte || {}).forEach(r => { if (r && r.da !== "direttivo" && r.ts && r.ts > max) max = r.ts; }); });
+      pallinoCenaTs = max;
+      aggiornaPallini();
+      const aperto = document.getElementById("menu-overlay") && document.getElementById("menu-overlay").classList.contains("open");
+      if (aperto) renderMenuDrawer();
+    } catch (e) { console.warn("Pallino della cena non calcolato", e); }
+  }, 500);
+}
+
 function renderMenuDrawer() {
   const drawer = document.getElementById("menu-drawer");
   if (!drawer) return;
@@ -6727,7 +6864,7 @@ function renderMenuDrawer() {
     ${g.voci.filter(([sez]) => !SEZIONI_NASCOSTE_SE_NON_PERMESSE.includes(sez) || sezionePermessa(sez)).map(([sez, icona, label]) => {
       const permessa = sezionePermessa(sez);
       return `<button type="button" class="menu-voce${sez === currentSection ? " attiva" : ""}" data-menu-sezione="${sez}"${permessa ? "" : ' disabled aria-disabled="true"'}>
-        <span class="mv-ic">${icona}</span><span class="mv-lb">${label}</span>${permessa ? "" : '<span class="mv-lock" title="Non disponibile per il tuo profilo">🔒</span>'}
+        <span class="mv-ic">${icona}</span><span class="mv-lb">${label}</span>${pallinoVoce(sez)}${permessa ? "" : '<span class="mv-lock" title="Non disponibile per il tuo profilo">🔒</span>'}
       </button>`;
     }).join("")}
   `).join("");
@@ -6743,7 +6880,7 @@ function renderMenuDrawer() {
     <div class="menu-gruppo">Profilo</div>
     ${currentUser && currentUser.startsWith("socio:") ? `<button type="button" class="menu-voce" data-menu-azione="scheda"><span class="mv-ic">👤</span><span class="mv-lb">La mia scheda</span></button>
     <button type="button" class="menu-voce" data-menu-azione="password"><span class="mv-ic">🔑</span><span class="mv-lb">Cambia password</span></button>` : ""}
-    <button type="button" class="menu-voce${currentSection === "manuali" ? " attiva" : ""}" data-menu-sezione="manuali"><span class="mv-ic">📘</span><span class="mv-lb">Manuali</span></button>
+    <button type="button" class="menu-voce${currentSection === "manuali" ? " attiva" : ""}" data-menu-sezione="manuali"><span class="mv-ic">📘</span><span class="mv-lb">Manuali</span>${pallinoVoce("manuali")}</button>
     <button type="button" class="menu-voce" data-menu-azione="guide"><span class="mv-ic">🎬</span><span class="mv-lb">Guide video</span></button>
     <button type="button" class="menu-voce" data-menu-azione="esci"><span class="mv-ic">🚪</span><span class="mv-lb">Esci</span></button>
     <div class="menu-foot">🔒 = non disponibile per il tuo profilo · v${APP_VERSION}</div>
@@ -6882,6 +7019,7 @@ function confermaCambiaUtente() {
 
 function startApp() {
   if (riallineaAccessoPersonale()) return;
+  vistoPrima = {}; ultimaSezioneVista = ""; pallinoCenaTs = "";
   logAggiornaBaseline();
   logAccesso(loginAppenaEffettuato);
   loginAppenaEffettuato = false;
@@ -6902,6 +7040,9 @@ function startApp() {
   renderSection();
   initFirebaseSync();
   setTimeout(controllaPasswordIniziale, 1200);
+  window.addEventListener("resize", aggiornaPallini);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") controllaPallinoCena(); });
+  controllaPallinoCena();
 
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).then(reg => {
