@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "8.47";
+const APP_VERSION = "8.67";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -304,6 +304,7 @@ function applyStateFields(source) {
   state.campagneBeneficenza = source.campagneBeneficenza || [];
   state.canzoni = source.canzoni || [];
   state.manuali = source.manuali || [];
+  state.casoncellata = source.casoncellata || [];
 }
 
 const SYNC_STATO = { ok: null, quando: null, errore: "", ricevuto: null, daCache: false };
@@ -369,7 +370,7 @@ const FASCIA_LABEL = { pranzo: "Pranzo", cena: "Cena", giornata: "Giornata inter
 const FASCIA_ORDER = ["pranzo", "cena", "giornata"];
 
 const PLACEHOLDER_SECTIONS = {
-  "conv-casoncellata": { title: "Conv. Casoncellata", icon: "🥟", desc: "Convocazioni per la Casoncellata." },
+  "conv-casoncellata": { title: "Casoncellata", icon: "🥟", desc: "Disponibilità dei soci per la Casoncellata." },
   "presenza-adunata": { title: "Presenza Adunata", icon: "🎖️", desc: "Registro presenze soci alle adunate." },
   "cassa": { title: "Cassa", icon: "💰", desc: "Qui gestirai entrate e uscite del gruppo." }
 };
@@ -421,6 +422,7 @@ let state = {
   campagneBeneficenza: [],
   canzoni: [],
   manuali: [],
+  casoncellata: [],
   meta: { ultimaModifica: null, ultimoImport: null }
 };
 let bollinoAnno = new Date().getFullYear();
@@ -475,7 +477,7 @@ const LOG_CAMPI_NOMI = {
   codiceFiscale: "codice fiscale", utenti: "utenti/password", moduloSedeUrl: "modulo sede", moduloSedeNome: "modulo sede",
   testoPreghiera: "testo preghiera", testoCanto: "testo canto", testoAuguriCompleanno: "testo auguri",
   quotaBollino: "quota bollino", quotaNazionale: "quota nazionale", appName: "nome app", incaricoFeste: "incarico feste",
-  tagliaVestiario: "taglia vestiario", brigataAlpina: "brigata alpina", aggiornatoDaSocio: "scheda aggiornata dal socio", aggiornato: "aggiornato", daSocio: "ordine del socio", audioUrl: "file audio", audioNome: "file audio", audioBytes: "file audio", categoria: "categoria", testo: "testo", visibilita: "chi lo vede", accessoApp: "accesso app", accessoLivello: "livello accesso", chiaviSede: "chiavi sede", dataIscrizione: "data iscrizione", haccpDataCorso: "data corso HACCP", haccpDataScadenza: "scadenza HACCP"
+  tagliaVestiario: "taglia vestiario", brigataAlpina: "brigata alpina", aggiornatoDaSocio: "scheda aggiornata dal socio", aperta: "richiesta aperta", sabato: "data del sabato", aggiornato: "aggiornato", daSocio: "ordine del socio", audioUrl: "file audio", audioNome: "file audio", audioBytes: "file audio", categoria: "categoria", testo: "testo", visibilita: "chi lo vede", accessoApp: "accesso app", accessoLivello: "livello accesso", chiaviSede: "chiavi sede", dataIscrizione: "data iscrizione", haccpDataCorso: "data corso HACCP", haccpDataScadenza: "scadenza HACCP"
 };
 
 function nomeSocioPerLog(id) {
@@ -496,6 +498,7 @@ const LOG_TRACK = [
   { id: "archivioBui", nome: "Archivio BUI", get: st => st.archivioBui, label: v => v.titolo },
   { id: "canzoni", nome: "Canzoni", get: st => st.canzoni, label: c => c.titolo },
   { id: "manuali", nome: "Manuali", get: st => st.manuali, label: m => m.titolo },
+  { id: "casoncellata", nome: "Casoncellata", get: st => st.casoncellata, label: e => "Casoncellata " + String(e.sabato || "").slice(0, 4) },
   { id: "bollino", nome: "Bollino", get: st => st.pagamentiBollino, label: p => `${nomeSocioPerLog(p.socioId)} ${p.anno || ""}`.trim() },
   { id: "convocazioni", nome: "Consiglio (convocazione)", get: st => (st.consiglio || {}).storico, label: c => c.data || "" },
   { id: "gruppoInfo", nome: "Home (dati del Gruppo)", obj: true, get: st => st.gruppoInfo },
@@ -747,6 +750,9 @@ function renderSection() {
   } else if (currentSection === "manuali") {
     content.innerHTML = renderManuali();
     attachManualiEvents();
+  } else if (currentSection === "conv-casoncellata") {
+    content.innerHTML = renderCasoncellata();
+    attachCasoncellataEvents();
   } else if (currentSection === "beneficenza") {
     content.innerHTML = renderBeneficenza();
     attachBeneficenzaEvents();
@@ -2751,7 +2757,7 @@ function openSettings() {
   const bloccoGestioneUtenti = ridotto ? "" : `
     <div class="settings-block">
       <h3>🔑 Gestione utenti</h3>
-      <div style="font-size:0.78rem; color:#666; margin-bottom:10px;">Ogni utente può avere una password (lasciala vuota per entrare senza password, come oggi). <b>Admin</b>: accesso completo, incluse Impostazioni avanzate (Gestione utenti, Backup/Ripristino, Zona pericolosa). <b>Direttivo</b>: accesso completo a tutte le sezioni operative, ma Impostazioni ridotte (senza Gestione utenti, Backup/Ripristino, Zona pericolosa). <b>Socio</b>: vede solo Home, Bacheca, Preghiera e Canto, Cena, Presenza Adunata, Attività, Panettoni &amp; C (prenotazione dei prodotti), Manuali (solo quello dei Soci), Verbali Consiglio (solo consultazione) e Prenotaz. Sede (quest'ultima con modulo, avviso, calendario e richieste in sola visualizzazione, senza poter confermare) — usalo per una password unica da dare a tutti i soci.</div>
+      <div style="font-size:0.78rem; color:#666; margin-bottom:10px;">Ogni utente può avere una password (lasciala vuota per entrare senza password, come oggi). <b>Admin</b>: accesso completo, incluse Impostazioni avanzate (Gestione utenti, Backup/Ripristino, Zona pericolosa). <b>Direttivo</b>: accesso completo a tutte le sezioni operative, ma Impostazioni ridotte (senza Gestione utenti, Backup/Ripristino, Zona pericolosa). <b>Socio</b>: vede solo Home, Bacheca, Preghiera e Canto, Cena, Presenza Adunata, Attività, Panettoni &amp; C (prenotazione dei prodotti), Casoncellata (disponibilità), Manuali (solo quello dei Soci), Verbali Consiglio (solo consultazione) e Prenotaz. Sede (quest'ultima con modulo, avviso, calendario e richieste in sola visualizzazione, senza poter confermare) — usalo per una password unica da dare a tutti i soci.</div>
       <div id="utenti-lista">
         ${(state.settings.utenti || []).map((u, idx) => `
           <div class="card" data-utente-idx="${idx}" style="padding:10px; margin-bottom:8px;">
@@ -5253,6 +5259,242 @@ function controlloAssegna() {
   renderSection();
 }
 
+// ---------- Casoncellata: disponibilità dei soci ----------
+const CASO_VOCI = [
+  { k: "ven", giorno: -1, lungo: "Preparativi", corto: "Prep. ven", breve: "Ven" },
+  { k: "sabP", giorno: 0, lungo: "Sabato pranzo", corto: "Sab pranzo", breve: "Sab pr." },
+  { k: "sabC", giorno: 0, lungo: "Sabato cena", corto: "Sab cena", breve: "Sab ce." },
+  { k: "domP", giorno: 1, lungo: "Domenica pranzo", corto: "Dom pranzo", breve: "Dom pr." },
+  { k: "domC", giorno: 1, lungo: "Domenica cena", corto: "Dom cena", breve: "Dom ce." },
+];
+const CASO_GIORNI = ["domenica", "lunedì", "martedì", "mercoledì", "giovedì", "venerdì", "sabato"];
+const CASO_MESI = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre"];
+
+function casoData(sabatoISO, delta) { const [a, m, g] = String(sabatoISO).split("-").map(Number); return new Date(a, m - 1, g + delta, 12); }
+function casoGiornoTesto(sabatoISO, delta) { const d = casoData(sabatoISO, delta); return `${CASO_GIORNI[d.getDay()]} ${d.getDate()} ${CASO_MESI[d.getMonth()]}`; }
+function casoPeriodoTesto(ed) {
+  const s = casoData(ed.sabato, 0), d = casoData(ed.sabato, 1);
+  return s.getMonth() === d.getMonth() ? `sabato ${s.getDate()} e domenica ${d.getDate()} ${CASO_MESI[d.getMonth()]} ${d.getFullYear()}`
+    : `sabato ${s.getDate()} ${CASO_MESI[s.getMonth()]} e domenica ${d.getDate()} ${CASO_MESI[d.getMonth()]} ${d.getFullYear()}`;
+}
+function casoTitolo(ed) { return `Casoncellata ${String(ed.sabato).slice(0, 4)}`; }
+// La richiesta resta aperta finché il Direttivo non la chiude, e comunque non oltre la domenica della Casoncellata.
+function casoScaduta(ed) { return casoData(ed.sabato, 1).getTime() + 12 * 3600 * 1000 < Date.now(); }
+function casoAperta(ed) { return !!ed && ed.aperta !== false && !casoScaduta(ed); }
+function casoRiassunto(r) { const v = CASO_VOCI.filter(x => r && r[x.k]).map(x => x.lungo); return v.length ? v.join(", ") : "non sono disponibile"; }
+
+function scaricaTesto(nome, testo, tipo) {
+  const blob = new Blob(["\ufeff" + testo], { type: tipo || "text/plain" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = nome;
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1500);
+}
+
+// Le risposte stanno in un documento a parte (come le cene): tanti soci possono rispondere insieme senza sovrascriversi.
+async function scriviRispostaCaso(edId, socioId, valore) {
+  if (!window.db) return { errore: "Non sono collegato: controlla la connessione e riprova." };
+  const ref = db.collection(FIRESTORE_COLLECTION).doc(`casoncellata_${edId}`);
+  let esito = {};
+  try {
+    await conTimeout(db.runTransaction(async tx => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) { esito = { errore: "Questa richiesta non esiste più." }; return; }
+      if (snap.data().chiusa) { esito = { errore: "La richiesta di disponibilità è chiusa.", chiusa: true }; return; }
+      tx.update(ref, { [`risposte.socio_${socioId}`]: valore });
+    }), 15000);
+  } catch (err) { console.error(err); return { errore: "Non sono riuscito a salvare: controlla la connessione e riprova." }; }
+  return esito;
+}
+async function leggiDocCaso(edId) {
+  if (!window.db) return null;
+  try { const d = await db.collection(FIRESTORE_COLLECTION).doc(`casoncellata_${edId}`).get(); return d.exists ? d.data() : null; } catch (e) { console.error(e); return null; }
+}
+
+function renderCasoncellata() {
+  const gestore = currentRole !== "socio";
+  const tutte = [...(state.casoncellata || [])].sort((x, y) => (y.sabato || "").localeCompare(x.sabato || ""));
+  if (!gestore) {
+    const ed = tutte.find(e => !casoScaduta(e));   // aperta, oppure chiusa dal Direttivo ma non ancora svolta: il socio rivede la sua risposta
+    return `<div id="caso-root">
+      <div class="section-title">🥟 Casoncellata</div>
+      ${ed ? `<div class="card-sub" style="margin-bottom:12px;">${esc(casoTitolo(ed))} · ${esc(casoPeriodoTesto(ed))}</div><div data-caso-form="${ed.id}" class="card-sub">Caricamento...</div>`
+           : `<div class="card"><div class="card-sub">Al momento non c'è nessuna richiesta di disponibilità per la Casoncellata.</div></div>`}
+    </div>`;
+  }
+  return `<div id="caso-root">
+    <div class="section-title">🥟 Casoncellata</div>
+    <div class="card-sub" style="margin-bottom:12px;">Richiesta di disponibilità ai soci: preparativi del venerdì, pranzo e cena del sabato e della domenica.</div>
+    <div class="card">
+      <div style="font-weight:800; margin-bottom:8px;">Nuova richiesta</div>
+      <div class="form-group"><label>Sabato della Casoncellata</label><input type="date" id="caso-sabato"></div>
+      <div class="card-sub" style="margin-bottom:8px;">Venerdì e domenica si ricavano dal sabato.</div>
+      <button type="button" class="btn block" data-caso="crea">➕ Apri la richiesta di disponibilità</button>
+    </div>
+    ${tutte.length ? tutte.map(ed => `
+      <div class="card">
+        <div style="display:flex; justify-content:space-between; gap:8px; align-items:flex-start;">
+          <div><div style="font-weight:800;">${esc(casoTitolo(ed))}</div><div class="card-sub">${esc(casoPeriodoTesto(ed))}</div></div>
+          <span class="stato ${casoAperta(ed) ? "ok" : "no"}">${casoAperta(ed) ? "Richiesta aperta" : "Chiusa"}</span>
+        </div>
+        <div class="card-sub" data-caso-conta="${ed.id}" style="margin-top:8px;">Caricamento risposte...</div>
+        <div class="ben-tasti" style="margin-top:10px;">
+          <button type="button" class="btn" data-caso="report" data-id="${ed.id}">📊 Report</button>
+          <button type="button" class="btn secondary" data-caso="${ed.aperta === false ? "riapri" : "chiudi"}" data-id="${ed.id}">${ed.aperta === false ? "Riapri" : "Chiudi"}</button>
+          <button type="button" class="btn danger" data-caso="elimina" data-id="${ed.id}" title="Elimina la richiesta">🗑️</button>
+        </div>
+      </div>`).join("") : `<div class="card-sub">Nessuna richiesta ancora creata.</div>`}
+  </div>`;
+}
+
+function contaCaso(dati) {
+  const r = Object.values((dati && dati.risposte) || {});
+  const tot = { risposto: r.length };
+  CASO_VOCI.forEach(v => { tot[v.k] = r.filter(x => x && x[v.k]).length; });
+  return tot;
+}
+
+function attachCasoncellataEvents() {
+  const root = document.getElementById("caso-root");
+  if (!root) return;
+  root.addEventListener("click", e => {
+    const el = e.target.closest("[data-caso]");
+    if (!el) return;
+    const az = el.dataset.caso;
+    if (az === "crea") creaRichiestaCaso();
+    else if (az === "report") apriReportCaso(el.dataset.id);
+    else if (az === "chiudi") impostaApertaCaso(el.dataset.id, false);
+    else if (az === "riapri") impostaApertaCaso(el.dataset.id, true);
+    else if (az === "elimina") eliminaRichiestaCaso(el.dataset.id);
+  });
+  root.querySelectorAll("[data-caso-form]").forEach(async el => {
+    const ed = (state.casoncellata || []).find(x => x.id === el.dataset.casoForm);
+    if (ed) disegnaFormCaso(ed, el, await leggiDocCaso(ed.id));
+  });
+  root.querySelectorAll("[data-caso-conta]").forEach(async el => {
+    const dati = await leggiDocCaso(el.dataset.casoConta);
+    if (!dati) { el.textContent = "Risposte non disponibili (controlla la connessione)."; return; }
+    const t = contaCaso(dati);
+    el.innerHTML = `<b>${t.risposto}</b> ${t.risposto === 1 ? "ha risposto" : "hanno risposto"} · ` + CASO_VOCI.map(v => `${v.corto}: <b>${t[v.k]}</b>`).join(" · ");
+  });
+}
+
+// Il riquadro del socio: cinque voci, una nota facoltativa, un tasto.
+function disegnaFormCaso(ed, el, dati) {
+  const mio = benMioId(), s = mio ? socioCorrente() : null;
+  el.className = "";
+  if (!s) { el.innerHTML = `<div class="iscr info">Per dare la tua disponibilità entra con il tuo nome e la tua data di nascita, non con il profilo condiviso.</div>`; return; }
+  const mia = dati && dati.risposte ? dati.risposte["socio_" + mio] : null;
+  const chiusa = !dati || dati.chiusa || !casoAperta(ed);
+  const dettaglio = mia ? `<div class="card-sub" style="margin-top:8px;">✅ Hai risposto il ${fmtDate(String(mia.ts || "").slice(0, 10))}: ${esc(casoRiassunto(mia))}.${mia.nota ? " Nota: " + esc(mia.nota) : ""}</div>` : "";
+  if (chiusa) {
+    el.innerHTML = `<div class="iscr passata">La richiesta di disponibilità è chiusa.</div>${mia ? dettaglio : `<div class="card-sub" style="margin-top:8px;">Non hai risposto.</div>`}`;
+    return;
+  }
+  el.innerHTML = `<div class="iscr nuova">
+    <div class="iscr-t">Dai la tua disponibilità</div>
+    ${CASO_VOCI.map(v => `<label class="caso-riga"><input type="checkbox" data-v="${v.k}" ${mia && mia[v.k] ? "checked" : ""}><span><b>${v.lungo}</b><small>${esc(casoGiornoTesto(ed.sabato, v.giorno))}</small></span></label>`).join("")}
+    <div class="form-group" style="margin-top:10px;"><label>Note (facoltative)</label><input type="text" maxlength="120" data-nota placeholder="Es. preferisco fare il cuoco" value="${esc(mia ? mia.nota || "" : "")}"></div>
+    <div data-caso-errore style="color:var(--red); font-size:0.82rem; min-height:1.1em; margin-bottom:6px;"></div>
+    <button type="button" class="btn block" data-salva>${mia ? "Aggiorna la mia disponibilità" : "Salva la mia disponibilità"}</button>
+    ${dettaglio}
+    <div class="card-sub" style="margin-top:6px;">Se non puoi nessun giorno, salva senza spuntare niente: il Direttivo saprà che hai risposto.</div>
+  </div>`;
+  el.querySelector("[data-salva]").addEventListener("click", async ev => {
+    const btn = ev.currentTarget; btn.disabled = true;
+    const valore = { nome: `${s.cognome} ${s.nome}`.trim(), nota: el.querySelector("[data-nota]").value.trim(), ts: new Date().toISOString() };
+    CASO_VOCI.forEach(v => { valore[v.k] = el.querySelector(`[data-v="${v.k}"]`).checked; });
+    const esito = await scriviRispostaCaso(ed.id, mio, valore);
+    if (esito.errore) { el.querySelector("[data-caso-errore]").textContent = esito.errore; btn.disabled = false; if (esito.chiusa) disegnaFormCaso(ed, el, await leggiDocCaso(ed.id)); return; }
+    scriviLog([{ ev: `🥟 ${casoTitolo(ed)}: ${valore.nome} ${mia ? "ha cambiato la disponibilità" : "ha dato la disponibilità"} (${casoRiassunto(valore)})` }]);
+    toast("Disponibilità salvata ✅");
+    disegnaFormCaso(ed, el, await leggiDocCaso(ed.id));
+  });
+}
+
+// ---- Direttivo e Admin ----
+async function creaRichiestaCaso() {
+  if (currentRole === "socio") return;
+  const sabato = document.getElementById("caso-sabato").value;
+  if (!sabato) { alert("Scegli la data del sabato della Casoncellata."); return; }
+  if (casoData(sabato, 0).getDay() !== 6 && !confirm("La data scelta non è un sabato. Continuare lo stesso?")) return;
+  if ((state.casoncellata || []).some(e => e.sabato === sabato)) { alert("Esiste già una richiesta per questa data."); return; }
+  const id = uid();
+  if (window.db) {
+    try { await db.collection(FIRESTORE_COLLECTION).doc(`casoncellata_${id}`).set({ sabato, chiusa: false, risposte: {} }); }
+    catch (e) { console.error(e); alert("Non sono riuscito a creare la richiesta: controlla la connessione e riprova."); return; }
+  }
+  state.casoncellata = state.casoncellata || [];
+  state.casoncellata.push({ id, sabato, aperta: true, creato: new Date().toISOString() });
+  saveState();
+  renderSection();
+  toast("Richiesta aperta ai soci");
+}
+
+async function impostaApertaCaso(edId, aperta) {
+  if (currentRole === "socio") return;
+  const ed = (state.casoncellata || []).find(x => x.id === edId);
+  if (!ed) return;
+  if (window.db) {
+    try { await db.collection(FIRESTORE_COLLECTION).doc(`casoncellata_${edId}`).update({ chiusa: !aperta }); }
+    catch (e) { console.error(e); alert("Non sono riuscito ad aggiornare la richiesta: controlla la connessione e riprova."); return; }
+  }
+  ed.aperta = aperta;
+  saveState();
+  renderSection();
+  toast(aperta ? "Richiesta riaperta" : "Richiesta chiusa");
+}
+
+async function eliminaRichiestaCaso(edId) {
+  if (currentRole === "socio") return;
+  const ed = (state.casoncellata || []).find(x => x.id === edId);
+  if (!ed || !confirm(`Eliminare la richiesta «${casoTitolo(ed)}» e tutte le risposte dei soci?`)) return;
+  if (window.db) { try { await db.collection(FIRESTORE_COLLECTION).doc(`casoncellata_${edId}`).delete(); } catch (e) { console.error(e); } }
+  state.casoncellata = state.casoncellata.filter(x => x.id !== edId);
+  saveState();
+  renderSection();
+}
+
+// Report "stile Excel": una riga per socio che ha risposto, una X dove ha dato la disponibilità, i totali in fondo.
+// A schermo il telefono e la nota stanno sotto il nome (così le cinque colonne entrano nel telefono); il file per Excel ha ogni dato in una colonna.
+async function apriReportCaso(edId) {
+  if (currentRole === "socio") return;
+  const ed = (state.casoncellata || []).find(x => x.id === edId);
+  if (!ed) return;
+  const dati = await leggiDocCaso(edId);
+  if (!dati) { alert("Non riesco a leggere le risposte: controlla la connessione e riprova."); return; }
+  const risposte = dati.risposte || {};
+  const soci = state.socios.filter(s => !s.andatoAvanti);
+  const nome = s => `${s.cognome} ${s.nome}`.trim();
+  const ordina = (x, y) => nome(x).localeCompare(nome(y), "it", { sensitivity: "base" });
+  const hannoRisposto = soci.filter(s => risposte["socio_" + s.id]).sort(ordina);
+  const nonRisposto = soci.filter(s => s.accessoApp && !risposte["socio_" + s.id]).sort(ordina);
+  if (!hannoRisposto.length) { alert(`Nessun socio ha ancora risposto.${nonRisposto.length ? "\n\nNon hanno ancora risposto: " + nonRisposto.map(nome).join(", ") + "." : ""}`); return; }
+  const intestazioniCsv = ["Cognome e nome", "Cellulare"].concat(CASO_VOCI.map(v => v.corto), ["Note"]);
+  const intestazioni = ["Cognome e nome"].concat(CASO_VOCI.map(v => v.breve));
+  const tot = {}; CASO_VOCI.forEach(v => { tot[v.k] = 0; });
+  const righe = [], testo = [], csv = [intestazioniCsv];
+  const X = '<b style="display:block; text-align:center;">X</b>';
+  hannoRisposto.forEach(s => {
+    const r = risposte["socio_" + s.id];
+    CASO_VOCI.forEach(v => { if (r[v.k]) tot[v.k]++; });
+    const cell = s.cellulare || s.telefono || "";
+    righe.push([`${esc(nome(s))}${cell ? `<div style="color:#666; font-size:0.9em;">${esc(cell)}</div>` : ""}${r.nota ? `<div style="color:#444; font-size:0.9em; font-style:italic;">${esc(r.nota)}</div>` : ""}`].concat(CASO_VOCI.map(v => r[v.k] ? X : "")));
+    csv.push([nome(s), cell].concat(CASO_VOCI.map(v => r[v.k] ? "X" : ""), [r.nota || ""]));
+    testo.push(`${nome(s)}: ${casoRiassunto(r)}${r.nota ? " (" + r.nota + ")" : ""}`);
+  });
+  righe.push(["<b>Totale</b>"].concat(CASO_VOCI.map(v => `<b style="display:block; text-align:center;">${tot[v.k]}</b>`)));
+  csv.push(["Totale", ""].concat(CASO_VOCI.map(v => String(tot[v.k])), [""]));
+  testo.push("", "Totali: " + CASO_VOCI.map(v => `${v.corto} ${tot[v.k]}`).join(", "));
+  const legenda = "Ven = preparativi del venerdì · pr. = pranzo · ce. = cena.";
+  const nota = legenda + (nonRisposto.length ? `<br><b>Non hanno ancora risposto (${nonRisposto.length}):</b> ${esc(nonRisposto.map(nome).join(", "))}.` : "");
+  if (nonRisposto.length) testo.push(`Non hanno ancora risposto (${nonRisposto.length}): ${nonRisposto.map(nome).join(", ")}`);
+  const virgolette = c => /[;"\n]/.test(c) ? `"${String(c).replace(/"/g, '""')}"` : String(c);
+  apriAnteprimaReportGenerico(`Disponibilità ${casoTitolo(ed)}`, intestazioni, righe, testo,
+    { nota, compatto: true, csv: { nome: `casoncellata_${String(ed.sabato).slice(0, 4)}_disponibilita.csv`, testo: csv.map(r => r.map(virgolette).join(";")).join("\r\n") } });
+}
+
 // ---------- Sezione Log ----------
 let logMese = null;
 let logCache = [];
@@ -6122,24 +6364,27 @@ async function condividiReportComePdf(titolo, headers, rows) {
   }
 }
 
-function apriAnteprimaReportGenerico(titolo, headers, rows, testoRighe) {
+function apriAnteprimaReportGenerico(titolo, headers, rows, testoRighe, opzioni) {
   if (rows.length === 0) {
     alert("Nessun risultato per i filtri selezionati.");
     return;
   }
-  const headerHtml = headers.map(h => `<th style="text-align:left; padding:6px;">${esc(h)}</th>`).join("");
+  const pad = opzioni && opzioni.compatto ? "4px" : "6px";
+  const headerHtml = headers.map(h => `<th style="text-align:left; padding:${pad};">${esc(h)}</th>`).join("");
   const headerHtmlPrint = headers.map(h => `<th style="text-align:left; border-bottom:2px solid #000; padding:6px;">${esc(h)}</th>`).join("");
-  const righeHtml = rows.map(cells => `<tr>${cells.map(c => `<td style="padding:6px; border-bottom:1px solid #ddd;">${c}</td>`).join("")}</tr>`).join("");
+  const righeHtml = rows.map(cells => `<tr>${cells.map(c => `<td style="padding:${pad}; border-bottom:1px solid #ddd;">${c}</td>`).join("")}</tr>`).join("");
   const html = `
     <div class="modal-title">🖨️ Anteprima — ${esc(titolo)}</div>
     <div class="card-sub" style="margin-bottom:12px;">${rows.length} righe — generato il ${fmtDateTime(new Date().toISOString())}</div>
     <div style="max-height:50vh; overflow-y:auto; border:2px solid var(--ink); border-radius:10px; margin-bottom:16px;">
-      <table style="width:100%; border-collapse:collapse; font-size:0.82rem;">
+      <table style="width:100%; border-collapse:collapse; font-size:${opzioni && opzioni.compatto ? "0.76rem" : "0.82rem"};">
         <thead><tr style="background:#f7f3e8;">${headerHtml}</tr></thead>
         <tbody>${righeHtml}</tbody>
       </table>
     </div>
+    ${opzioni && opzioni.nota ? `<div class="card-sub" style="margin:-6px 0 14px;">${opzioni.nota}</div>` : ""}
     <button type="button" class="btn block" id="anteprima-stampa-btn" style="margin-bottom:10px;">🖨️ Stampa</button>
+    ${opzioni && opzioni.csv ? `<button type="button" class="btn block" id="anteprima-csv-btn" style="margin-bottom:10px; background:#1d6f42; color:#fff;">📥 Scarica per Excel</button>` : ""}
     <button type="button" class="btn block" id="anteprima-pdf-btn" style="margin-bottom:10px; background:var(--gold);">📄 Condividi come PDF</button>
     <div class="modal-actions">
       <button type="button" class="btn secondary" id="anteprima-email-btn">✉️ Email</button>
@@ -6160,6 +6405,7 @@ function apriAnteprimaReportGenerico(titolo, headers, rows, testoRighe) {
         </thead>
         <tbody>${righeHtml}</tbody>
       </table>
+      ${opzioni && opzioni.nota ? `<div style="margin-top:10px; font-size:11pt;">${opzioni.nota}</div>` : ""}
     `;
     stampaConLoghi(area);
   });
@@ -6167,6 +6413,8 @@ function apriAnteprimaReportGenerico(titolo, headers, rows, testoRighe) {
   document.getElementById("anteprima-pdf-btn").addEventListener("click", () => {
     condividiReportComePdf(titolo, headers, rows);
   });
+  const csvBtn = document.getElementById("anteprima-csv-btn");
+  if (csvBtn) csvBtn.addEventListener("click", () => scaricaTesto(opzioni.csv.nome, opzioni.csv.testo, "text/csv;charset=utf-8"));
 
   const testoPiano = () => `📋 ${titolo}\n${rows.length} righe\n\n` + testoRighe.join("\n");
   document.getElementById("anteprima-email-btn").addEventListener("click", () => {
@@ -6701,7 +6949,7 @@ function apriCambioPassword(primoAccesso) {
 const MENU_GRUPPI = [
   { titolo: "", voci: [["home", "🏠", "Home"]] },
   { titolo: "Soci e tesseramento", voci: [["anagrafica", "👤", "Anagrafica"], ["conv-consiglio", "📋", "Consiglio"], ["bollino", "🎫", "Bollino"], ["bollino-amici", "🤝", "Bollino Amici"]] },
-  { titolo: "Eventi", voci: [["cena", "🍽️", "Cena"], ["iniziative", "🎉", "Attività"], ["presenza-adunata", "🎖️", "Adunata"], ["prenotazioni", "🗓️", "Prenotaz. Sede"], ["beneficenza", "🎁", "Panettoni &amp; C"], ["conv-casoncellata", "🥟", "Conv. Casoncellata"]] },
+  { titolo: "Eventi", voci: [["cena", "🍽️", "Cena"], ["iniziative", "🎉", "Attività"], ["presenza-adunata", "🎖️", "Adunata"], ["prenotazioni", "🗓️", "Prenotaz. Sede"], ["beneficenza", "🎁", "Panettoni &amp; C"], ["conv-casoncellata", "🥟", "Casoncellata"]] },
   { titolo: "Comunicazione", voci: [["bacheca", "📌", "Bacheca"], ["verbali", "📑", "Verbali Consiglio"], ["libretto", "📖", "Preghiera e Canto"], ["canzoni", "🎵", "Canzoni"]] },
   { titolo: "Gestione e report", voci: [["archivio-bui", "🗄️", "Archivio BUI"], ["cassa", "💰", "Cassa"], ["ore-alpine", "⏱️", "Ore Alpine"], ["ringraziamenti", "🙏", "Ringraziamenti"], ["sponsor", "💼", "Sponsor"], ["report", "📊", "Report 1"], ["report2", "📊", "Report 2"], ["log", "📜", "Log"]] }
 ];
@@ -6727,8 +6975,9 @@ function sezionePermessa(sezione) {
 // Rosso (ai soci): c'è una pubblicazione nuova nella sezione, o la sezione è nuova.
 // Azzurro (a Direttivo e Admin): un socio ha fatto qualcosa (scheda aggiornata, ordine, iscrizione alla cena).
 // Si ragiona per telefono: ogni telefono si ricorda quando è stata aperta l'ultima volta ogni sezione.
-const PALLINI_SEZIONI_ROSSO = ["bacheca", "iniziative", "cena", "presenza-adunata", "verbali", "beneficenza", "manuali"];
-const PALLINI_SEZIONI_AZZURRO = ["anagrafica", "beneficenza", "cena"];
+const PALLINI_SEZIONI_ROSSO = ["bacheca", "iniziative", "cena", "presenza-adunata", "verbali", "beneficenza", "conv-casoncellata", "manuali"];
+const PALLINI_SEZIONI_AZZURRO = ["anagrafica", "beneficenza", "cena", "conv-casoncellata"];
+let pallinoCasoTs = "";        // ultima disponibilità data da un socio per la Casoncellata
 let pallinoCenaTs = "";        // ultima iscrizione alla cena fatta da un socio (letta dai documenti delle cene)
 let vistoPrima = {};           // com'era "l'ultima apertura" prima di entrare nella sezione (serve per le etichette azzurre)
 let ultimaSezioneVista = "";
@@ -6761,6 +7010,7 @@ function ultimaPubblicazione(sez) {
     case "verbali": return ultimoTesto((state.verbali || []).map(x => x.creato));
     case "beneficenza": return ultimoTesto((state.campagneBeneficenza || []).filter(c => c.stato === "aperta").map(x => x.creato));
     case "manuali": return ultimoTesto((state.manuali || []).filter(m => m.visibilita === "tutti").map(x => x.caricato));
+    case "conv-casoncellata": return ultimoTesto((state.casoncellata || []).filter(casoAperta).map(x => x.creato));
   }
   return "";
 }
@@ -6770,6 +7020,7 @@ function ultimaAzioneSoci(sez) {
     case "anagrafica": return ultimoTesto((state.socios || []).map(s => s.aggiornatoDaSocio));
     case "beneficenza": return ultimoTesto((state.campagneBeneficenza || []).reduce((acc, c) => acc.concat((c.prenotazioni || []).filter(r => r.daSocio).map(r => r.aggiornato || r.creato)), []));
     case "cena": return pallinoCenaTs;
+    case "conv-casoncellata": return pallinoCasoTs;
   }
   return "";
 }
@@ -6849,6 +7100,10 @@ function controllaPallinoCena() {
       let max = "";
       docs.forEach(d => { if (d && d.exists) Object.values(d.data().risposte || {}).forEach(r => { if (r && r.da !== "direttivo" && r.ts && r.ts > max) max = r.ts; }); });
       pallinoCenaTs = max;
+      const docsCaso = await Promise.all((state.casoncellata || []).filter(casoAperta).map(e => db.collection(FIRESTORE_COLLECTION).doc(`casoncellata_${e.id}`).get().catch(() => null)));
+      let maxCaso = "";
+      docsCaso.forEach(d => { if (d && d.exists) Object.values(d.data().risposte || {}).forEach(r => { if (r && r.ts && r.ts > maxCaso) maxCaso = r.ts; }); });
+      pallinoCasoTs = maxCaso;
       aggiornaPallini();
       const aperto = document.getElementById("menu-overlay") && document.getElementById("menu-overlay").classList.contains("open");
       if (aperto) renderMenuDrawer();
@@ -6971,8 +7226,8 @@ function init() {
   }
 }
 
-const SOCIO_SEZIONI = ["home", "bacheca", "libretto", "cena", "presenza-adunata", "iniziative", "prenotazioni", "verbali", "beneficenza", "manuali"];
-const SEZIONI_SOLO_ADMIN = ["cassa", "conv-casoncellata", "log"];
+const SOCIO_SEZIONI = ["home", "bacheca", "libretto", "cena", "presenza-adunata", "iniziative", "prenotazioni", "verbali", "beneficenza", "conv-casoncellata", "manuali"];
+const SEZIONI_SOLO_ADMIN = ["cassa", "log"];
 
 function sezioniAttive() {
   if (!puoVedereArchivioBui()) return sezioniAttiveBase().filter(s => s !== "archivio-bui");
@@ -7019,7 +7274,7 @@ function confermaCambiaUtente() {
 
 function startApp() {
   if (riallineaAccessoPersonale()) return;
-  vistoPrima = {}; ultimaSezioneVista = ""; pallinoCenaTs = "";
+  vistoPrima = {}; ultimaSezioneVista = ""; pallinoCenaTs = ""; pallinoCasoTs = "";
   logAggiornaBaseline();
   logAccesso(loginAppenaEffettuato);
   loginAppenaEffettuato = false;
