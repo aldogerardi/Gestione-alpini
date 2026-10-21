@@ -384,3 +384,11 @@ body.menu-aperto { overflow: hidden; }
 .stato { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: .78rem; font-weight: 800; flex: none; }
 .stato.ok { background: #e3f4e8; color: #1a6b3c; border: 1.5px solid #1a6b3c; }
 .stato.no { background: #f1f1ee; color: #888; border: 1.5px solid #ddd; }
+
+/* Casoncellata: inserimento a mano, come un foglio */
+.cm-riga { display: flex; align-items: center; gap: 4px; padding: 5px 0; border-bottom: 1px solid #eee; }
+.cm-testa { border-bottom: 2px solid #1a6b3c; position: sticky; top: 0; background: var(--bg, #f5f0e1); }
+.cm-nome { flex: 1; min-width: 0; font-size: .9rem; line-height: 1.15; }
+.cm-c { width: 38px; flex: none; text-align: center; font-size: .72rem; font-weight: 700; }
+.cm-c input { width: 24px; height: 24px; accent-color: #1a6b3c; margin: 0; }
+.cm-tot { border-top: 2px solid #1a1a1a; border-bottom: none; margin-top: 4px; }

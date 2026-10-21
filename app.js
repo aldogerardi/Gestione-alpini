@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "8.67";
+const APP_VERSION = "8.68";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -5307,6 +5307,24 @@ async function scriviRispostaCaso(edId, socioId, valore) {
   } catch (err) { console.error(err); return { errore: "Non sono riuscito a salvare: controlla la connessione e riprova." }; }
   return esito;
 }
+// Direttivo e Admin: scrive o toglie molte risposte in una volta, anche a richiesta chiusa o Casoncellata già svolta
+// (per chi non usa l'app e per i fogli cartacei). Il valore null toglie la risposta.
+async function scriviRisposteCasoMolte(edId, modifiche) {
+  if (currentRole === "socio") return { errore: "Operazione riservata al Direttivo." };
+  if (!window.db) return { errore: "Non sono collegato: controlla la connessione e riprova." };
+  const ref = db.collection(FIRESTORE_COLLECTION).doc(`casoncellata_${edId}`);
+  let esito = {};
+  try {
+    await conTimeout(db.runTransaction(async tx => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) { esito = { errore: "Questa richiesta non esiste più." }; return; }
+      const upd = {};
+      Object.keys(modifiche).forEach(id => { upd[`risposte.socio_${id}`] = modifiche[id] === null ? firebase.firestore.FieldValue.delete() : modifiche[id]; });
+      tx.update(ref, upd);
+    }), 20000);
+  } catch (err) { console.error(err); return { errore: "Non sono riuscito a salvare: controlla la connessione e riprova." }; }
+  return esito;
+}
 async function leggiDocCaso(edId) {
   if (!window.db) return null;
   try { const d = await db.collection(FIRESTORE_COLLECTION).doc(`casoncellata_${edId}`).get(); return d.exists ? d.data() : null; } catch (e) { console.error(e); return null; }
@@ -5336,13 +5354,16 @@ function renderCasoncellata() {
       <div class="card">
         <div style="display:flex; justify-content:space-between; gap:8px; align-items:flex-start;">
           <div><div style="font-weight:800;">${esc(casoTitolo(ed))}</div><div class="card-sub">${esc(casoPeriodoTesto(ed))}</div></div>
-          <span class="stato ${casoAperta(ed) ? "ok" : "no"}">${casoAperta(ed) ? "Richiesta aperta" : "Chiusa"}</span>
+          <span class="stato ${casoAperta(ed) ? "ok" : "no"}">${casoScaduta(ed) ? "Già svolta" : (casoAperta(ed) ? "Richiesta aperta" : "Chiusa")}</span>
         </div>
         <div class="card-sub" data-caso-conta="${ed.id}" style="margin-top:8px;">Caricamento risposte...</div>
         <div class="ben-tasti" style="margin-top:10px;">
           <button type="button" class="btn" data-caso="report" data-id="${ed.id}">📊 Report</button>
-          <button type="button" class="btn secondary" data-caso="${ed.aperta === false ? "riapri" : "chiudi"}" data-id="${ed.id}">${ed.aperta === false ? "Riapri" : "Chiudi"}</button>
-          <button type="button" class="btn danger" data-caso="elimina" data-id="${ed.id}" title="Elimina la richiesta">🗑️</button>
+          <button type="button" class="btn" data-caso="mano" data-id="${ed.id}" title="Inserisci le disponibilità di chi non usa l'app o dal foglio cartaceo">📝 Inserisci a mano</button>
+        </div>
+        <div class="ben-tasti" style="margin-top:8px;">
+          <button type="button" class="btn secondary" data-caso="${ed.aperta === false ? "riapri" : "chiudi"}" data-id="${ed.id}">${ed.aperta === false ? "Riapri ai soci" : "Chiudi ai soci"}</button>
+          <button type="button" class="btn danger" data-caso="elimina" data-id="${ed.id}" title="Elimina la richiesta e tutte le risposte">🗑️ Elimina</button>
         </div>
       </div>`).join("") : `<div class="card-sub">Nessuna richiesta ancora creata.</div>`}
   </div>`;
@@ -5364,6 +5385,7 @@ function attachCasoncellataEvents() {
     const az = el.dataset.caso;
     if (az === "crea") creaRichiestaCaso();
     else if (az === "report") apriReportCaso(el.dataset.id);
+    else if (az === "mano") apriInserimentoCaso(el.dataset.id);
     else if (az === "chiudi") impostaApertaCaso(el.dataset.id, false);
     else if (az === "riapri") impostaApertaCaso(el.dataset.id, true);
     else if (az === "elimina") eliminaRichiestaCaso(el.dataset.id);
@@ -5420,6 +5442,7 @@ async function creaRichiestaCaso() {
   if (!sabato) { alert("Scegli la data del sabato della Casoncellata."); return; }
   if (casoData(sabato, 0).getDay() !== 6 && !confirm("La data scelta non è un sabato. Continuare lo stesso?")) return;
   if ((state.casoncellata || []).some(e => e.sabato === sabato)) { alert("Esiste già una richiesta per questa data."); return; }
+  if (casoData(sabato, 1).getTime() + 12 * 3600 * 1000 < Date.now() && !confirm("Questa Casoncellata è già passata: per i soci la richiesta resterà chiusa, ma tu potrai inserire le disponibilità a mano (per esempio dal foglio cartaceo). Continuare?")) return;
   const id = uid();
   if (window.db) {
     try { await db.collection(FIRESTORE_COLLECTION).doc(`casoncellata_${id}`).set({ sabato, chiusa: false, risposte: {} }); }
@@ -5454,6 +5477,63 @@ async function eliminaRichiestaCaso(edId) {
   state.casoncellata = state.casoncellata.filter(x => x.id !== edId);
   saveState();
   renderSection();
+}
+
+// "Inserisci a mano": l'elenco dei soci con le cinque colonne da spuntare, come sul foglio cartaceo.
+async function apriInserimentoCaso(edId) {
+  if (currentRole === "socio") return;
+  const ed = (state.casoncellata || []).find(x => x.id === edId);
+  if (!ed) return;
+  const dati = await leggiDocCaso(edId);
+  if (!dati) { alert("Non riesco a leggere le risposte: controlla la connessione e riprova."); return; }
+  const risposte = dati.risposte || {};
+  const soci = state.socios.filter(s => !s.andatoAvanti).sort((x, y) => `${x.cognome} ${x.nome}`.localeCompare(`${y.cognome} ${y.nome}`, "it", { sensitivity: "base" }));
+  const flag = r => { const o = {}; CASO_VOCI.forEach(v => { o[v.k] = !!(r && r[v.k]); }); return o; };
+  const iniziale = {};
+  soci.forEach(s => { iniziale[s.id] = risposte["socio_" + s.id] ? flag(risposte["socio_" + s.id]) : null; });
+  showModal(`<div id="cm-root">
+    <div class="modal-title">📝 Inserisci a mano</div>
+    <div class="card-sub" style="margin-bottom:8px;">${esc(casoTitolo(ed))}. Per i soci senza app o dal foglio cartaceo. Spunta i momenti: una riga senza spunte non compare nel report. Chi ha risposto dall'app è già spuntato.</div>
+    <input type="text" id="cm-cerca" placeholder="Cerca un socio..." style="width:100%; box-sizing:border-box; margin-bottom:6px;">
+    <div class="cm-riga cm-testa"><span class="cm-nome"></span>${CASO_VOCI.map(v => `<span class="cm-c">${esc(v.breve)}</span>`).join("")}</div>
+    <div id="cm-lista" style="max-height:42vh; overflow-y:auto;">${soci.map(s => `
+      <div class="cm-riga" data-id="${s.id}" data-nome="${esc(`${s.cognome} ${s.nome}`.toLowerCase())}">
+        <span class="cm-nome">${esc(s.cognome)} ${esc(s.nome)}</span>${CASO_VOCI.map(v => `<span class="cm-c"><input type="checkbox" data-s="${s.id}" data-k="${v.k}" ${iniziale[s.id] && iniziale[s.id][v.k] ? "checked" : ""}></span>`).join("")}
+      </div>`).join("")}</div>
+    <div class="cm-riga cm-tot"><span class="cm-nome"><b>Totale</b></span>${CASO_VOCI.map(v => `<span class="cm-c"><b data-tot="${v.k}">0</b></span>`).join("")}</div>
+    <div id="cm-errore" style="color:var(--red); font-size:0.82rem; min-height:1.1em; margin-top:6px;"></div>
+    <div class="modal-actions"><button type="button" class="btn secondary" id="cm-chiudi">Chiudi</button><button type="button" class="btn" id="cm-salva">Salva</button></div>
+  </div>`);
+  const spunta = (id, k) => document.querySelector(`#cm-lista input[data-s="${id}"][data-k="${k}"]`).checked;
+  const totali = () => CASO_VOCI.forEach(v => { document.querySelector(`[data-tot="${v.k}"]`).textContent = soci.filter(s => spunta(s.id, v.k)).length; });
+  totali();
+  document.getElementById("cm-lista").addEventListener("change", totali);
+  document.getElementById("cm-cerca").addEventListener("input", e => {
+    const q = e.target.value.trim().toLowerCase();
+    document.querySelectorAll("#cm-lista .cm-riga").forEach(r => { r.style.display = !q || r.dataset.nome.includes(q) ? "" : "none"; });
+  });
+  document.getElementById("cm-chiudi").addEventListener("click", closeModal);
+  document.getElementById("cm-salva").addEventListener("click", async () => {
+    const modifiche = {}; let aggiornate = 0, tolte = 0;
+    soci.forEach(s => {
+      const nuovo = {}; CASO_VOCI.forEach(v => { nuovo[v.k] = spunta(s.id, v.k); });
+      const iniz = iniziale[s.id], haX = CASO_VOCI.some(v => nuovo[v.k]);
+      const uguale = iniz ? CASO_VOCI.every(v => iniz[v.k] === nuovo[v.k]) : !haX;
+      if (uguale) return;
+      if (!haX) { modifiche[s.id] = null; tolte++; return; }
+      const prima = risposte["socio_" + s.id];
+      modifiche[s.id] = Object.assign({ nome: `${s.cognome} ${s.nome}`.trim(), nota: prima ? prima.nota || "" : "", ts: new Date().toISOString(), da: "direttivo" }, nuovo);
+      aggiornate++;
+    });
+    if (!aggiornate && !tolte) { closeModal(); return; }
+    const btn = document.getElementById("cm-salva"); btn.disabled = true;
+    const esito = await scriviRisposteCasoMolte(edId, modifiche);
+    if (esito.errore) { document.getElementById("cm-errore").textContent = esito.errore; btn.disabled = false; return; }
+    scriviLog([{ ev: `🥟 ${casoTitolo(ed)}: disponibilità inserite a mano dal Direttivo (${aggiornate} ${aggiornate === 1 ? "riga" : "righe"}${tolte ? ", " + tolte + " tolte" : ""})` }]);
+    closeModal();
+    toast("Disponibilità salvate");
+    renderSection();
+  });
 }
 
 // Report "stile Excel": una riga per socio che ha risposto, una X dove ha dato la disponibilità, i totali in fondo.
@@ -7102,7 +7182,7 @@ function controllaPallinoCena() {
       pallinoCenaTs = max;
       const docsCaso = await Promise.all((state.casoncellata || []).filter(casoAperta).map(e => db.collection(FIRESTORE_COLLECTION).doc(`casoncellata_${e.id}`).get().catch(() => null)));
       let maxCaso = "";
-      docsCaso.forEach(d => { if (d && d.exists) Object.values(d.data().risposte || {}).forEach(r => { if (r && r.ts && r.ts > maxCaso) maxCaso = r.ts; }); });
+      docsCaso.forEach(d => { if (d && d.exists) Object.values(d.data().risposte || {}).forEach(r => { if (r && r.ts && r.da !== "direttivo" && r.ts > maxCaso) maxCaso = r.ts; }); });
       pallinoCasoTs = maxCaso;
       aggiornaPallini();
       const aperto = document.getElementById("menu-overlay") && document.getElementById("menu-overlay").classList.contains("open");
