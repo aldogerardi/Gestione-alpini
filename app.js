@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "8.68";
+const APP_VERSION = "8.69";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -5271,6 +5271,7 @@ const CASO_GIORNI = ["domenica", "lunedì", "martedì", "mercoledì", "giovedì"
 const CASO_MESI = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre"];
 
 function casoData(sabatoISO, delta) { const [a, m, g] = String(sabatoISO).split("-").map(Number); return new Date(a, m - 1, g + delta, 12); }
+function casoDataBreve(sabatoISO, delta) { const d = casoData(sabatoISO, delta); return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`; }
 function casoGiornoTesto(sabatoISO, delta) { const d = casoData(sabatoISO, delta); return `${CASO_GIORNI[d.getDay()]} ${d.getDate()} ${CASO_MESI[d.getMonth()]}`; }
 function casoPeriodoTesto(ed) {
   const s = casoData(ed.sabato, 0), d = casoData(ed.sabato, 1);
@@ -5416,8 +5417,12 @@ function disegnaFormCaso(ed, el, dati) {
   }
   el.innerHTML = `<div class="iscr nuova">
     <div class="iscr-t">Dai la tua disponibilità</div>
-    ${CASO_VOCI.map(v => `<label class="caso-riga"><input type="checkbox" data-v="${v.k}" ${mia && mia[v.k] ? "checked" : ""}><span><b>${v.lungo}</b><small>${esc(casoGiornoTesto(ed.sabato, v.giorno))}</small></span></label>`).join("")}
-    <div class="form-group" style="margin-top:10px;"><label>Note (facoltative)</label><input type="text" maxlength="120" data-nota placeholder="Es. preferisco fare il cuoco" value="${esc(mia ? mia.nota || "" : "")}"></div>
+    <div class="caso-griglia">
+      <div class="g-t g-ven">Venerdì</div><div class="g-t g-sab">Sabato ${casoDataBreve(ed.sabato, 0)}</div><div class="g-t g-dom">Domenica ${casoDataBreve(ed.sabato, 1)}</div>
+      <div class="g-v">Preparativi</div><div class="g-v">Pranzo</div><div class="g-v">Cena</div><div class="g-v">Pranzo</div><div class="g-v">Cena</div>
+      ${CASO_VOCI.map(v => `<label class="g-c" title="${esc(v.lungo)}"><input type="checkbox" data-v="${v.k}" aria-label="${esc(v.lungo)}" ${mia && mia[v.k] ? "checked" : ""}></label>`).join("")}
+    </div>
+    <div class="form-group" style="margin-top:12px;"><label>Note/Ruolo (facoltativo)</label><input type="text" maxlength="120" data-nota placeholder="Es. preferisco fare il cuoco" value="${esc(mia ? mia.nota || "" : "")}"></div>
     <div data-caso-errore style="color:var(--red); font-size:0.82rem; min-height:1.1em; margin-bottom:6px;"></div>
     <button type="button" class="btn block" data-salva>${mia ? "Aggiorna la mia disponibilità" : "Salva la mia disponibilità"}</button>
     ${dettaglio}
@@ -5495,7 +5500,10 @@ async function apriInserimentoCaso(edId) {
     <div class="modal-title">📝 Inserisci a mano</div>
     <div class="card-sub" style="margin-bottom:8px;">${esc(casoTitolo(ed))}. Per i soci senza app o dal foglio cartaceo. Spunta i momenti: una riga senza spunte non compare nel report. Chi ha risposto dall'app è già spuntato.</div>
     <input type="text" id="cm-cerca" placeholder="Cerca un socio..." style="width:100%; box-sizing:border-box; margin-bottom:6px;">
-    <div class="cm-riga cm-testa"><span class="cm-nome"></span>${CASO_VOCI.map(v => `<span class="cm-c">${esc(v.breve)}</span>`).join("")}</div>
+    <div class="cm-testa">
+      <div class="cm-riga"><span class="cm-nome"></span><span class="cm-g" style="width:38px;">Ven</span><span class="cm-g" style="width:80px;">Sab ${casoDataBreve(ed.sabato, 0).slice(0, 5)}</span><span class="cm-g" style="width:80px;">Dom ${casoDataBreve(ed.sabato, 1).slice(0, 5)}</span></div>
+      <div class="cm-riga"><span class="cm-nome"></span><span class="cm-c">Prep.</span><span class="cm-c">Pr.</span><span class="cm-c">Ce.</span><span class="cm-c">Pr.</span><span class="cm-c">Ce.</span></div>
+    </div>
     <div id="cm-lista" style="max-height:42vh; overflow-y:auto;">${soci.map(s => `
       <div class="cm-riga" data-id="${s.id}" data-nome="${esc(`${s.cognome} ${s.nome}`.toLowerCase())}">
         <span class="cm-nome">${esc(s.cognome)} ${esc(s.nome)}</span>${CASO_VOCI.map(v => `<span class="cm-c"><input type="checkbox" data-s="${s.id}" data-k="${v.k}" ${iniziale[s.id] && iniziale[s.id][v.k] ? "checked" : ""}></span>`).join("")}
@@ -5536,8 +5544,16 @@ async function apriInserimentoCaso(edId) {
   });
 }
 
-// Report "stile Excel": una riga per socio che ha risposto, una X dove ha dato la disponibilità, i totali in fondo.
-// A schermo il telefono e la nota stanno sotto il nome (così le cinque colonne entrano nel telefono); il file per Excel ha ogni dato in una colonna.
+// Intestazione a due livelli, come il foglio cartaceo: Venerdì | Sabato (data) | Domenica (data) | Note/Ruolo, e sotto i momenti.
+function testataCaso(ed, stile) {
+  const cella = `text-align:center; font-weight:700; border:1px solid #444; background:#f7f3e8; padding:${stile === "pdf" ? "6px" : "4px 3px"};${stile === "pdf" ? " font-family:Arial,sans-serif; font-size:13px;" : ""}`;
+  const th = (testo, attr) => `<th style="${cella}" ${attr || ""}>${testo}</th>`;
+  return `<tr>${th("Cognome e nome", 'rowspan="2"')}${th("Venerdì")}${th("Sabato " + casoDataBreve(ed.sabato, 0), 'colspan="2"')}${th("Domenica " + casoDataBreve(ed.sabato, 1), 'colspan="2"')}${th("Note/Ruolo", 'rowspan="2"')}</tr>`
+    + `<tr>${th("Preparativi")}${th("Pranzo")}${th("Cena")}${th("Pranzo")}${th("Cena")}</tr>`;
+}
+
+// Report "stile Excel": come il foglio cartaceo. Una riga per socio che ha risposto, una X dove ha dato la disponibilità, i totali in fondo.
+// Il file per Excel ha la stessa intestazione su due righe, più il cellulare in una colonna.
 async function apriReportCaso(edId) {
   if (currentRole === "socio") return;
   const ed = (state.casoncellata || []).find(x => x.id === edId);
@@ -5551,28 +5567,28 @@ async function apriReportCaso(edId) {
   const hannoRisposto = soci.filter(s => risposte["socio_" + s.id]).sort(ordina);
   const nonRisposto = soci.filter(s => s.accessoApp && !risposte["socio_" + s.id]).sort(ordina);
   if (!hannoRisposto.length) { alert(`Nessun socio ha ancora risposto.${nonRisposto.length ? "\n\nNon hanno ancora risposto: " + nonRisposto.map(nome).join(", ") + "." : ""}`); return; }
-  const intestazioniCsv = ["Cognome e nome", "Cellulare"].concat(CASO_VOCI.map(v => v.corto), ["Note"]);
-  const intestazioni = ["Cognome e nome"].concat(CASO_VOCI.map(v => v.breve));
+  const intestazioni = ["Cognome e nome", "Venerdì - Preparativi", "Sabato - Pranzo", "Sabato - Cena", "Domenica - Pranzo", "Domenica - Cena", "Note/Ruolo"];
   const tot = {}; CASO_VOCI.forEach(v => { tot[v.k] = 0; });
-  const righe = [], testo = [], csv = [intestazioniCsv];
+  const righe = [], testo = [];
+  const csv = [["Cognome e nome", "Cellulare", "Venerdì", "Sabato " + casoDataBreve(ed.sabato, 0), "", "Domenica " + casoDataBreve(ed.sabato, 1), "", "Note/Ruolo"], ["", "", "Preparativi", "Pranzo", "Cena", "Pranzo", "Cena", ""]];
   const X = '<b style="display:block; text-align:center;">X</b>';
   hannoRisposto.forEach(s => {
     const r = risposte["socio_" + s.id];
     CASO_VOCI.forEach(v => { if (r[v.k]) tot[v.k]++; });
     const cell = s.cellulare || s.telefono || "";
-    righe.push([`${esc(nome(s))}${cell ? `<div style="color:#666; font-size:0.9em;">${esc(cell)}</div>` : ""}${r.nota ? `<div style="color:#444; font-size:0.9em; font-style:italic;">${esc(r.nota)}</div>` : ""}`].concat(CASO_VOCI.map(v => r[v.k] ? X : "")));
+    righe.push([`${esc(nome(s))}${cell ? `<div style="color:#666; font-size:0.9em;">${esc(cell)}</div>` : ""}`].concat(CASO_VOCI.map(v => r[v.k] ? X : ""), [esc(r.nota || "")]));
     csv.push([nome(s), cell].concat(CASO_VOCI.map(v => r[v.k] ? "X" : ""), [r.nota || ""]));
     testo.push(`${nome(s)}: ${casoRiassunto(r)}${r.nota ? " (" + r.nota + ")" : ""}`);
   });
-  righe.push(["<b>Totale</b>"].concat(CASO_VOCI.map(v => `<b style="display:block; text-align:center;">${tot[v.k]}</b>`)));
+  righe.push(["<b>Totale</b>"].concat(CASO_VOCI.map(v => `<b style="display:block; text-align:center;">${tot[v.k]}</b>`), [""]));
   csv.push(["Totale", ""].concat(CASO_VOCI.map(v => String(tot[v.k])), [""]));
   testo.push("", "Totali: " + CASO_VOCI.map(v => `${v.corto} ${tot[v.k]}`).join(", "));
-  const legenda = "Ven = preparativi del venerdì · pr. = pranzo · ce. = cena.";
-  const nota = legenda + (nonRisposto.length ? `<br><b>Non hanno ancora risposto (${nonRisposto.length}):</b> ${esc(nonRisposto.map(nome).join(", "))}.` : "");
+  const nota = nonRisposto.length ? `<b>Non hanno ancora risposto (${nonRisposto.length}):</b> ${esc(nonRisposto.map(nome).join(", "))}.` : "";
   if (nonRisposto.length) testo.push(`Non hanno ancora risposto (${nonRisposto.length}): ${nonRisposto.map(nome).join(", ")}`);
   const virgolette = c => /[;"\n]/.test(c) ? `"${String(c).replace(/"/g, '""')}"` : String(c);
   apriAnteprimaReportGenerico(`Disponibilità ${casoTitolo(ed)}`, intestazioni, righe, testo,
-    { nota, compatto: true, csv: { nome: `casoncellata_${String(ed.sabato).slice(0, 4)}_disponibilita.csv`, testo: csv.map(r => r.map(virgolette).join(";")).join("\r\n") } });
+    { nota, suggerimento: "↔ Scorri la tabella verso destra (o ruota il telefono) per vedere Domenica e Note/Ruolo.", compatto: true, griglia: true, primaFissa: true, testata: stile => testataCaso(ed, stile),
+      csv: { nome: `casoncellata_${String(ed.sabato).slice(0, 4)}_disponibilita.csv`, testo: csv.map(r => r.map(virgolette).join(";")).join("\r\n") } });
 }
 
 // ---------- Sezione Log ----------
@@ -6347,7 +6363,7 @@ function stampaConLoghi(area) {
   setTimeout(() => { if (rimaste > 0) { rimaste = 0; eseguiStampa(); } }, 1500);
 }
 
-async function condividiReportComePdf(titolo, headers, rows) {
+async function condividiReportComePdf(titolo, headers, rows, opzioni) {
   if (typeof html2canvas === "undefined" || typeof window.jspdf === "undefined") {
     alert("Generazione PDF non disponibile: manca la connessione per caricare le librerie necessarie (serve una volta sola, poi restano salvate).");
     return;
@@ -6362,7 +6378,9 @@ async function condividiReportComePdf(titolo, headers, rows) {
   document.body.appendChild(wrapper);
 
   const headerRowHtml = headers.map(h => `<th style="text-align:left; border-bottom:2px solid #000; padding:6px; font-family:Arial,sans-serif; font-size:13px;">${esc(h)}</th>`).join("");
-  const rigaHtml = cells => `<tr>${cells.map(c => `<td style="padding:6px; border-bottom:1px solid #ddd; font-family:Arial,sans-serif; font-size:13px;">${c}</td>`).join("")}</tr>`;
+  const testataPdf = opzioni && opzioni.testata ? opzioni.testata("pdf") : `<tr>${headerRowHtml}</tr>`;
+  const bordoPdf = opzioni && opzioni.griglia ? "border:1px solid #999;" : "border-bottom:1px solid #ddd;";
+  const rigaHtml = cells => `<tr>${cells.map(c => `<td style="padding:6px; ${bordoPdf} font-family:Arial,sans-serif; font-size:13px;">${c}</td>`).join("")}</tr>`;
 
   try {
     // --- misuro le altezze reali (carta intestata, riga intestazione colonne, riga dato) ---
@@ -6371,8 +6389,8 @@ async function condividiReportComePdf(titolo, headers, rows) {
     misura.innerHTML = `
       <div id="misura-letterhead">${LETTERHEAD_HTML}</div>
       <table style="width:100%; border-collapse:collapse;">
+        <thead id="misura-thead">${testataPdf}</thead>
         <tbody>
-          <tr id="misura-thead">${headerRowHtml}</tr>
           ${rigaHtml(rows[0])}
         </tbody>
       </table>`;
@@ -6402,7 +6420,7 @@ async function condividiReportComePdf(titolo, headers, rows) {
       pageDiv.innerHTML = `
         ${LETTERHEAD_HTML}
         <table style="width:100%; border-collapse:collapse;">
-          <thead><tr>${headerRowHtml}</tr></thead>
+          <thead>${testataPdf}</thead>
           <tbody>${pagine[p].map(rigaHtml).join("")}</tbody>
         </table>`;
       wrapper.appendChild(pageDiv);
@@ -6451,17 +6469,22 @@ function apriAnteprimaReportGenerico(titolo, headers, rows, testoRighe, opzioni)
   }
   const pad = opzioni && opzioni.compatto ? "4px" : "6px";
   const headerHtml = headers.map(h => `<th style="text-align:left; padding:${pad};">${esc(h)}</th>`).join("");
-  const headerHtmlPrint = headers.map(h => `<th style="text-align:left; border-bottom:2px solid #000; padding:6px;">${esc(h)}</th>`).join("");
-  const righeHtml = rows.map(cells => `<tr>${cells.map(c => `<td style="padding:${pad}; border-bottom:1px solid #ddd;">${c}</td>`).join("")}</tr>`).join("");
+  const headerHtmlPrint = headers.map(h => `<th style="text-align:left; border-bottom:2px solid #000; padding:${pad};">${esc(h)}</th>`).join("");
+  // opzioni.testata(stile) restituisce un'intestazione a più righe (per esempio giorni sopra e momenti sotto); opzioni.griglia disegna tutti i bordi
+  const theadSchermo = opzioni && opzioni.testata ? opzioni.testata("schermo") : `<tr style="background:#f7f3e8;">${headerHtml}</tr>`;
+  const theadStampa = opzioni && opzioni.testata ? opzioni.testata("stampa") : `<tr>${headerHtmlPrint}</tr>`;
+  const bordo = opzioni && opzioni.griglia ? "border:1px solid #999;" : "border-bottom:1px solid #ddd;";
+  const righeHtml = rows.map(cells => `<tr>${cells.map(c => `<td style="padding:${pad}; ${bordo}">${c}</td>`).join("")}</tr>`).join("");
   const html = `
     <div class="modal-title">🖨️ Anteprima — ${esc(titolo)}</div>
     <div class="card-sub" style="margin-bottom:12px;">${rows.length} righe — generato il ${fmtDateTime(new Date().toISOString())}</div>
     <div style="max-height:50vh; overflow-y:auto; border:2px solid var(--ink); border-radius:10px; margin-bottom:16px;">
-      <table style="width:100%; border-collapse:collapse; font-size:${opzioni && opzioni.compatto ? "0.76rem" : "0.82rem"};">
-        <thead><tr style="background:#f7f3e8;">${headerHtml}</tr></thead>
+      <table class="${opzioni && opzioni.primaFissa ? "rep-prima-fissa" : ""}" style="width:100%; border-collapse:collapse; font-size:${opzioni && opzioni.compatto ? "0.76rem" : "0.82rem"};">
+        <thead>${theadSchermo}</thead>
         <tbody>${righeHtml}</tbody>
       </table>
     </div>
+    ${opzioni && opzioni.suggerimento ? `<div class="card-sub" style="margin:-8px 0 8px;">${opzioni.suggerimento}</div>` : ""}
     ${opzioni && opzioni.nota ? `<div class="card-sub" style="margin:-6px 0 14px;">${opzioni.nota}</div>` : ""}
     <button type="button" class="btn block" id="anteprima-stampa-btn" style="margin-bottom:10px;">🖨️ Stampa</button>
     ${opzioni && opzioni.csv ? `<button type="button" class="btn block" id="anteprima-csv-btn" style="margin-bottom:10px; background:#1d6f42; color:#fff;">📥 Scarica per Excel</button>` : ""}
@@ -6481,7 +6504,7 @@ function apriAnteprimaReportGenerico(titolo, headers, rows, testoRighe, opzioni)
       <table style="width:100%; border-collapse:collapse;">
         <thead>
           <tr><td colspan="${nCol}" style="padding:0;">${LETTERHEAD_HTML}</td></tr>
-          <tr>${headerHtmlPrint}</tr>
+          ${theadStampa}
         </thead>
         <tbody>${righeHtml}</tbody>
       </table>
@@ -6491,7 +6514,7 @@ function apriAnteprimaReportGenerico(titolo, headers, rows, testoRighe, opzioni)
   });
 
   document.getElementById("anteprima-pdf-btn").addEventListener("click", () => {
-    condividiReportComePdf(titolo, headers, rows);
+    condividiReportComePdf(titolo, headers, rows, opzioni);
   });
   const csvBtn = document.getElementById("anteprima-csv-btn");
   if (csvBtn) csvBtn.addEventListener("click", () => scaricaTesto(opzioni.csv.nome, opzioni.csv.testo, "text/csv;charset=utf-8"));

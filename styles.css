@@ -387,8 +387,23 @@ body.menu-aperto { overflow: hidden; }
 
 /* Casoncellata: inserimento a mano, come un foglio */
 .cm-riga { display: flex; align-items: center; gap: 4px; padding: 5px 0; border-bottom: 1px solid #eee; }
-.cm-testa { border-bottom: 2px solid #1a6b3c; position: sticky; top: 0; background: var(--bg, #f5f0e1); }
 .cm-nome { flex: 1; min-width: 0; font-size: .9rem; line-height: 1.15; }
 .cm-c { width: 38px; flex: none; text-align: center; font-size: .72rem; font-weight: 700; }
 .cm-c input { width: 24px; height: 24px; accent-color: #1a6b3c; margin: 0; }
 .cm-tot { border-top: 2px solid #1a1a1a; border-bottom: none; margin-top: 4px; }
+
+/* Casoncellata: lo schema del foglio cartaceo (giorni sopra, momenti sotto) */
+.caso-griglia { display: grid; grid-template-columns: 1.35fr 1fr 1fr 1fr 1fr; border: 1.5px solid #444; border-radius: 6px; overflow: hidden; margin-top: 4px; }
+.caso-griglia > div, .caso-griglia > label { border: 1px solid #aaa; margin: -0.5px; text-align: center; }
+.g-t { grid-row: 1; padding: 8px 1px; font-weight: 800; font-size: .72rem; background: #f7f3e8; display: flex; align-items: center; justify-content: center; }
+.g-ven { grid-column: 1; } .g-sab { grid-column: 2 / span 2; } .g-dom { grid-column: 4 / span 2; }
+.g-v { grid-row: 2; padding: 6px 1px; font-weight: 700; font-size: .72rem; background: #fbf9f1; }
+.g-c { grid-row: 3; display: flex; align-items: center; justify-content: center; padding: 12px 0; cursor: pointer; }
+.g-c input { width: 28px; height: 28px; accent-color: #1a6b3c; margin: 0; }
+.rep-prima-fissa th:first-child, .rep-prima-fissa td:first-child { position: sticky; left: 0; z-index: 1; }
+.rep-prima-fissa td:first-child { background: #fff; }
+.rep-prima-fissa td, .rep-prima-fissa th { white-space: nowrap; }
+.rep-prima-fissa td:last-child { white-space: normal; min-width: 90px; }
+.cm-testa { position: sticky; top: 0; background: var(--bg, #f5f0e1); border-bottom: 2px solid #1a6b3c; }
+.cm-testa .cm-riga { border-bottom: none; padding: 2px 0; }
+.cm-g { flex: none; text-align: center; font-size: .72rem; font-weight: 800; border-bottom: 1.5px solid #1a6b3c; }
