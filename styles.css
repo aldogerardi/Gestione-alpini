@@ -400,10 +400,25 @@ body.menu-aperto { overflow: hidden; }
 .g-v { grid-row: 2; padding: 6px 1px; font-weight: 700; font-size: .72rem; background: #fbf9f1; }
 .g-c { grid-row: 3; display: flex; align-items: center; justify-content: center; padding: 12px 0; cursor: pointer; }
 .g-c input { width: 28px; height: 28px; accent-color: #1a6b3c; margin: 0; }
-.rep-prima-fissa th:first-child, .rep-prima-fissa td:first-child { position: sticky; left: 0; z-index: 1; }
+/* si fissa solo la prima colonna: il nome nelle righe e "Cognome e nome" nella prima riga dell'intestazione (non la seconda) */
+.rep-prima-fissa thead tr:first-child th:first-child, .rep-prima-fissa tbody td:first-child { position: sticky; left: 0; z-index: 1; }
 .rep-prima-fissa td:first-child { background: #fff; }
 .rep-prima-fissa td, .rep-prima-fissa th { white-space: nowrap; }
 .rep-prima-fissa td:last-child { white-space: normal; min-width: 90px; }
 .cm-testa { position: sticky; top: 0; background: var(--bg, #f5f0e1); border-bottom: 2px solid #1a6b3c; }
 .cm-testa .cm-riga { border-bottom: none; padding: 2px 0; }
 .cm-g { flex: none; text-align: center; font-size: .72rem; font-weight: 800; border-bottom: 1.5px solid #1a6b3c; }
+
+/* Casoncellata: assegnare i ruoli */
+.ar-riga { padding: 10px 0; border-bottom: 1px solid #e8e4d6; }
+.ar-nome { font-weight: 800; }
+.ar-chips { margin: 3px 0 7px; }
+.ar-chip { display: inline-block; padding: 1px 8px; margin: 0 4px 3px 0; border-radius: 10px; background: #e3f4e8; border: 1px solid #1a6b3c; color: #1a6b3c; font-size: .74rem; font-weight: 700; }
+.ar-campi { display: flex; gap: 8px; }
+.ar-campi > div { flex: 1 1 0; min-width: 0; }
+.ar-campi label { display: block; font-size: .72rem; font-weight: 700; color: #555; margin-bottom: 2px; }
+.ar-campi input { width: 100%; box-sizing: border-box; padding: 8px; font-size: .9rem; border: 2px solid #1a1a1a; border-radius: 8px; background: #fff; }
+.ar-filtri { display: flex; gap: 6px; margin: 8px 0 4px; }
+.ar-f { padding: 5px 12px; border-radius: 16px; border: 1.5px solid #1a6b3c; color: #1a6b3c; background: transparent; font-weight: 700; font-size: .82rem; cursor: pointer; }
+.ar-f.att { background: #1a6b3c; color: #fff; }
+.ar-conta { font-weight: 700; margin: 4px 0; }

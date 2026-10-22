@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "8.69";
+const APP_VERSION = "8.89";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -5303,7 +5303,14 @@ async function scriviRispostaCaso(edId, socioId, valore) {
       const snap = await tx.get(ref);
       if (!snap.exists) { esito = { errore: "Questa richiesta non esiste più." }; return; }
       if (snap.data().chiusa) { esito = { errore: "La richiesta di disponibilità è chiusa.", chiusa: true }; return; }
-      tx.update(ref, { [`risposte.socio_${socioId}`]: valore });
+      const upd = {};
+      if ((snap.data().risposte || {})["socio_" + socioId]) {
+        // già risposto: si aggiornano solo i campi del socio, così ruolo e note assegnati dal Direttivo restano
+        Object.keys(valore).forEach(k => { upd[`risposte.socio_${socioId}.${k}`] = valore[k]; });
+      } else {
+        upd[`risposte.socio_${socioId}`] = valore;   // prima risposta: si scrive la voce intera
+      }
+      tx.update(ref, upd);
     }), 15000);
   } catch (err) { console.error(err); return { errore: "Non sono riuscito a salvare: controlla la connessione e riprova." }; }
   return esito;
@@ -5360,10 +5367,13 @@ function renderCasoncellata() {
         <div class="card-sub" data-caso-conta="${ed.id}" style="margin-top:8px;">Caricamento risposte...</div>
         <div class="ben-tasti" style="margin-top:10px;">
           <button type="button" class="btn" data-caso="report" data-id="${ed.id}">📊 Report</button>
-          <button type="button" class="btn" data-caso="mano" data-id="${ed.id}" title="Inserisci le disponibilità di chi non usa l'app o dal foglio cartaceo">📝 Inserisci a mano</button>
+          <button type="button" class="btn" data-caso="ruoli" data-id="${ed.id}" title="Assegna il ruolo a chi ha dato disponibilità">🧑‍🍳 Assegna ruoli</button>
         </div>
         <div class="ben-tasti" style="margin-top:8px;">
+          <button type="button" class="btn secondary" data-caso="mano" data-id="${ed.id}" title="Inserisci le disponibilità di chi non usa l'app o dal foglio cartaceo">📝 Inserisci a mano</button>
           <button type="button" class="btn secondary" data-caso="${ed.aperta === false ? "riapri" : "chiudi"}" data-id="${ed.id}">${ed.aperta === false ? "Riapri ai soci" : "Chiudi ai soci"}</button>
+        </div>
+        <div class="ben-tasti" style="margin-top:8px;">
           <button type="button" class="btn danger" data-caso="elimina" data-id="${ed.id}" title="Elimina la richiesta e tutte le risposte">🗑️ Elimina</button>
         </div>
       </div>`).join("") : `<div class="card-sub">Nessuna richiesta ancora creata.</div>`}
@@ -5387,6 +5397,7 @@ function attachCasoncellataEvents() {
     if (az === "crea") creaRichiestaCaso();
     else if (az === "report") apriReportCaso(el.dataset.id);
     else if (az === "mano") apriInserimentoCaso(el.dataset.id);
+    else if (az === "ruoli") apriAssegnaRuoliCaso(el.dataset.id);
     else if (az === "chiudi") impostaApertaCaso(el.dataset.id, false);
     else if (az === "riapri") impostaApertaCaso(el.dataset.id, true);
     else if (az === "elimina") eliminaRichiestaCaso(el.dataset.id);
@@ -5410,7 +5421,7 @@ function disegnaFormCaso(ed, el, dati) {
   if (!s) { el.innerHTML = `<div class="iscr info">Per dare la tua disponibilità entra con il tuo nome e la tua data di nascita, non con il profilo condiviso.</div>`; return; }
   const mia = dati && dati.risposte ? dati.risposte["socio_" + mio] : null;
   const chiusa = !dati || dati.chiusa || !casoAperta(ed);
-  const dettaglio = mia ? `<div class="card-sub" style="margin-top:8px;">✅ Hai risposto il ${fmtDate(String(mia.ts || "").slice(0, 10))}: ${esc(casoRiassunto(mia))}.${mia.nota ? " Nota: " + esc(mia.nota) : ""}</div>` : "";
+  const dettaglio = mia ? `<div class="card-sub" style="margin-top:8px;">✅ Hai risposto il ${fmtDate(String(mia.ts || "").slice(0, 10))}: ${esc(casoRiassunto(mia))}.</div>` : "";
   if (chiusa) {
     el.innerHTML = `<div class="iscr passata">La richiesta di disponibilità è chiusa.</div>${mia ? dettaglio : `<div class="card-sub" style="margin-top:8px;">Non hai risposto.</div>`}`;
     return;
@@ -5422,7 +5433,6 @@ function disegnaFormCaso(ed, el, dati) {
       <div class="g-v">Preparativi</div><div class="g-v">Pranzo</div><div class="g-v">Cena</div><div class="g-v">Pranzo</div><div class="g-v">Cena</div>
       ${CASO_VOCI.map(v => `<label class="g-c" title="${esc(v.lungo)}"><input type="checkbox" data-v="${v.k}" aria-label="${esc(v.lungo)}" ${mia && mia[v.k] ? "checked" : ""}></label>`).join("")}
     </div>
-    <div class="form-group" style="margin-top:12px;"><label>Note/Ruolo (facoltativo)</label><input type="text" maxlength="120" data-nota placeholder="Es. preferisco fare il cuoco" value="${esc(mia ? mia.nota || "" : "")}"></div>
     <div data-caso-errore style="color:var(--red); font-size:0.82rem; min-height:1.1em; margin-bottom:6px;"></div>
     <button type="button" class="btn block" data-salva>${mia ? "Aggiorna la mia disponibilità" : "Salva la mia disponibilità"}</button>
     ${dettaglio}
@@ -5430,7 +5440,7 @@ function disegnaFormCaso(ed, el, dati) {
   </div>`;
   el.querySelector("[data-salva]").addEventListener("click", async ev => {
     const btn = ev.currentTarget; btn.disabled = true;
-    const valore = { nome: `${s.cognome} ${s.nome}`.trim(), nota: el.querySelector("[data-nota]").value.trim(), ts: new Date().toISOString() };
+    const valore = { nome: `${s.cognome} ${s.nome}`.trim(), ts: new Date().toISOString() };
     CASO_VOCI.forEach(v => { valore[v.k] = el.querySelector(`[data-v="${v.k}"]`).checked; });
     const esito = await scriviRispostaCaso(ed.id, mio, valore);
     if (esito.errore) { el.querySelector("[data-caso-errore]").textContent = esito.errore; btn.disabled = false; if (esito.chiusa) disegnaFormCaso(ed, el, await leggiDocCaso(ed.id)); return; }
@@ -5530,7 +5540,7 @@ async function apriInserimentoCaso(edId) {
       if (uguale) return;
       if (!haX) { modifiche[s.id] = null; tolte++; return; }
       const prima = risposte["socio_" + s.id];
-      modifiche[s.id] = Object.assign({ nome: `${s.cognome} ${s.nome}`.trim(), nota: prima ? prima.nota || "" : "", ts: new Date().toISOString(), da: "direttivo" }, nuovo);
+      modifiche[s.id] = Object.assign({ nome: `${s.cognome} ${s.nome}`.trim(), nota: prima ? prima.nota || "" : "", ruolo: prima ? prima.ruolo || "" : "", ts: new Date().toISOString(), da: "direttivo" }, nuovo);
       aggiornate++;
     });
     if (!aggiornate && !tolte) { closeModal(); return; }
@@ -5544,11 +5554,114 @@ async function apriInserimentoCaso(edId) {
   });
 }
 
+// Direttivo e Admin: scrive Ruolo e Note di più soci in una volta, senza toccare il resto della risposta (spunte, orario, origine).
+async function scriviRuoliCaso(edId, modifiche) {
+  if (currentRole === "socio") return { errore: "Operazione riservata al Direttivo." };
+  if (!window.db) return { errore: "Non sono collegato: controlla la connessione e riprova." };
+  const ref = db.collection(FIRESTORE_COLLECTION).doc(`casoncellata_${edId}`);
+  let esito = {};
+  try {
+    await conTimeout(db.runTransaction(async tx => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) { esito = { errore: "Questa richiesta non esiste più." }; return; }
+      const risposte = snap.data().risposte || {};
+      const upd = {};
+      Object.keys(modifiche).forEach(id => {
+        if (!risposte["socio_" + id]) return;   // si assegna solo a chi ha una risposta
+        upd[`risposte.socio_${id}.ruolo`] = modifiche[id].ruolo;
+        upd[`risposte.socio_${id}.nota`] = modifiche[id].nota;
+      });
+      if (Object.keys(upd).length) tx.update(ref, upd);
+    }), 20000);
+  } catch (err) { console.error(err); return { errore: "Non sono riuscito a salvare: controlla la connessione e riprova." }; }
+  return esito;
+}
+
+const CASO_RUOLI_BASE = ["Cuochi", "Lavapiatti", "Camerieri piatti", "Camerieri bar", "Pulizia tavoli", "Gazebo"];
+
+// "Assegna ruoli": chi ha dato disponibilità, con le sue spunte, e due campi liberi: Ruolo (con suggerimenti) e Note.
+async function apriAssegnaRuoliCaso(edId) {
+  if (currentRole === "socio") return;
+  const ed = (state.casoncellata || []).find(x => x.id === edId);
+  if (!ed) return;
+  const dati = await leggiDocCaso(edId);
+  if (!dati) { alert("Non riesco a leggere le risposte: controlla la connessione e riprova."); return; }
+  const risposte = dati.risposte || {};
+  const nome = s => `${s.cognome} ${s.nome}`.trim();
+  const soci = state.socios.filter(s => {
+    const r = risposte["socio_" + s.id];
+    return !s.andatoAvanti && r && (CASO_VOCI.some(v => r[v.k]) || r.ruolo || r.nota);
+  }).sort((x, y) => nome(x).localeCompare(nome(y), "it", { sensitivity: "base" }));
+  if (!soci.length) { alert("Nessun socio ha ancora dato disponibilità. Aspetta le risposte, oppure usa «Inserisci a mano»."); return; }
+  // suggerimenti: i ruoli già scritti (anche negli altri anni) e i reparti più comuni
+  const usati = new Set(CASO_RUOLI_BASE);
+  Object.values(risposte).forEach(r => { if (r && r.ruolo) usati.add(r.ruolo); });
+  const altri = await Promise.all((state.casoncellata || []).filter(e => e.id !== edId).map(e => leggiDocCaso(e.id)));
+  altri.forEach(d => { if (d) Object.values(d.risposte || {}).forEach(r => { if (r && r.ruolo) usati.add(r.ruolo); }); });
+  const iniz = {};
+  soci.forEach(s => { const r = risposte["socio_" + s.id]; iniz[s.id] = { ruolo: String(r.ruolo || ""), nota: String(r.nota || "") }; });
+  showModal(`<div id="ar-root">
+    <div class="modal-title">🧑‍🍳 Assegna ruoli</div>
+    <div class="card-sub" style="margin-bottom:6px;">${esc(casoTitolo(ed))}. Scrivi il ruolo di ognuno (per esempio Cuochi, Lavapiatti, Camerieri piatti…) e, se serve, una nota. Mentre scrivi l'app suggerisce i ruoli già usati.</div>
+    <input type="text" id="ar-cerca" placeholder="Cerca un socio..." style="width:100%; box-sizing:border-box;">
+    <div class="ar-filtri"><button type="button" class="ar-f att" data-f="tutti"></button><button type="button" class="ar-f" data-f="senza"></button></div>
+    <div class="ar-conta" id="ar-conta"></div>
+    <datalist id="ar-ruoli">${[...usati].sort((x, y) => x.localeCompare(y, "it")).map(r => `<option value="${esc(r)}"></option>`).join("")}</datalist>
+    <div id="ar-lista" style="max-height:46vh; overflow-y:auto;">${soci.map(s => { const r = risposte["socio_" + s.id]; return `
+      <div class="ar-riga" data-id="${s.id}" data-nome="${esc(nome(s).toLowerCase())}">
+        <div class="ar-nome">${esc(nome(s))}</div>
+        <div class="ar-chips">${CASO_VOCI.filter(v => r[v.k]).map(v => `<span class="ar-chip">${esc(v.breve)}</span>`).join("") || '<span class="card-sub">Ha risposto: nessun giorno</span>'}</div>
+        <div class="ar-campi"><div><label>Ruolo</label><input type="text" list="ar-ruoli" maxlength="40" data-r="${s.id}" placeholder="es. Cuochi" value="${esc(iniz[s.id].ruolo)}"></div><div><label>Note</label><input type="text" maxlength="120" data-n="${s.id}" placeholder="facoltative" value="${esc(iniz[s.id].nota)}"></div></div>
+      </div>`; }).join("")}</div>
+    <div id="ar-errore" style="color:var(--red); font-size:0.82rem; min-height:1.1em; margin-top:6px;"></div>
+    <div class="modal-actions"><button type="button" class="btn secondary" id="ar-chiudi">Chiudi</button><button type="button" class="btn" id="ar-salva">Salva</button></div>
+  </div>`);
+  let filtro = "tutti";
+  const val = (sel, id) => document.querySelector(`#ar-lista input[${sel}="${id}"]`).value.trim().replace(/\s+/g, " ");
+  const aggiorna = () => {
+    const q = document.getElementById("ar-cerca").value.trim().toLowerCase();
+    const conRuolo = soci.filter(s => val("data-r", s.id)).length;
+    document.querySelector('[data-f="tutti"]').textContent = `Tutti (${soci.length})`;
+    document.querySelector('[data-f="senza"]').textContent = `Senza ruolo (${soci.length - conRuolo})`;
+    document.getElementById("ar-conta").textContent = `${conRuolo} su ${soci.length} con un ruolo`;
+    document.querySelectorAll("#ar-lista .ar-riga").forEach(r => {
+      const ok = (!q || r.dataset.nome.includes(q)) && (filtro === "tutti" || !val("data-r", r.dataset.id));
+      r.style.display = ok ? "" : "none";
+    });
+    document.querySelectorAll(".ar-f").forEach(b => b.classList.toggle("att", b.dataset.f === filtro));
+  };
+  aggiorna();
+  document.getElementById("ar-cerca").addEventListener("input", aggiorna);
+  document.querySelectorAll(".ar-f").forEach(b => b.addEventListener("click", () => { filtro = b.dataset.f; aggiorna(); }));
+  // il filtro "Senza ruolo" non fa sparire la riga mentre la si sta scrivendo: si ricalcola quando si esce dal campo
+  document.getElementById("ar-lista").addEventListener("focusout", aggiorna);
+  document.getElementById("ar-lista").addEventListener("input", () => {
+    const conRuolo = soci.filter(s => val("data-r", s.id)).length;
+    document.getElementById("ar-conta").textContent = `${conRuolo} su ${soci.length} con un ruolo`;
+  });
+  document.getElementById("ar-chiudi").addEventListener("click", closeModal);
+  document.getElementById("ar-salva").addEventListener("click", async () => {
+    const modifiche = {}; let n = 0;
+    soci.forEach(s => {
+      const ruolo = val("data-r", s.id), nota = val("data-n", s.id);
+      if (ruolo !== iniz[s.id].ruolo || nota !== iniz[s.id].nota) { modifiche[s.id] = { ruolo, nota }; n++; }
+    });
+    if (!n) { closeModal(); return; }
+    const btn = document.getElementById("ar-salva"); btn.disabled = true;
+    const esito = await scriviRuoliCaso(edId, modifiche);
+    if (esito.errore) { document.getElementById("ar-errore").textContent = esito.errore; btn.disabled = false; return; }
+    scriviLog([{ ev: `🥟 ${casoTitolo(ed)}: ruoli e note assegnati dal Direttivo (${n} ${n === 1 ? "riga" : "righe"})` }]);
+    closeModal();
+    toast("Ruoli salvati");
+    renderSection();
+  });
+}
+
 // Intestazione a due livelli, come il foglio cartaceo: Venerdì | Sabato (data) | Domenica (data) | Note/Ruolo, e sotto i momenti.
 function testataCaso(ed, stile) {
   const cella = `text-align:center; font-weight:700; border:1px solid #444; background:#f7f3e8; padding:${stile === "pdf" ? "6px" : "4px 3px"};${stile === "pdf" ? " font-family:Arial,sans-serif; font-size:13px;" : ""}`;
   const th = (testo, attr) => `<th style="${cella}" ${attr || ""}>${testo}</th>`;
-  return `<tr>${th("Cognome e nome", 'rowspan="2"')}${th("Venerdì")}${th("Sabato " + casoDataBreve(ed.sabato, 0), 'colspan="2"')}${th("Domenica " + casoDataBreve(ed.sabato, 1), 'colspan="2"')}${th("Note/Ruolo", 'rowspan="2"')}</tr>`
+  return `<tr>${th("Cognome e nome", 'rowspan="2"')}${th("Venerdì")}${th("Sabato " + casoDataBreve(ed.sabato, 0), 'colspan="2"')}${th("Domenica " + casoDataBreve(ed.sabato, 1), 'colspan="2"')}${th("Ruolo", 'rowspan="2"')}${th("Note", 'rowspan="2"')}</tr>`
     + `<tr>${th("Preparativi")}${th("Pranzo")}${th("Cena")}${th("Pranzo")}${th("Cena")}</tr>`;
 }
 
@@ -5567,27 +5680,27 @@ async function apriReportCaso(edId) {
   const hannoRisposto = soci.filter(s => risposte["socio_" + s.id]).sort(ordina);
   const nonRisposto = soci.filter(s => s.accessoApp && !risposte["socio_" + s.id]).sort(ordina);
   if (!hannoRisposto.length) { alert(`Nessun socio ha ancora risposto.${nonRisposto.length ? "\n\nNon hanno ancora risposto: " + nonRisposto.map(nome).join(", ") + "." : ""}`); return; }
-  const intestazioni = ["Cognome e nome", "Venerdì - Preparativi", "Sabato - Pranzo", "Sabato - Cena", "Domenica - Pranzo", "Domenica - Cena", "Note/Ruolo"];
+  const intestazioni = ["Cognome e nome", "Venerdì - Preparativi", "Sabato - Pranzo", "Sabato - Cena", "Domenica - Pranzo", "Domenica - Cena", "Ruolo", "Note"];
   const tot = {}; CASO_VOCI.forEach(v => { tot[v.k] = 0; });
   const righe = [], testo = [];
-  const csv = [["Cognome e nome", "Cellulare", "Venerdì", "Sabato " + casoDataBreve(ed.sabato, 0), "", "Domenica " + casoDataBreve(ed.sabato, 1), "", "Note/Ruolo"], ["", "", "Preparativi", "Pranzo", "Cena", "Pranzo", "Cena", ""]];
+  const csv = [["Cognome e nome", "Cellulare", "Venerdì", "Sabato " + casoDataBreve(ed.sabato, 0), "", "Domenica " + casoDataBreve(ed.sabato, 1), "", "Ruolo", "Note"], ["", "", "Preparativi", "Pranzo", "Cena", "Pranzo", "Cena", "", ""]];
   const X = '<b style="display:block; text-align:center;">X</b>';
   hannoRisposto.forEach(s => {
     const r = risposte["socio_" + s.id];
     CASO_VOCI.forEach(v => { if (r[v.k]) tot[v.k]++; });
     const cell = s.cellulare || s.telefono || "";
-    righe.push([`${esc(nome(s))}${cell ? `<div style="color:#666; font-size:0.9em;">${esc(cell)}</div>` : ""}`].concat(CASO_VOCI.map(v => r[v.k] ? X : ""), [esc(r.nota || "")]));
-    csv.push([nome(s), cell].concat(CASO_VOCI.map(v => r[v.k] ? "X" : ""), [r.nota || ""]));
-    testo.push(`${nome(s)}: ${casoRiassunto(r)}${r.nota ? " (" + r.nota + ")" : ""}`);
+    righe.push([`${esc(nome(s))}${cell ? `<div style="color:#666; font-size:0.9em;">${esc(cell)}</div>` : ""}`].concat(CASO_VOCI.map(v => r[v.k] ? X : ""), [esc(r.ruolo || ""), esc(r.nota || "")]));
+    csv.push([nome(s), cell].concat(CASO_VOCI.map(v => r[v.k] ? "X" : ""), [r.ruolo || "", r.nota || ""]));
+    testo.push(`${nome(s)}${r.ruolo ? " - " + r.ruolo : ""}: ${casoRiassunto(r)}${r.nota ? " (" + r.nota + ")" : ""}`);
   });
-  righe.push(["<b>Totale</b>"].concat(CASO_VOCI.map(v => `<b style="display:block; text-align:center;">${tot[v.k]}</b>`), [""]));
-  csv.push(["Totale", ""].concat(CASO_VOCI.map(v => String(tot[v.k])), [""]));
+  righe.push(["<b>Totale</b>"].concat(CASO_VOCI.map(v => `<b style="display:block; text-align:center;">${tot[v.k]}</b>`), ["", ""]));
+  csv.push(["Totale", ""].concat(CASO_VOCI.map(v => String(tot[v.k])), ["", ""]));
   testo.push("", "Totali: " + CASO_VOCI.map(v => `${v.corto} ${tot[v.k]}`).join(", "));
   const nota = nonRisposto.length ? `<b>Non hanno ancora risposto (${nonRisposto.length}):</b> ${esc(nonRisposto.map(nome).join(", "))}.` : "";
   if (nonRisposto.length) testo.push(`Non hanno ancora risposto (${nonRisposto.length}): ${nonRisposto.map(nome).join(", ")}`);
   const virgolette = c => /[;"\n]/.test(c) ? `"${String(c).replace(/"/g, '""')}"` : String(c);
   apriAnteprimaReportGenerico(`Disponibilità ${casoTitolo(ed)}`, intestazioni, righe, testo,
-    { nota, suggerimento: "↔ Scorri la tabella verso destra (o ruota il telefono) per vedere Domenica e Note/Ruolo.", compatto: true, griglia: true, primaFissa: true, testata: stile => testataCaso(ed, stile),
+    { nota, suggerimento: "↔ Scorri la tabella verso destra (o ruota il telefono) per vedere Domenica, Ruolo e Note.", compatto: true, griglia: true, primaFissa: true, testata: stile => testataCaso(ed, stile),
       csv: { nome: `casoncellata_${String(ed.sabato).slice(0, 4)}_disponibilita.csv`, testo: csv.map(r => r.map(virgolette).join(";")).join("\r\n") } });
 }
 
