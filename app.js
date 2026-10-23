@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "9.14";
+const APP_VERSION = "9.15";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -5797,6 +5797,27 @@ async function usoIncarichiCaso(incarichi) {
   docs.forEach(d => { if (d) Object.values(d.risposte || {}).forEach(r => { if (r && chiavi.has(chiaveRuolo(r.ruolo))) n++; }); });
   return n;
 }
+// Rinomina un incarico in tutte le Casoncellate (anche scritto con maiuscole diverse). Restituisce quante risposte sono state aggiornate, o null se qualcosa non è andato.
+async function rinominaIncaricoCaso(vecchio, nuovo) {
+  if (currentRole !== "admin" || !window.db) return null;
+  const chiave = chiaveRuolo(vecchio); let totale = 0;
+  for (const e of state.casoncellata || []) {
+    const ref = db.collection(FIRESTORE_COLLECTION).doc(`casoncellata_${e.id}`);
+    let parziale = 0;
+    try {
+      await conTimeout(db.runTransaction(async tx => {
+        const snap = await tx.get(ref);
+        if (!snap.exists) return;
+        const risposte = snap.data().risposte || {}, upd = {};
+        Object.keys(risposte).forEach(k => { const r = risposte[k]; if (r && r.ruolo && chiaveRuolo(r.ruolo) === chiave) upd[`risposte.${k}.ruolo`] = nuovo; });
+        parziale = Object.keys(upd).length;
+        if (parziale) tx.update(ref, upd);
+      }), 20000);
+    } catch (err) { console.error(err); return null; }
+    totale += parziale;
+  }
+  return totale;
+}
 function apriRepartiCaso() {
   if (currentRole !== "admin") return;
   const reparti = casoReparti();
@@ -5806,7 +5827,7 @@ function apriRepartiCaso() {
     <div class="card-sub" style="margin-bottom:6px;">Solo l'Admin. Gli incarichi si scelgono poi dal menu del Ruolo in «Assegna ruoli». Le modifiche valgono subito.</div>
     ${reparti.map(rep => `<div class="gr" data-rep="${esc(rep.id)}">
       <div class="t"><span>${esc(rep.nome)}</span><span><button type="button" class="rc-ico" data-rc="rinomina" data-rep="${esc(rep.id)}" title="Rinomina il reparto">✏️</button><button type="button" class="rc-ico" data-rc="elimina-rep" data-rep="${esc(rep.id)}" title="Elimina il reparto">🗑️</button></span></div>
-      <div>${rep.incarichi.map(inc => `<span class="c">${esc(inc)} <button type="button" class="rc-x" data-rc="elimina-inc" data-rep="${esc(rep.id)}" data-inc="${esc(inc)}" title="Togli l'incarico">✕</button></span>`).join("") || '<span class="card-sub">Nessun incarico</span>'}</div>
+      <div>${rep.incarichi.map(inc => `<span class="c">${esc(inc)} <button type="button" class="rc-ico" data-rc="rinomina-inc" data-rep="${esc(rep.id)}" data-inc="${esc(inc)}" title="Rinomina l'incarico">✏️</button><button type="button" class="rc-x" data-rc="elimina-inc" data-rep="${esc(rep.id)}" data-inc="${esc(inc)}" title="Togli l'incarico">✕</button></span>`).join("") || '<span class="card-sub">Nessun incarico</span>'}</div>
       <div class="rc-nuovo"><input type="text" maxlength="40" placeholder="Nuovo incarico…" data-nuovo-inc="${esc(rep.id)}"><button type="button" class="btn secondary" data-rc="aggiungi-inc" data-rep="${esc(rep.id)}">＋</button></div>
     </div>`).join("")}
     <div class="rc-nuovo" style="margin-top:8px;"><input type="text" maxlength="30" placeholder="Nuovo reparto…" id="rc-nuovo-rep"><button type="button" class="btn secondary" data-rc="aggiungi-rep">＋ Reparto</button></div>
@@ -5843,6 +5864,16 @@ function apriRepartiCaso() {
       if (casoReparti().some(r => r.id !== rep.id && chiaveRuolo(r.nome) === chiaveRuolo(n))) { errore(`Il reparto «${n}» esiste già.`); return; }
       const vecchio = rep.nome; rep.nome = n;
       fatto(`il reparto «${vecchio}» ora si chiama «${n}»`); return;
+    }
+    if (az === "rinomina-inc") {
+      const inc = b.dataset.inc, n = pulisci(prompt("Nuovo nome dell'incarico", inc));
+      if (!n || n === inc) return;
+      const gia = incaricoDiRuolo(n);
+      if (gia && chiaveRuolo(gia.incarico) !== chiaveRuolo(inc)) { errore(`L'incarico «${gia.incarico}» esiste già (reparto ${gia.reparto.nome}).`); return; }
+      const aggiornate = await rinominaIncaricoCaso(inc, n);
+      if (aggiornate === null) { errore("Non sono riuscito ad aggiornare le risposte: controlla la connessione e riprova. Nessun nome è stato cambiato."); return; }
+      rep.incarichi = rep.incarichi.map(x => x === inc ? n : x);
+      fatto(`l'incarico «${inc}» ora si chiama «${n}» (${aggiornate} ${aggiornate === 1 ? "risposta aggiornata" : "risposte aggiornate"})`); return;
     }
     if (az === "elimina-inc") {
       const inc = b.dataset.inc, uso = await usoIncarichiCaso([inc]);
@@ -5951,14 +5982,15 @@ async function apriTabelloneCaso(edId) {
   persone.forEach(p => { if (p.r.ruolo && !info(p)) daAssociare.add(chiaveRuolo(p.r.ruolo)); });
   if (prec.ultima) Object.values(prec.ultima.risposte).forEach(rp => { if (rp && rp.ruolo && !incaricoDiRuolo(rp.ruolo)) daAssociare.add(chiaveRuolo(rp.ruolo)); });
   const proposti = persone.some(p => p.r.ruolo && p.r.ruoloProposto && CASO_VOCI.some(v => p.r[v.k]));
-  // l'incarico generico (uguale al nome del reparto: Cucina, Sala, Vendita) non si scrive accanto al nome
-  const etichetta = p => { const m = info(p); return m && chiaveRuolo(m.incarico) !== chiaveRuolo(m.reparto.nome) ? m.incarico : ""; };
+  // l'incarico si scrive sempre (anche quando ha lo stesso nome del reparto): così le persone si vedono raggruppate per incarico
+  const etichetta = p => { const m = info(p); return m ? m.incarico : ""; };
   const scarico = persone.filter(p => p.r.ven);
   const giorni = CASO_GIORNI_TAB.map(g => ({
     g, titolo: `${g.nome} ${casoDataBreve(ed.sabato, g.delta)}`,
     blocchi: reparti.map((rep, i) => ({ rep, mom: g.momenti, colore: CASO_COLORI_REPARTO[i % CASO_COLORI_REPARTO.length],
       righe: persone.filter(p => { const m = info(p); return m && m.reparto.id === rep.id && g.momenti.some(mo => p.r[mo.k]); })
-        .sort((x, y) => (y.r[g.momenti[0].k] ? 1 : 0) - (x.r[g.momenti[0].k] ? 1 : 0) || x.nome.localeCompare(y.nome, "it", { sensitivity: "base" })),
+        .sort((x, y) => { const ix = p => rep.incarichi.findIndex(n => chiaveRuolo(n) === chiaveRuolo(p.r.ruolo));
+          return ix(x) - ix(y) || (y.r[g.momenti[0].k] ? 1 : 0) - (x.r[g.momenti[0].k] ? 1 : 0) || x.nome.localeCompare(y.nome, "it", { sensitivity: "base" }); }),
       cols: g.momenti.map(mo => {
       const lista = persone.filter(p => { const m = info(p); return m && m.reparto.id === rep.id && p.r[mo.k]; });
       return { mo, lista, prima: (prima[rep.id] || {})[mo.k] || 0 };
