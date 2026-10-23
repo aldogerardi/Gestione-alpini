@@ -499,3 +499,10 @@ body.menu-aperto { overflow: hidden; }
 .xl-t tr.tot td { font-weight: 800; background: #f7f5ee; border-top: 2px solid #444; height: auto; }
 .xl-t tr.tot small { color: #777; font-weight: 600; }
 .xl-v { color: #aaa; }
+
+/* Tabellone: tre colonne (Pranzo, Cena, Incarico), caratteri più piccoli, stessa persona sulla stessa riga */
+.xl-t { font-size: .74rem; }
+.xl-t th, .xl-t td { padding: 2px 5px; height: 20px; }
+.xl-t td.xl-i { text-align: center; }
+.xl-ic { color: #7a5a00; font-weight: 700; font-size: .7rem; }
+.xl-t td.xl-i .tb-n { font-size: .66rem; }

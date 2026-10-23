@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "9.13";
+const APP_VERSION = "9.14";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -5956,7 +5956,10 @@ async function apriTabelloneCaso(edId) {
   const scarico = persone.filter(p => p.r.ven);
   const giorni = CASO_GIORNI_TAB.map(g => ({
     g, titolo: `${g.nome} ${casoDataBreve(ed.sabato, g.delta)}`,
-    blocchi: reparti.map((rep, i) => ({ rep, colore: CASO_COLORI_REPARTO[i % CASO_COLORI_REPARTO.length], cols: g.momenti.map(mo => {
+    blocchi: reparti.map((rep, i) => ({ rep, mom: g.momenti, colore: CASO_COLORI_REPARTO[i % CASO_COLORI_REPARTO.length],
+      righe: persone.filter(p => { const m = info(p); return m && m.reparto.id === rep.id && g.momenti.some(mo => p.r[mo.k]); })
+        .sort((x, y) => (y.r[g.momenti[0].k] ? 1 : 0) - (x.r[g.momenti[0].k] ? 1 : 0) || x.nome.localeCompare(y.nome, "it", { sensitivity: "base" })),
+      cols: g.momenti.map(mo => {
       const lista = persone.filter(p => { const m = info(p); return m && m.reparto.id === rep.id && p.r[mo.k]; });
       return { mo, lista, prima: (prima[rep.id] || {})[mo.k] || 0 };
     }) })),
@@ -5967,25 +5970,26 @@ async function apriTabelloneCaso(edId) {
   const totale = (n, p) => prec.ultima ? `${n} <small>(${p})</small>` : `${n}`;
   // --- schermo (un riquadro sotto l'altro) ---
   // --- schermo: in stile Excel, come il foglio (griglia con i bordi; i riquadri si affiancano se c'è spazio) ---
-  const cellaXl = p => p ? `<span class="xl-n">${esc(p.nome)}${p.r.ruolo && p.r.ruoloProposto ? " *" : ""}</span>${etichetta(p) ? ` <span class="tb-i">${esc(etichetta(p))}</span>` : ""}${p.r.nota ? ` <span class="tb-n">${esc(p.r.nota)}</span>` : ""}` : "";
+  const nomeXl = p => `<span class="xl-n">${esc(p.nome)}${p.r.ruolo && p.r.ruoloProposto ? " *" : ""}</span>`;
+  const incXl = p => `${etichetta(p) ? `<span class="xl-ic">${esc(etichetta(p))}</span>` : ""}${p.r.nota ? ` <span class="tb-n">${esc(p.r.nota)}</span>` : ""}`;
   const bloccoXl = b => {
-    const n = Math.max(...b.cols.map(c => c.lista.length), 0);
-    let righe = n ? "" : `<tr class="xl-p">${b.cols.map(() => '<td class="xl-v">—</td>').join("")}</tr>`;
-    for (let i = 0; i < n; i++) righe += `<tr class="xl-p">${b.cols.map(c => `<td>${cellaXl(c.lista[i])}</td>`).join("")}</tr>`;
-    return `<div class="xl-b"><div class="xl-h">${esc(b.rep.nome.toUpperCase())}</div><table class="xl-t"><tr>${b.cols.map(c => `<th>${c.mo.nome}</th>`).join("")}</tr>${righe}<tr class="tot">${b.cols.map(c => `<td>${totale(c.lista.length, c.prima)}</td>`).join("")}</tr></table></div>`;
+    const righe = b.righe.length ? b.righe.map(p => `<tr class="xl-p"><td>${p.r[b.mom[0].k] ? nomeXl(p) : ""}</td><td>${p.r[b.mom[1].k] ? nomeXl(p) : ""}</td><td class="xl-i">${incXl(p)}</td></tr>`).join("")
+      : '<tr class="xl-p"><td class="xl-v">—</td><td class="xl-v">—</td><td></td></tr>';
+    return `<div class="xl-b"><div class="xl-h">${esc(b.rep.nome.toUpperCase())}</div><table class="xl-t"><colgroup><col style="width:33%"><col style="width:33%"><col style="width:34%"></colgroup><tr>${b.cols.map(c => `<th>${c.mo.nome}</th>`).join("")}<th>Incarico</th></tr>${righe}<tr class="tot">${b.cols.map(c => `<td>${totale(c.lista.length, c.prima)}</td>`).join("")}<td></td></tr></table></div>`;
   };
   const schermo = `<div class="xl-tab"><div class="xl-g">VENERDÌ ${casoDataBreve(ed.sabato, -1)}</div><div class="xl-sc"><b>SCARICO</b> (${scarico.length}): ${esc(scarico.map(p => p.nome).join(", ")) || "nessuno"}</div>`
     + giorni.map(gi => `<div class="xl-g">${esc(gi.titolo)}</div><div class="xl-r">${gi.blocchi.map(bloccoXl).join("")}</div><div class="xl-sc"><b>Senza ruolo / a disposizione:</b> ${esc(gi.senza.map(senzaTesto).join(", ")) || "nessuno"}</div>`).join("") + `</div>`;
 
   // --- stampa (due riquadri affiancati, come il foglio) ---
   const bloccoStampa = b => {
-    const n = Math.max(...b.cols.map(c => c.lista.length), 0);
-    let righe = "";
-    for (let i = 0; i < n; i++) righe += `<tr>${b.cols.map(c => { const p = c.lista[i]; return `<td style="border:1px solid #777; padding:2px 5px; height:15px;">${p ? `${esc(p.nome)}${p.r.ruolo && p.r.ruoloProposto ? " *" : ""}${etichetta(p) ? ` <i style="float:right; font-style:normal; color:#7a5a00; font-size:9px;">${esc(etichetta(p))}</i>` : ""}${p.r.nota ? ` <i style="font-style:italic; color:#555; font-size:9px;">(${esc(p.r.nota)})</i>` : ""}` : ""}</td>`; }).join("")}</tr>`;
+    const cella = "border:1px solid #777; padding:2px 5px; height:15px;";
+    const nomeS = p => `${esc(p.nome)}${p.r.ruolo && p.r.ruoloProposto ? " *" : ""}`;
+    const righe = b.righe.map(p => `<tr><td style="${cella}">${p.r[b.mom[0].k] ? nomeS(p) : ""}</td><td style="${cella}">${p.r[b.mom[1].k] ? nomeS(p) : ""}</td><td style="${cella} color:#7a5a00; font-size:9px;"><b>${esc(etichetta(p))}</b>${p.r.nota ? ` <i style="font-weight:400; color:#555;">(${esc(p.r.nota)})</i>` : ""}</td></tr>`).join("");
     return `<div style="flex:1 1 0; min-width:0;"><div style="text-align:center; font-weight:800; font-size:12px;">${esc(b.rep.nome.toUpperCase())}</div>
-      <table style="width:100%; border-collapse:collapse; font-size:11px;"><tr>${b.cols.map(c => `<th style="border:1px solid #777; background:#f1ede0; padding:2px;">${c.mo.nome}</th>`).join("")}</tr>${righe}
-      <tr>${b.cols.map(c => `<td style="border:1px solid #777; padding:2px 5px; font-weight:700; background:#f7f5ee;">Totale ${totale(c.lista.length, c.prima).replace(/<small>/, '<span style="color:#777; font-weight:400;">').replace(/<\/small>/, "</span>")}</td>`).join("")}</tr></table></div>`;
+      <table style="width:100%; border-collapse:collapse; font-size:10px; table-layout:fixed;"><colgroup><col style="width:33%"><col style="width:33%"><col style="width:34%"></colgroup><tr>${b.cols.map(c => `<th style="border:1px solid #777; background:#f1ede0; padding:2px;">${c.mo.nome}</th>`).join("")}<th style="border:1px solid #777; background:#f1ede0; padding:2px;">Incarico</th></tr>${righe}
+      <tr>${b.cols.map(c => `<td style="border:1px solid #777; padding:2px 5px; font-weight:700; background:#f7f5ee;">Totale ${totale(c.lista.length, c.prima).replace(/<small>/, '<span style="color:#777; font-weight:400;">').replace(/<\/small>/, "</span>")}</td>`).join("")}<td style="border:1px solid #777; background:#f7f5ee;"></td></tr></table></div>`;
   };
+
   const stampa = `<div style="font-family:Arial,sans-serif;">
     <div style="text-align:center; font-weight:800; font-size:15px; color:#b3261e; margin:6px 0;">VENERDÌ ${casoDataBreve(ed.sabato, -1)}</div>
     <div style="font-size:11px; margin-bottom:8px;"><b>SCARICO</b> &nbsp; ${esc(scarico.map(p => p.nome).join(", ")) || "nessuno"}</div>
