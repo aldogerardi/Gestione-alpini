@@ -418,7 +418,19 @@ body.menu-aperto { overflow: hidden; }
 .ar-campi > div { flex: 1 1 0; min-width: 0; }
 .ar-campi label { display: block; font-size: .72rem; font-weight: 700; color: #555; margin-bottom: 2px; }
 .ar-campi input { width: 100%; box-sizing: border-box; padding: 8px; font-size: .9rem; border: 2px solid #1a1a1a; border-radius: 8px; background: #fff; }
-.ar-filtri { display: flex; gap: 6px; margin: 8px 0 4px; }
-.ar-f { padding: 5px 12px; border-radius: 16px; border: 1.5px solid #1a6b3c; color: #1a6b3c; background: transparent; font-weight: 700; font-size: .82rem; cursor: pointer; }
+.ar-filtri { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 4px; }
+.ar-f { white-space: nowrap; padding: 5px 12px; border-radius: 16px; border: 1.5px solid #1a6b3c; color: #1a6b3c; background: transparent; font-weight: 700; font-size: .82rem; cursor: pointer; }
 .ar-f.att { background: #1a6b3c; color: #fff; }
 .ar-conta { font-weight: 700; margin: 4px 0; }
+
+/* Casoncellata: ruoli proposti dall'edizione precedente e riepilogo per ruolo */
+.ar-campi input.prop { background: #fff8e1; border-color: #d9a400; }
+.ar-tag { display: inline-block; margin-left: 6px; padding: 0 7px; border-radius: 9px; background: #fff2cc; border: 1px solid #d9a400; color: #7a5a00; font-size: .68rem; font-weight: 800; vertical-align: middle; }
+.box-riep { background: #fff; border: 2px solid #1a1a1a; border-radius: 12px; padding: 8px 10px; margin: 8px 0; }
+.riep { width: 100%; border-collapse: collapse; font-size: .82rem; margin: 6px 0; }
+.riep th, .riep td { padding: 4px 6px; border-bottom: 1px solid #e8e4d6; text-align: center; }
+.riep th:first-child, .riep td:first-child { text-align: left; font-weight: 700; }
+.riep th { font-size: .7rem; color: #555; }
+.riep .male { color: #b3261e; font-weight: 800; }
+.riep .bene { color: #1a6b3c; font-weight: 800; }
+.box-att { background: #fff8e1; border: 2px solid #d9a400; border-radius: 12px; padding: 8px 10px; margin: 8px 0; align-items: center; justify-content: space-between; gap: 8px; font-weight: 700; font-size: .88rem; }
