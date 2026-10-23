@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "8.90";
+const APP_VERSION = "9.10";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -305,6 +305,7 @@ function applyStateFields(source) {
   state.canzoni = source.canzoni || [];
   state.manuali = source.manuali || [];
   state.casoncellata = source.casoncellata || [];
+  state.casoReparti = source.casoReparti || [];
 }
 
 const SYNC_STATO = { ok: null, quando: null, errore: "", ricevuto: null, daCache: false };
@@ -423,6 +424,7 @@ let state = {
   canzoni: [],
   manuali: [],
   casoncellata: [],
+  casoReparti: [],
   meta: { ultimaModifica: null, ultimoImport: null }
 };
 let bollinoAnno = new Date().getFullYear();
@@ -5294,6 +5296,25 @@ function scaricaTesto(nome, testo, tipo) {
 }
 
 // Le risposte stanno in un documento a parte (come le cene): tanti soci possono rispondere insieme senza sovrascriversi.
+// ---------- Reparti e incarichi della Casoncellata ----------
+// L'elenco iniziale vale finché l'Admin non lo modifica (e allora si salva in state.casoReparti).
+const CASO_REPARTI_BASE = [
+  { id: "cucina", nome: "Cucina", incarichi: ["Resp. cucina", "Cucina", "Piatti freddi", "Lavapiatti"] },
+  { id: "bar", nome: "Bar", incarichi: ["Bar piano terra", "Bar 1° piano", "Bar piano terra e 1° piano"] },
+  { id: "sala", nome: "Sala", incarichi: ["Resp. piani", "Sala", "Portinaio"] },
+  { id: "vendita", nome: "Vendita", incarichi: ["Vendita"] },
+];
+function casoReparti() { return state.casoReparti && state.casoReparti.length ? state.casoReparti : CASO_REPARTI_BASE; }
+function chiaveRuolo(r) { return String(r || "").trim().toLowerCase().replace(/\s+/g, " "); }
+// Dato un ruolo (testo), il reparto e l'incarico dell'elenco a cui corrisponde (senza badare a maiuscole), oppure null.
+function incaricoDiRuolo(ruolo) {
+  const k = chiaveRuolo(ruolo);
+  if (!k) return null;
+  for (const rep of casoReparti()) for (const inc of rep.incarichi) if (chiaveRuolo(inc) === k) return { reparto: rep, incarico: inc };
+  return null;
+}
+function casoRuoloCanonico(ruolo) { const m = incaricoDiRuolo(ruolo); return m ? m.incarico : String(ruolo || ""); }
+
 // Ruoli delle Casoncellate precedenti: per ogni socio l'ultimo ruolo avuto, i ruoli già usati e l'ultima edizione in cui qualcuno ne aveva uno.
 async function ruoliPrecedentiCaso(ed) {
   const prec = (state.casoncellata || []).filter(e => e.id !== ed.id && String(e.sabato) < String(ed.sabato)).sort((x, y) => String(y.sabato).localeCompare(String(x.sabato)));
@@ -5306,7 +5327,7 @@ async function ruoliPrecedentiCaso(ed) {
       const r = rs[k], id = k.replace(/^socio_/, "");
       if (!r || !r.ruolo) return;
       ruoli.add(r.ruolo);
-      if (!mappa[id]) mappa[id] = { ruolo: r.ruolo, anno };
+      if (!mappa[id]) mappa[id] = { ruolo: casoRuoloCanonico(r.ruolo), anno };
       if (!ultima) ultima = { anno, risposte: rs };
     });
   });
@@ -5383,6 +5404,10 @@ function renderCasoncellata() {
       <div class="card-sub" style="margin-bottom:8px;">Venerdì e domenica si ricavano dal sabato.</div>
       <button type="button" class="btn block" data-caso="crea">➕ Apri la richiesta di disponibilità</button>
     </div>
+    <div class="ben-tasti" style="margin:0 0 10px;">
+      ${currentRole === "admin" ? `<button type="button" class="btn secondary" data-caso="reparti" title="Reparti e incarichi">⚙️ Reparti e incarichi</button>` : ""}
+      <button type="button" class="btn secondary" data-caso="associa" title="Associa i ruoli scritti a mano agli incarichi">🔁 Associa i vecchi ruoli</button>
+    </div>
     ${tutte.length ? tutte.map(ed => `
       <div class="card">
         <div style="display:flex; justify-content:space-between; gap:8px; align-items:flex-start;">
@@ -5392,13 +5417,14 @@ function renderCasoncellata() {
         <div class="card-sub" data-caso-conta="${ed.id}" style="margin-top:8px;">Caricamento risposte...</div>
         <div class="ben-tasti" style="margin-top:10px;">
           <button type="button" class="btn" data-caso="report" data-id="${ed.id}">📊 Report</button>
+          <button type="button" class="btn" data-caso="tabellone" data-id="${ed.id}" title="Chi c'è in ogni reparto, pranzo e cena">📋 Tabellone</button>
+        </div>
+        <div class="ben-tasti" style="margin-top:8px;">
           <button type="button" class="btn" data-caso="ruoli" data-id="${ed.id}" title="Assegna il ruolo a chi ha dato disponibilità">🧑‍🍳 Assegna ruoli</button>
-        </div>
-        <div class="ben-tasti" style="margin-top:8px;">
           <button type="button" class="btn secondary" data-caso="mano" data-id="${ed.id}" title="Inserisci le disponibilità di chi non usa l'app o dal foglio cartaceo">📝 Inserisci a mano</button>
-          <button type="button" class="btn secondary" data-caso="${ed.aperta === false ? "riapri" : "chiudi"}" data-id="${ed.id}">${ed.aperta === false ? "Riapri ai soci" : "Chiudi ai soci"}</button>
         </div>
         <div class="ben-tasti" style="margin-top:8px;">
+          <button type="button" class="btn secondary" data-caso="${ed.aperta === false ? "riapri" : "chiudi"}" data-id="${ed.id}">${ed.aperta === false ? "Riapri ai soci" : "Chiudi ai soci"}</button>
           <button type="button" class="btn danger" data-caso="elimina" data-id="${ed.id}" title="Elimina la richiesta e tutte le risposte">🗑️ Elimina</button>
         </div>
       </div>`).join("") : `<div class="card-sub">Nessuna richiesta ancora creata.</div>`}
@@ -5423,6 +5449,9 @@ function attachCasoncellataEvents() {
     else if (az === "report") apriReportCaso(el.dataset.id);
     else if (az === "mano") apriInserimentoCaso(el.dataset.id);
     else if (az === "ruoli") apriAssegnaRuoliCaso(el.dataset.id);
+    else if (az === "tabellone") apriTabelloneCaso(el.dataset.id);
+    else if (az === "reparti") apriRepartiCaso();
+    else if (az === "associa") apriAssociaRuoliCaso();
     else if (az === "chiudi") impostaApertaCaso(el.dataset.id, false);
     else if (az === "riapri") impostaApertaCaso(el.dataset.id, true);
     else if (az === "elimina") eliminaRichiestaCaso(el.dataset.id);
@@ -5611,8 +5640,15 @@ async function scriviRuoliCaso(edId, modifiche) {
 
 const CASO_RUOLI_BASE = ["Cuochi", "Lavapiatti", "Camerieri piatti", "Camerieri bar", "Pulizia tavoli", "Gazebo"];
 
-// "Assegna ruoli": chi ha dato disponibilità, con le sue spunte, e due campi liberi: Ruolo (con suggerimenti) e Note.
-// Se c'è una Casoncellata precedente con i ruoli, in cima c'è il riepilogo per ruolo (per tappare i buchi) e i ruoli copiati restano "da confermare".
+// "Assegna ruoli": chi ha dato disponibilità, con le sue spunte, il Ruolo (un menu con gli incarichi, raggruppati per reparto) e le Note.
+// Se c'è una Casoncellata precedente con i ruoli, in cima c'è il riepilogo per reparto (per tappare i buchi) e i ruoli copiati restano "da confermare".
+function opzioniRuoloCaso(corrente) {
+  const m = incaricoDiRuolo(corrente);
+  const gruppi = casoReparti().map(rep => `<optgroup label="${esc(rep.nome)}">${rep.incarichi.map(inc => `<option value="${esc(inc)}"${m && m.incarico === inc ? " selected" : ""}>${esc(inc)}</option>`).join("")}</optgroup>`).join("");
+  const altro = corrente && !m ? `<optgroup label="Altro (da associare)"><option value="${esc(corrente)}" selected>${esc(corrente)}</option></optgroup>` : "";
+  return `<option value=""${!corrente ? " selected" : ""}>— nessun ruolo —</option>${gruppi}${altro}`;
+}
+
 async function apriAssegnaRuoliCaso(edId) {
   if (currentRole === "socio") return;
   const ed = (state.casoncellata || []).find(x => x.id === edId);
@@ -5628,12 +5664,8 @@ async function apriAssegnaRuoliCaso(edId) {
   }).sort(ordina);
   if (!soci.length) { alert("Nessun socio ha ancora dato disponibilità. Aspetta le risposte, oppure usa «Inserisci a mano»."); return; }
   const prec = await ruoliPrecedentiCaso(ed);
-  // suggerimenti: i reparti più comuni, i ruoli già scritti quest'anno e quelli degli anni precedenti
-  const usati = new Set(CASO_RUOLI_BASE);
-  Object.values(risposte).forEach(r => { if (r && r.ruolo) usati.add(r.ruolo); });
-  prec.ruoli.forEach(r => usati.add(r));
   const iniz = {};
-  soci.forEach(s => { const r = risposte["socio_" + s.id]; iniz[s.id] = { ruolo: String(r.ruolo || ""), nota: String(r.nota || ""), prop: String(r.ruoloProposto || "") }; });
+  soci.forEach(s => { const r = risposte["socio_" + s.id]; iniz[s.id] = { ruolo: casoRuoloCanonico(r.ruolo || ""), nota: String(r.nota || ""), prop: String(r.ruoloProposto || "") }; });
   const confermati = new Set();
   // chi c'era nell'ultima edizione con un ruolo, e non ha risposto o ha detto di non poter venire
   const nonRisposto = [], hannoDettoNo = [];
@@ -5642,51 +5674,58 @@ async function apriAssegnaRuoliCaso(edId) {
       const rp = prec.ultima.risposte["socio_" + s.id];
       if (!rp || !rp.ruolo) return;
       const cur = risposte["socio_" + s.id];
-      if (!cur) nonRisposto.push(`${nome(s)} (${rp.ruolo})`);
-      else if (!CASO_VOCI.some(v => cur[v.k])) hannoDettoNo.push(`${nome(s)} (${rp.ruolo})`);
+      if (!cur) nonRisposto.push(`${nome(s)} (${casoRuoloCanonico(rp.ruolo)})`);
+      else if (!CASO_VOCI.some(v => cur[v.k])) hannoDettoNo.push(`${nome(s)} (${casoRuoloCanonico(rp.ruolo)})`);
     });
   }
   const haProposte = soci.some(s => iniz[s.id].prop);
   showModal(`<div id="ar-root">
     <div class="modal-title">🧑‍🍳 Assegna ruoli</div>
-    <div class="card-sub" style="margin-bottom:4px;">${esc(casoTitolo(ed))}. Scrivi il ruolo di ognuno (per esempio Cuochi, Lavapiatti, Camerieri piatti…) e, se serve, una nota. Mentre scrivi l'app suggerisce i ruoli già usati.</div>
-    ${prec.ultima ? `<div class="box-riep"><div style="font-weight:800;">Riepilogo per ruolo</div><div id="ar-riep"></div>
+    <div class="card-sub" style="margin-bottom:4px;">${esc(casoTitolo(ed))}. Scegli l'incarico di ognuno dal menu e, se serve, scrivi una nota.</div>
+    ${prec.ultima ? `<div class="box-riep"><div style="font-weight:800;">Riepilogo per reparto</div><div id="ar-riep"></div>
       ${nonRisposto.length ? `<div style="font-size:.82rem; margin-top:4px;"><b>Non hanno ancora risposto, c'erano nel ${esc(prec.ultima.anno)} (${nonRisposto.length}):</b> ${esc(nonRisposto.join(", "))}.</div>` : ""}
       ${hannoDettoNo.length ? `<div style="font-size:.82rem; margin-top:4px;"><b>Hanno detto che non possono (${hannoDettoNo.length}):</b> ${esc(hannoDettoNo.join(", "))}.</div>` : ""}</div>` : ""}
     <div class="box-att" id="ar-banner" style="display:none;"><span id="ar-banner-t"></span><button type="button" class="btn" id="ar-conferma" style="padding:6px 12px; font-size:.85rem;">Conferma tutti</button></div>
     <input type="text" id="ar-cerca" placeholder="Cerca un socio..." style="width:100%; box-sizing:border-box;">
     <div class="ar-filtri"><button type="button" class="ar-f att" data-f="tutti"></button><button type="button" class="ar-f" data-f="senza"></button>${haProposte ? '<button type="button" class="ar-f" data-f="conferma"></button>' : ""}</div>
     <div class="ar-conta" id="ar-conta"></div>
-    <datalist id="ar-ruoli">${[...usati].sort((x, y) => x.localeCompare(y, "it")).map(r => `<option value="${esc(r)}"></option>`).join("")}</datalist>
     <div id="ar-lista" style="max-height:44vh; overflow-y:auto;">${soci.map(s => { const r = risposte["socio_" + s.id]; return `
       <div class="ar-riga" data-id="${s.id}" data-nome="${esc(nome(s).toLowerCase())}">
         <div class="ar-nome">${esc(nome(s))}<span class="ar-tag" data-tag="${s.id}" style="display:none;"></span></div>
         <div class="ar-chips">${CASO_VOCI.filter(v => r[v.k]).map(v => `<span class="ar-chip">${esc(v.breve)}</span>`).join("") || '<span class="card-sub">Ha risposto: nessun giorno</span>'}</div>
-        <div class="ar-campi"><div><label>Ruolo</label><input type="text" list="ar-ruoli" maxlength="40" data-r="${s.id}" placeholder="es. Cuochi" value="${esc(iniz[s.id].ruolo)}"></div><div><label>Note</label><input type="text" maxlength="120" data-n="${s.id}" placeholder="facoltative" value="${esc(iniz[s.id].nota)}"></div></div>
+        <div class="ar-campi"><div><label>Ruolo</label><select data-r="${s.id}" class="sel-ruolo">${opzioniRuoloCaso(iniz[s.id].ruolo)}</select></div><div><label>Note</label><input type="text" maxlength="120" data-n="${s.id}" placeholder="facoltative" value="${esc(iniz[s.id].nota)}"></div></div>
       </div>`; }).join("")}</div>
     <div id="ar-errore" style="color:var(--red); font-size:0.82rem; min-height:1.1em; margin-top:6px;"></div>
     <div class="modal-actions"><button type="button" class="btn secondary" id="ar-chiudi">Chiudi</button><button type="button" class="btn" id="ar-salva">Salva</button></div>
   </div>`);
   let filtro = "tutti";
-  const val = (sel, id) => document.querySelector(`#ar-lista input[${sel}="${id}"]`).value.trim().replace(/\s+/g, " ");
+  const val = (sel, id) => document.querySelector(`#ar-lista [${sel}="${id}"]`).value.trim().replace(/\s+/g, " ");
   // un ruolo copiato resta "da confermare" finché non lo confermi o lo cambi
   const propAttiva = id => !!iniz[id].prop && !confermati.has(id) && val("data-r", id) === iniz[id].ruolo;
-  const chiave = r => String(r).trim().toLowerCase();
   const riepilogo = () => {
     const box = document.getElementById("ar-riep");
     if (!box) return;
-    const ora = {}, prima = {}, etichetta = {};
+    const ora = {}, prima = {}, altroOra = {}, altroPrima = {};
+    const conta = (mappa, altro, ruolo) => { const m = incaricoDiRuolo(ruolo); if (m) mappa[m.incarico] = (mappa[m.incarico] || 0) + 1; else if (ruolo) altro[ruolo] = (altro[ruolo] || 0) + 1; };
     Object.keys(prec.ultima.risposte).forEach(k => {
       const rp = prec.ultima.risposte[k], s = state.socios.find(x => "socio_" + x.id === k);
-      if (!rp || !rp.ruolo || !s || s.andatoAvanti) return;
-      const c = chiave(rp.ruolo); prima[c] = (prima[c] || 0) + 1; if (!etichetta[c]) etichetta[c] = rp.ruolo;
+      if (rp && rp.ruolo && s && !s.andatoAvanti) conta(prima, altroPrima, rp.ruolo);
     });
-    soci.forEach(s => { const r = val("data-r", s.id); if (!r) return; const c = chiave(r); ora[c] = (ora[c] || 0) + 1; if (!etichetta[c]) etichetta[c] = r; });
-    const chiavi = [...new Set(Object.keys(prima).concat(Object.keys(ora)))].sort((x, y) => (prima[y] || 0) - (prima[x] || 0) || etichetta[x].localeCompare(etichetta[y], "it"));
-    box.innerHTML = `<table class="riep"><tr><th></th><th>Quest'anno</th><th>Nel ${esc(prec.ultima.anno)}</th><th></th></tr>${chiavi.map(c => {
-      const q = ora[c] || 0, p = prima[c] || 0, d = q - p;
-      return `<tr><td>${esc(etichetta[c])}</td><td>${q}</td><td>${p}</td><td class="${d < 0 ? "male" : d > 0 ? "bene" : ""}">${d < 0 ? "mancano " + (-d) : d > 0 ? "+" + d : "ok"}</td></tr>`;
-    }).join("")}</table>`;
+    soci.forEach(s => conta(ora, altroOra, val("data-r", s.id)));
+    const diff = (q, p) => { const d = q - p; return `<td class="${d < 0 ? "male" : d > 0 ? "bene" : ""}">${d < 0 ? "mancano " + (-d) : d > 0 ? "+" + d : "ok"}</td>`; };
+    let righe = "";
+    casoReparti().forEach(rep => {
+      const q = rep.incarichi.reduce((n, i) => n + (ora[i] || 0), 0), p = rep.incarichi.reduce((n, i) => n + (prima[i] || 0), 0);
+      if (!q && !p) return;
+      righe += `<tr class="rep-r"><td>${esc(rep.nome)}</td><td>${q}</td><td>${p}</td>${diff(q, p)}</tr>`;
+      rep.incarichi.forEach(i => { if (ora[i] || prima[i]) righe += `<tr><td class="i">${esc(i)}</td><td>${ora[i] || 0}</td><td>${prima[i] || 0}</td>${diff(ora[i] || 0, prima[i] || 0)}</tr>`; });
+    });
+    const testi = [...new Set(Object.keys(altroOra).concat(Object.keys(altroPrima)))];
+    if (testi.length) {
+      righe += `<tr class="rep-r"><td>Altro (da associare)</td><td>${testi.reduce((n, t) => n + (altroOra[t] || 0), 0)}</td><td>${testi.reduce((n, t) => n + (altroPrima[t] || 0), 0)}</td><td></td></tr>`;
+      testi.forEach(t => { righe += `<tr><td class="i">${esc(t)}</td><td>${altroOra[t] || 0}</td><td>${altroPrima[t] || 0}</td><td></td></tr>`; });
+    }
+    box.innerHTML = `<table class="riep"><tr><th></th><th>Quest'anno</th><th>Nel ${esc(prec.ultima.anno)}</th><th></th></tr>${righe}</table>`;
   };
   const aggiornaLive = () => {
     const conRuolo = soci.filter(s => val("data-r", s.id)).length;
@@ -5698,7 +5737,7 @@ async function apriAssegnaRuoliCaso(edId) {
     soci.forEach(s => {
       const att = propAttiva(s.id), tag = document.querySelector(`[data-tag="${s.id}"]`);
       tag.style.display = att ? "" : "none"; tag.textContent = att ? `dal ${iniz[s.id].prop} *` : "";
-      document.querySelector(`#ar-lista input[data-r="${s.id}"]`).classList.toggle("prop", att);
+      document.querySelector(`#ar-lista [data-r="${s.id}"]`).classList.toggle("prop", att);
     });
     riepilogo();
     return { conRuolo, daConf };
@@ -5719,9 +5758,10 @@ async function apriAssegnaRuoliCaso(edId) {
   aggiorna();
   document.getElementById("ar-cerca").addEventListener("input", aggiorna);
   document.querySelectorAll(".ar-f").forEach(b => b.addEventListener("click", () => { filtro = b.dataset.f; aggiorna(); }));
-  // la riga non sparisce dal filtro mentre la si sta scrivendo: si ricalcola quando si esce dal campo
+  // la riga non sparisce dal filtro mentre la si sta modificando: si ricalcola quando si esce dal campo
   document.getElementById("ar-lista").addEventListener("focusout", aggiorna);
   document.getElementById("ar-lista").addEventListener("input", aggiornaLive);
+  document.getElementById("ar-lista").addEventListener("change", aggiornaLive);
   document.getElementById("ar-conferma").addEventListener("click", () => { soci.forEach(s => { if (propAttiva(s.id)) confermati.add(s.id); }); aggiorna(); });
   document.getElementById("ar-chiudi").addEventListener("click", closeModal);
   document.getElementById("ar-salva").addEventListener("click", async () => {
@@ -5739,6 +5779,229 @@ async function apriAssegnaRuoliCaso(edId) {
     toast("Ruoli salvati");
     renderSection();
   });
+}
+
+// ---- Reparti e incarichi (solo Admin) ----
+function repartiModificabili() {
+  if (!state.casoReparti || !state.casoReparti.length) state.casoReparti = JSON.parse(JSON.stringify(CASO_REPARTI_BASE));
+  return state.casoReparti;
+}
+// Quante risposte (in tutti gli anni) hanno questo incarico: serve ad avvisare prima di toglierlo.
+async function usoIncarichiCaso(incarichi) {
+  const chiavi = new Set(incarichi.map(chiaveRuolo)); let n = 0;
+  const docs = await Promise.all((state.casoncellata || []).map(e => leggiDocCaso(e.id)));
+  docs.forEach(d => { if (d) Object.values(d.risposte || {}).forEach(r => { if (r && chiavi.has(chiaveRuolo(r.ruolo))) n++; }); });
+  return n;
+}
+function apriRepartiCaso() {
+  if (currentRole !== "admin") return;
+  const reparti = casoReparti();
+  const pulisci = t => String(t || "").trim().replace(/\s+/g, " ");
+  showModal(`<div id="rc-root">
+    <div class="modal-title">⚙️ Reparti e incarichi</div>
+    <div class="card-sub" style="margin-bottom:6px;">Solo l'Admin. Gli incarichi si scelgono poi dal menu del Ruolo in «Assegna ruoli». Le modifiche valgono subito.</div>
+    ${reparti.map(rep => `<div class="gr" data-rep="${esc(rep.id)}">
+      <div class="t"><span>${esc(rep.nome)}</span><span><button type="button" class="rc-ico" data-rc="rinomina" data-rep="${esc(rep.id)}" title="Rinomina il reparto">✏️</button><button type="button" class="rc-ico" data-rc="elimina-rep" data-rep="${esc(rep.id)}" title="Elimina il reparto">🗑️</button></span></div>
+      <div>${rep.incarichi.map(inc => `<span class="c">${esc(inc)} <button type="button" class="rc-x" data-rc="elimina-inc" data-rep="${esc(rep.id)}" data-inc="${esc(inc)}" title="Togli l'incarico">✕</button></span>`).join("") || '<span class="card-sub">Nessun incarico</span>'}</div>
+      <div class="rc-nuovo"><input type="text" maxlength="40" placeholder="Nuovo incarico…" data-nuovo-inc="${esc(rep.id)}"><button type="button" class="btn secondary" data-rc="aggiungi-inc" data-rep="${esc(rep.id)}">＋</button></div>
+    </div>`).join("")}
+    <div class="rc-nuovo" style="margin-top:8px;"><input type="text" maxlength="30" placeholder="Nuovo reparto…" id="rc-nuovo-rep"><button type="button" class="btn secondary" data-rc="aggiungi-rep">＋ Reparto</button></div>
+    <div id="rc-errore" style="color:var(--red); font-size:0.82rem; min-height:1.1em; margin-top:6px;"></div>
+    <div class="modal-actions"><button type="button" class="btn" data-rc="chiudi">Chiudi</button></div>
+  </div>`);
+  const errore = t => { document.getElementById("rc-errore").textContent = t; };
+  const fatto = ev => { saveState(); scriviLog([{ ev: `🥟 Reparti e incarichi della Casoncellata: ${ev}` }]); apriRepartiCaso(); };
+  document.getElementById("rc-root").addEventListener("click", async e => {
+    const b = e.target.closest("[data-rc]");
+    if (!b) return;
+    const az = b.dataset.rc, repId = b.dataset.rep;
+    if (az === "chiudi") { closeModal(); renderSection(); return; }
+    if (az === "aggiungi-rep") {
+      const n = pulisci(document.getElementById("rc-nuovo-rep").value);
+      if (!n) { errore("Scrivi il nome del reparto."); return; }
+      if (casoReparti().some(r => chiaveRuolo(r.nome) === chiaveRuolo(n))) { errore(`Il reparto «${n}» esiste già.`); return; }
+      repartiModificabili().push({ id: uid(), nome: n, incarichi: [] });
+      fatto(`aggiunto il reparto «${n}»`); return;
+    }
+    const rep = repartiModificabili().find(r => r.id === repId);
+    if (!rep) return;
+    if (az === "aggiungi-inc") {
+      const n = pulisci(document.querySelector(`[data-nuovo-inc="${repId}"]`).value);
+      if (!n) { errore("Scrivi il nome dell'incarico."); return; }
+      const gia = incaricoDiRuolo(n);
+      if (gia) { errore(`L'incarico «${gia.incarico}» esiste già (reparto ${gia.reparto.nome}).`); return; }
+      rep.incarichi.push(n);
+      fatto(`aggiunto l'incarico «${n}» a ${rep.nome}`); return;
+    }
+    if (az === "rinomina") {
+      const n = pulisci(prompt("Nuovo nome del reparto", rep.nome));
+      if (!n || n === rep.nome) return;
+      if (casoReparti().some(r => r.id !== rep.id && chiaveRuolo(r.nome) === chiaveRuolo(n))) { errore(`Il reparto «${n}» esiste già.`); return; }
+      const vecchio = rep.nome; rep.nome = n;
+      fatto(`il reparto «${vecchio}» ora si chiama «${n}»`); return;
+    }
+    if (az === "elimina-inc") {
+      const inc = b.dataset.inc, uso = await usoIncarichiCaso([inc]);
+      if (!confirm(`Togliere l'incarico «${inc}» dal reparto ${rep.nome}?${uso ? `\n\n${uso} ${uso === 1 ? "risposta ha" : "risposte hanno"} questo incarico (in tutti gli anni): resteranno con il ruolo scritto, da associare di nuovo.` : ""}`)) return;
+      rep.incarichi = rep.incarichi.filter(x => x !== inc);
+      fatto(`tolto l'incarico «${inc}» da ${rep.nome}`); return;
+    }
+    if (az === "elimina-rep") {
+      const uso = await usoIncarichiCaso(rep.incarichi);
+      if (!confirm(`Eliminare il reparto «${rep.nome}»${rep.incarichi.length ? ` e i suoi ${rep.incarichi.length} ${rep.incarichi.length === 1 ? "incarico" : "incarichi"}` : ""}?${uso ? `\n\n${uso} ${uso === 1 ? "risposta ha" : "risposte hanno"} uno di questi incarichi (in tutti gli anni): resteranno con il ruolo scritto, da associare di nuovo.` : ""}`)) return;
+      state.casoReparti = repartiModificabili().filter(r => r.id !== rep.id);
+      if (!state.casoReparti.length) state.casoReparti = [{ id: uid(), nome: "Nuovo reparto", incarichi: [] }];   // l'elenco non resta mai vuoto (tornerebbe a quello iniziale)
+      fatto(`eliminato il reparto «${rep.nome}»`); return;
+    }
+  });
+}
+
+// ---- Associare i vecchi ruoli (scritti a mano) agli incarichi ----
+async function apriAssociaRuoliCaso() {
+  if (currentRole === "socio") return;
+  const edizioni = [...(state.casoncellata || [])].sort((x, y) => String(x.sabato).localeCompare(String(y.sabato)));
+  const docs = await Promise.all(edizioni.map(e => leggiDocCaso(e.id)));
+  if (docs.some(d => !d) && !window.db) { alert("Non riesco a leggere le risposte: controlla la connessione e riprova."); return; }
+  const trovati = {};   // chiave → { etichette: {testo: n}, n, anni:Set }
+  docs.forEach((d, i) => {
+    if (!d) return;
+    const anno = String(edizioni[i].sabato).slice(0, 4);
+    Object.values(d.risposte || {}).forEach(r => {
+      if (!r || !r.ruolo || incaricoDiRuolo(r.ruolo)) return;
+      const k = chiaveRuolo(r.ruolo), t = trovati[k] = trovati[k] || { etichette: {}, n: 0, anni: new Set() };
+      t.etichette[r.ruolo] = (t.etichette[r.ruolo] || 0) + 1; t.n++; t.anni.add(anno);
+    });
+  });
+  const chiavi = Object.keys(trovati).sort();
+  if (!chiavi.length) { alert("Nessun ruolo da associare: tutti i ruoli corrispondono agli incarichi."); return; }
+  const etichetta = k => Object.keys(trovati[k].etichette).sort((a, b) => trovati[k].etichette[b] - trovati[k].etichette[a])[0];
+  const opzioni = `<option value="">— scegli l'incarico —</option>${casoReparti().map(rep => `<optgroup label="${esc(rep.nome)}">${rep.incarichi.map(i => `<option value="${esc(i)}">${esc(i)}</option>`).join("")}</optgroup>`).join("")}`;
+  showModal(`<div id="as-root">
+    <div class="modal-title">🔁 Associa i vecchi ruoli</div>
+    <div class="card-sub" style="margin-bottom:6px;">Nelle Casoncellate già caricate ci sono ruoli scritti a mano. Dì a quale incarico corrisponde ognuno: l'app li aggiorna in tutti gli anni, così i confronti con l'anno scorso funzionano.</div>
+    ${chiavi.map(k => `<div class="ar-riga"><div class="ar-nome">«${esc(etichetta(k))}» <span style="font-weight:600; color:#666; font-size:.85rem;">· ${trovati[k].n} ${trovati[k].n === 1 ? "risposta" : "risposte"} ${trovati[k].anni.size > 1 ? "in " + trovati[k].anni.size + " anni" : "nel " + [...trovati[k].anni][0]}</span></div>
+      <div class="ar-campi" style="margin-top:4px;"><div><label>Diventa</label><select data-k="${esc(k)}" class="sel-ruolo">${opzioni}</select></div></div></div>`).join("")}
+    <div id="as-errore" style="color:var(--red); font-size:0.82rem; min-height:1.1em; margin-top:6px;"></div>
+    <div class="modal-actions"><button type="button" class="btn secondary" id="as-chiudi">Più tardi</button><button type="button" class="btn" id="as-applica">Applica a tutti gli anni</button></div>
+  </div>`);
+  document.getElementById("as-chiudi").addEventListener("click", closeModal);
+  document.getElementById("as-applica").addEventListener("click", async () => {
+    const mappa = {};
+    document.querySelectorAll("#as-root select[data-k]").forEach(s => { if (s.value) mappa[s.dataset.k] = s.value; });
+    if (!Object.keys(mappa).length) { document.getElementById("as-errore").textContent = "Scegli l'incarico di almeno un ruolo."; return; }
+    const btn = document.getElementById("as-applica"); btn.disabled = true;
+    let aggiornate = 0, errori = 0;
+    for (const e of edizioni) {
+      if (!window.db) break;
+      const ref = db.collection(FIRESTORE_COLLECTION).doc(`casoncellata_${e.id}`);
+      try {
+        await conTimeout(db.runTransaction(async tx => {
+          const snap = await tx.get(ref);
+          if (!snap.exists) return;
+          const risposte = snap.data().risposte || {}, upd = {};
+          Object.keys(risposte).forEach(k => { const r = risposte[k]; if (r && r.ruolo && mappa[chiaveRuolo(r.ruolo)] && !incaricoDiRuolo(r.ruolo)) { upd[`risposte.${k}.ruolo`] = mappa[chiaveRuolo(r.ruolo)]; aggiornate++; } });
+          if (Object.keys(upd).length) tx.update(ref, upd);
+        }), 20000);
+      } catch (err) { console.error(err); errori++; }
+    }
+    if (errori) { document.getElementById("as-errore").textContent = "Alcuni anni non sono stati aggiornati: controlla la connessione e riprova."; btn.disabled = false; return; }
+    scriviLog([{ ev: `🥟 Casoncellata: ruoli scritti a mano associati agli incarichi (${aggiornate} ${aggiornate === 1 ? "risposta" : "risposte"})` }]);
+    closeModal();
+    toast(`${aggiornate} ${aggiornate === 1 ? "ruolo aggiornato" : "ruoli aggiornati"}`);
+    renderSection();
+  });
+}
+
+// ---- Tabellone per reparto: chi c'è in ogni reparto, pranzo e cena, giorno per giorno (come il foglio) ----
+const CASO_GIORNI_TAB = [
+  { nome: "SABATO", delta: 0, momenti: [{ k: "sabP", nome: "Pranzo" }, { k: "sabC", nome: "Cena" }] },
+  { nome: "DOMENICA", delta: 1, momenti: [{ k: "domP", nome: "Pranzo" }, { k: "domC", nome: "Cena" }] },
+];
+const CASO_COLORI_REPARTO = ["#b3541e", "#1a6b3c", "#2d6a9f", "#8a6500", "#6b3fa0", "#a02d55", "#4a6b1a"];
+
+async function apriTabelloneCaso(edId) {
+  if (currentRole === "socio") return;
+  const ed = (state.casoncellata || []).find(x => x.id === edId);
+  if (!ed) return;
+  const dati = await leggiDocCaso(edId);
+  if (!dati) { alert("Non riesco a leggere le risposte: controlla la connessione e riprova."); return; }
+  const risposte = dati.risposte || {};
+  const prec = await ruoliPrecedentiCaso(ed);
+  const reparti = casoReparti();
+  const persone = Object.keys(risposte).map(k => {
+    const id = k.replace(/^socio_/, ""), r = risposte[k], s = state.socios.find(x => x.id === id);
+    return { id, r, s, nome: s ? `${s.cognome} ${s.nome}`.trim() : String(r.nome || id) };
+  }).filter(p => !(p.s && p.s.andatoAvanti)).sort((x, y) => x.nome.localeCompare(y.nome, "it", { sensitivity: "base" }));
+  if (!persone.some(p => CASO_VOCI.some(v => p.r[v.k]))) { alert("Nessuno ha ancora dato disponibilità."); return; }
+  const info = p => incaricoDiRuolo(p.r.ruolo);
+  // l'anno scorso: persone per reparto e per momento
+  const prima = {};
+  if (prec.ultima) Object.keys(prec.ultima.risposte).forEach(k => {
+    const rp = prec.ultima.risposte[k], s = state.socios.find(x => "socio_" + x.id === k);
+    if (!rp || !rp.ruolo || (s && s.andatoAvanti)) return;
+    const m = incaricoDiRuolo(rp.ruolo);
+    if (!m) return;
+    CASO_VOCI.forEach(v => { if (rp[v.k]) { prima[m.reparto.id] = prima[m.reparto.id] || {}; prima[m.reparto.id][v.k] = (prima[m.reparto.id][v.k] || 0) + 1; } });
+  });
+  const daAssociare = new Set();
+  persone.forEach(p => { if (p.r.ruolo && !info(p)) daAssociare.add(chiaveRuolo(p.r.ruolo)); });
+  if (prec.ultima) Object.values(prec.ultima.risposte).forEach(rp => { if (rp && rp.ruolo && !incaricoDiRuolo(rp.ruolo)) daAssociare.add(chiaveRuolo(rp.ruolo)); });
+  const proposti = persone.some(p => p.r.ruolo && p.r.ruoloProposto && CASO_VOCI.some(v => p.r[v.k]));
+  // l'incarico generico (uguale al nome del reparto: Cucina, Sala, Vendita) non si scrive accanto al nome
+  const etichetta = p => { const m = info(p); return m && chiaveRuolo(m.incarico) !== chiaveRuolo(m.reparto.nome) ? m.incarico : ""; };
+  const scarico = persone.filter(p => p.r.ven);
+  const giorni = CASO_GIORNI_TAB.map(g => ({
+    g, titolo: `${g.nome} ${casoDataBreve(ed.sabato, g.delta)}`,
+    blocchi: reparti.map((rep, i) => ({ rep, colore: CASO_COLORI_REPARTO[i % CASO_COLORI_REPARTO.length], cols: g.momenti.map(mo => {
+      const lista = persone.filter(p => { const m = info(p); return m && m.reparto.id === rep.id && p.r[mo.k]; });
+      return { mo, lista, prima: (prima[rep.id] || {})[mo.k] || 0 };
+    }) })),
+    senza: persone.filter(p => !info(p) && g.momenti.some(mo => p.r[mo.k])),
+  }));
+  const senzaTesto = p => p.nome + (p.r.ruolo ? ` (${p.r.ruolo})` : "");
+  const voce = p => `<div>${esc(p.nome)}${p.r.ruolo && p.r.ruoloProposto ? " *" : ""}${etichetta(p) ? ` <span class="tb-i">${esc(etichetta(p))}</span>` : ""}${p.r.nota ? ` <span class="tb-n">${esc(p.r.nota)}</span>` : ""}</div>`;
+  const totale = (n, p) => prec.ultima ? `${n} <small>(${p})</small>` : `${n}`;
+  // --- schermo (un riquadro sotto l'altro) ---
+  const schermo = `<div class="tb-g">VENERDÌ ${casoDataBreve(ed.sabato, -1)} · SCARICO</div><div class="tb-sc"><b>${scarico.length} ${scarico.length === 1 ? "persona" : "persone"}${scarico.length ? ":" : ""}</b> ${esc(scarico.map(p => p.nome).join(", "))}</div>`
+    + giorni.map(gi => `<div class="tb-g">${esc(gi.titolo)}</div>${gi.blocchi.map(b => `<div class="rb"><div class="h" style="background:${b.colore};">${esc(b.rep.nome)}</div>
+      <table class="rt"><tr>${b.cols.map(c => `<th>${c.mo.nome}</th>`).join("")}</tr><tr>${b.cols.map(c => `<td>${c.lista.map(voce).join("") || '<span class="tb-v">—</span>'}</td>`).join("")}</tr>
+      <tr class="tot">${b.cols.map(c => `<td>${totale(c.lista.length, c.prima)}</td>`).join("")}</tr></table></div>`).join("")}
+      <div class="sr"><b>Senza ruolo / a disposizione:</b> ${esc(gi.senza.map(senzaTesto).join(", ")) || "nessuno"}</div>`).join("");
+  // --- stampa (due riquadri affiancati, come il foglio) ---
+  const bloccoStampa = b => {
+    const n = Math.max(...b.cols.map(c => c.lista.length), 0);
+    let righe = "";
+    for (let i = 0; i < n; i++) righe += `<tr>${b.cols.map(c => { const p = c.lista[i]; return `<td style="border:1px solid #777; padding:2px 5px; height:15px;">${p ? `${esc(p.nome)}${p.r.ruolo && p.r.ruoloProposto ? " *" : ""}${etichetta(p) ? ` <i style="float:right; font-style:normal; color:#7a5a00; font-size:9px;">${esc(etichetta(p))}</i>` : ""}${p.r.nota ? ` <i style="font-style:italic; color:#555; font-size:9px;">(${esc(p.r.nota)})</i>` : ""}` : ""}</td>`; }).join("")}</tr>`;
+    return `<div style="flex:1 1 0; min-width:0;"><div style="text-align:center; font-weight:800; font-size:12px;">${esc(b.rep.nome.toUpperCase())}</div>
+      <table style="width:100%; border-collapse:collapse; font-size:11px;"><tr>${b.cols.map(c => `<th style="border:1px solid #777; background:#f1ede0; padding:2px;">${c.mo.nome}</th>`).join("")}</tr>${righe}
+      <tr>${b.cols.map(c => `<td style="border:1px solid #777; padding:2px 5px; font-weight:700; background:#f7f5ee;">Totale ${totale(c.lista.length, c.prima).replace(/<small>/, '<span style="color:#777; font-weight:400;">').replace(/<\/small>/, "</span>")}</td>`).join("")}</tr></table></div>`;
+  };
+  const stampa = `<div style="font-family:Arial,sans-serif;">
+    <div style="text-align:center; font-weight:800; font-size:15px; color:#b3261e; margin:6px 0;">VENERDÌ ${casoDataBreve(ed.sabato, -1)}</div>
+    <div style="font-size:11px; margin-bottom:8px;"><b>SCARICO</b> &nbsp; ${esc(scarico.map(p => p.nome).join(", ")) || "nessuno"}</div>
+    ${giorni.map(gi => { const righe = []; for (let i = 0; i < gi.blocchi.length; i += 2) righe.push(gi.blocchi.slice(i, i + 2));
+      return `<div style="page-break-inside:avoid;"><div style="text-align:center; font-weight:800; font-size:15px; color:#b3261e; margin:12px 0 6px;">${esc(gi.titolo)}</div>
+        ${righe.map(r => `<div style="display:flex; gap:22px; margin-bottom:10px;">${r.map(bloccoStampa).join("")}${r.length === 1 ? '<div style="flex:1 1 0;"></div>' : ""}</div>`).join("")}
+        <div style="font-size:11px; margin:2px 0 6px;">Senza ruolo / a disposizione: ${esc(gi.senza.map(senzaTesto).join(", ")) || "nessuno"}</div></div>`; }).join("")}</div>`;
+  // --- testo per WhatsApp e email, e file per Excel ---
+  const testo = [`VENERDÌ ${casoDataBreve(ed.sabato, -1)} · SCARICO (${scarico.length}): ${scarico.map(p => p.nome).join(", ") || "nessuno"}`];
+  const csv = [["Giorno", "Momento", "Reparto", "Incarico", "Cognome e nome", "Note"]];
+  scarico.forEach(p => csv.push([`Venerdì ${casoDataBreve(ed.sabato, -1)}`, "Scarico", "", "", p.nome, p.r.nota || ""]));
+  giorni.forEach(gi => {
+    testo.push("", gi.titolo);
+    gi.blocchi.forEach(b => { testo.push(b.rep.nome.toUpperCase()); b.cols.forEach(c => testo.push(`  ${c.mo.nome} (${c.lista.length}${prec.ultima ? ", nel " + prec.ultima.anno + ": " + c.prima : ""}): ${c.lista.map(p => p.nome + (p.r.ruolo && p.r.ruoloProposto ? "*" : "") + (etichetta(p) ? " - " + etichetta(p) : "")).join(", ") || "—"}`));
+      b.cols.forEach(c => c.lista.forEach(p => csv.push([gi.titolo.charAt(0) + gi.titolo.slice(1).toLowerCase(), c.mo.nome, b.rep.nome, info(p) ? info(p).incarico : "", p.nome + (p.r.ruolo && p.r.ruoloProposto ? " *" : ""), p.r.nota || ""]))); });
+    testo.push(`Senza ruolo / a disposizione: ${gi.senza.map(senzaTesto).join(", ") || "nessuno"}`);
+    gi.senza.forEach(p => g_pushSenza(csv, gi, p));
+  });
+  function g_pushSenza(righeCsv, gi, p) { gi.g.momenti.forEach(mo => { if (p.r[mo.k]) righeCsv.push([gi.titolo.charAt(0) + gi.titolo.slice(1).toLowerCase(), mo.nome, "Senza ruolo", p.r.ruolo || "", p.nome, p.r.nota || ""]); }); }
+  if (proposti) testo.push("", "* Ruolo ancora da confermare.");
+  const virgolette = c => /[;"\n]/.test(c) ? `"${String(c).replace(/"/g, '""')}"` : String(c);
+  const note = [prec.ultima ? `Totali: tra parentesi il ${prec.ultima.anno}.` : "", proposti ? "* Ruolo ancora da confermare." : "",
+    daAssociare.size ? `Ci sono ${daAssociare.size} ${daAssociare.size === 1 ? "ruolo scritto a mano" : "ruoli scritti a mano"} da associare agli incarichi (tasto «Associa i vecchi ruoli»): finché non lo fai quelle persone compaiono in «Senza ruolo» e i confronti sono parziali.` : ""].filter(Boolean).join("<br>");
+  apriAnteprimaReportGenerico(`Tabellone ${casoTitolo(ed)}`, [], [["x"]], testo,
+    { corpoHtml: schermo, stampaHtml: stampa, sottotitolo: `Chi c'è in ogni reparto, pranzo e cena${prec.ultima ? ". In fondo i totali, tra parentesi il " + esc(prec.ultima.anno) : ""}.`, senzaPdf: true, senzaConteggio: true, nota: note,
+      csv: { nome: `casoncellata_${String(ed.sabato).slice(0, 4)}_tabellone.csv`, testo: csv.map(r => r.map(virgolette).join(";")).join("\r\n") } });
 }
 
 // Intestazione a due livelli, come il foglio cartaceo: Venerdì | Sabato (data) | Domenica (data) | Note/Ruolo, e sotto i momenti.
@@ -6665,7 +6928,7 @@ async function condividiReportComePdf(titolo, headers, rows, opzioni) {
 }
 
 function apriAnteprimaReportGenerico(titolo, headers, rows, testoRighe, opzioni) {
-  if (rows.length === 0) {
+  if (!(opzioni && opzioni.corpoHtml) && rows.length === 0) {
     alert("Nessun risultato per i filtri selezionati.");
     return;
   }
@@ -6676,21 +6939,21 @@ function apriAnteprimaReportGenerico(titolo, headers, rows, testoRighe, opzioni)
   const theadSchermo = opzioni && opzioni.testata ? opzioni.testata("schermo") : `<tr style="background:#f7f3e8;">${headerHtml}</tr>`;
   const theadStampa = opzioni && opzioni.testata ? opzioni.testata("stampa") : `<tr>${headerHtmlPrint}</tr>`;
   const bordo = opzioni && opzioni.griglia ? "border:1px solid #999;" : "border-bottom:1px solid #ddd;";
-  const righeHtml = rows.map(cells => `<tr>${cells.map(c => `<td style="padding:${pad}; ${bordo}">${c}</td>`).join("")}</tr>`).join("");
+  const righeHtml = opzioni && opzioni.corpoHtml ? "" : rows.map(cells => `<tr>${cells.map(c => `<td style="padding:${pad}; ${bordo}">${c}</td>`).join("")}</tr>`).join("");
   const html = `
     <div class="modal-title">🖨️ Anteprima — ${esc(titolo)}</div>
-    <div class="card-sub" style="margin-bottom:12px;">${rows.length} righe — generato il ${fmtDateTime(new Date().toISOString())}</div>
-    <div style="max-height:50vh; overflow-y:auto; border:2px solid var(--ink); border-radius:10px; margin-bottom:16px;">
+    <div class="card-sub" style="margin-bottom:12px;">${opzioni && opzioni.sottotitolo ? opzioni.sottotitolo : rows.length + " righe"} — generato il ${fmtDateTime(new Date().toISOString())}</div>
+    ${opzioni && opzioni.corpoHtml ? `<div style="max-height:56vh; overflow-y:auto; margin-bottom:12px;">${opzioni.corpoHtml}</div>` : `<div style="max-height:50vh; overflow-y:auto; border:2px solid var(--ink); border-radius:10px; margin-bottom:16px;">
       <table class="${opzioni && opzioni.primaFissa ? "rep-prima-fissa" : ""}" style="width:100%; border-collapse:collapse; font-size:${opzioni && opzioni.compatto ? "0.76rem" : "0.82rem"};">
         <thead>${theadSchermo}</thead>
         <tbody>${righeHtml}</tbody>
       </table>
-    </div>
+    </div>`}
     ${opzioni && opzioni.suggerimento ? `<div class="card-sub" style="margin:-8px 0 8px;">${opzioni.suggerimento}</div>` : ""}
     ${opzioni && opzioni.nota ? `<div class="card-sub" style="margin:-6px 0 14px;">${opzioni.nota}</div>` : ""}
     <button type="button" class="btn block" id="anteprima-stampa-btn" style="margin-bottom:10px;">🖨️ Stampa</button>
     ${opzioni && opzioni.csv ? `<button type="button" class="btn block" id="anteprima-csv-btn" style="margin-bottom:10px; background:#1d6f42; color:#fff;">📥 Scarica per Excel</button>` : ""}
-    <button type="button" class="btn block" id="anteprima-pdf-btn" style="margin-bottom:10px; background:var(--gold);">📄 Condividi come PDF</button>
+    ${opzioni && opzioni.senzaPdf ? "" : `<button type="button" class="btn block" id="anteprima-pdf-btn" style="margin-bottom:10px; background:var(--gold);">📄 Condividi come PDF</button>`}
     <div class="modal-actions">
       <button type="button" class="btn secondary" id="anteprima-email-btn">✉️ Email</button>
       <button type="button" class="btn" id="anteprima-wa-btn" style="background:#25D366; color:#fff;">${WA_ICON} WhatsApp</button>
@@ -6702,7 +6965,7 @@ function apriAnteprimaReportGenerico(titolo, headers, rows, testoRighe, opzioni)
   document.getElementById("anteprima-stampa-btn").addEventListener("click", () => {
     const area = document.getElementById("print-area");
     const nCol = headers.length;
-    area.innerHTML = `
+    area.innerHTML = opzioni && opzioni.stampaHtml ? `${LETTERHEAD_HTML}${opzioni.stampaHtml}${opzioni.nota ? `<div style="margin-top:10px; font-size:10pt;">${opzioni.nota}</div>` : ""}` : `
       <table style="width:100%; border-collapse:collapse;">
         <thead>
           <tr><td colspan="${nCol}" style="padding:0;">${LETTERHEAD_HTML}</td></tr>
@@ -6715,13 +6978,14 @@ function apriAnteprimaReportGenerico(titolo, headers, rows, testoRighe, opzioni)
     stampaConLoghi(area);
   });
 
-  document.getElementById("anteprima-pdf-btn").addEventListener("click", () => {
+  const pdfBtn = document.getElementById("anteprima-pdf-btn");
+  if (pdfBtn) pdfBtn.addEventListener("click", () => {
     condividiReportComePdf(titolo, headers, rows, opzioni);
   });
   const csvBtn = document.getElementById("anteprima-csv-btn");
   if (csvBtn) csvBtn.addEventListener("click", () => scaricaTesto(opzioni.csv.nome, opzioni.csv.testo, "text/csv;charset=utf-8"));
 
-  const testoPiano = () => `📋 ${titolo}\n${rows.length} righe\n\n` + testoRighe.join("\n");
+  const testoPiano = () => `📋 ${titolo}\n${opzioni && opzioni.senzaConteggio ? "" : rows.length + " righe\n"}\n` + testoRighe.join("\n");
   document.getElementById("anteprima-email-btn").addEventListener("click", () => {
     window.location.href = `mailto:?subject=${encodeURIComponent(titolo)}&body=${encodeURIComponent(testoPiano())}`;
   });
