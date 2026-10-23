@@ -483,3 +483,19 @@ body.menu-aperto { overflow: hidden; }
 .rep-due-fisse tbody tr:last-child td:nth-child(1), .rep-due-fisse tbody tr:last-child td:nth-child(2) { background: #faf8f2; }
 .rep-due-fisse td, .rep-due-fisse th { white-space: nowrap; }
 .rep-due-fisse td:last-child { white-space: normal; min-width: 90px; }
+
+/* Tabellone in stile Excel, come il foglio */
+.xl-tab { font-family: Arial, Helvetica, sans-serif; background: #fff; padding: 6px 8px 10px; border: 1px solid #bbb; border-radius: 4px; }
+.xl-g { text-align: center; font-weight: 800; font-size: 1.02rem; color: #b3261e; margin: 14px 0 6px; }
+.xl-g:first-child { margin-top: 4px; }
+.xl-sc { font-size: .84rem; margin: 2px 0 8px; line-height: 1.35; }
+.xl-sc b { margin-right: 4px; }
+.xl-r { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 6px; }
+.xl-b { flex: 1 1 280px; min-width: 0; }
+.xl-h { text-align: center; font-weight: 800; font-size: .9rem; margin-bottom: 2px; }
+.xl-t { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: .8rem; }
+.xl-t th, .xl-t td { border: 1px solid #666; padding: 3px 6px; vertical-align: top; line-height: 1.25; overflow-wrap: anywhere; height: 22px; }
+.xl-t th { background: #f1ede0; text-align: center; font-size: .76rem; height: auto; }
+.xl-t tr.tot td { font-weight: 800; background: #f7f5ee; border-top: 2px solid #444; height: auto; }
+.xl-t tr.tot small { color: #777; font-weight: 600; }
+.xl-v { color: #aaa; }

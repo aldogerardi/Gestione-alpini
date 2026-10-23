@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "9.12";
+const APP_VERSION = "9.13";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -5966,11 +5966,17 @@ async function apriTabelloneCaso(edId) {
   const voce = p => `<div>${esc(p.nome)}${p.r.ruolo && p.r.ruoloProposto ? " *" : ""}${etichetta(p) ? ` <span class="tb-i">${esc(etichetta(p))}</span>` : ""}${p.r.nota ? ` <span class="tb-n">${esc(p.r.nota)}</span>` : ""}</div>`;
   const totale = (n, p) => prec.ultima ? `${n} <small>(${p})</small>` : `${n}`;
   // --- schermo (un riquadro sotto l'altro) ---
-  const schermo = `<div class="tb-g">VENERDÌ ${casoDataBreve(ed.sabato, -1)} · SCARICO</div><div class="tb-sc"><b>${scarico.length} ${scarico.length === 1 ? "persona" : "persone"}${scarico.length ? ":" : ""}</b> ${esc(scarico.map(p => p.nome).join(", "))}</div>`
-    + giorni.map(gi => `<div class="tb-g">${esc(gi.titolo)}</div>${gi.blocchi.map(b => `<div class="rb"><div class="h" style="background:${b.colore};">${esc(b.rep.nome)}</div>
-      <table class="rt"><tr>${b.cols.map(c => `<th>${c.mo.nome}</th>`).join("")}</tr><tr>${b.cols.map(c => `<td>${c.lista.map(voce).join("") || '<span class="tb-v">—</span>'}</td>`).join("")}</tr>
-      <tr class="tot">${b.cols.map(c => `<td>${totale(c.lista.length, c.prima)}</td>`).join("")}</tr></table></div>`).join("")}
-      <div class="sr"><b>Senza ruolo / a disposizione:</b> ${esc(gi.senza.map(senzaTesto).join(", ")) || "nessuno"}</div>`).join("");
+  // --- schermo: in stile Excel, come il foglio (griglia con i bordi; i riquadri si affiancano se c'è spazio) ---
+  const cellaXl = p => p ? `<span class="xl-n">${esc(p.nome)}${p.r.ruolo && p.r.ruoloProposto ? " *" : ""}</span>${etichetta(p) ? ` <span class="tb-i">${esc(etichetta(p))}</span>` : ""}${p.r.nota ? ` <span class="tb-n">${esc(p.r.nota)}</span>` : ""}` : "";
+  const bloccoXl = b => {
+    const n = Math.max(...b.cols.map(c => c.lista.length), 0);
+    let righe = n ? "" : `<tr class="xl-p">${b.cols.map(() => '<td class="xl-v">—</td>').join("")}</tr>`;
+    for (let i = 0; i < n; i++) righe += `<tr class="xl-p">${b.cols.map(c => `<td>${cellaXl(c.lista[i])}</td>`).join("")}</tr>`;
+    return `<div class="xl-b"><div class="xl-h">${esc(b.rep.nome.toUpperCase())}</div><table class="xl-t"><tr>${b.cols.map(c => `<th>${c.mo.nome}</th>`).join("")}</tr>${righe}<tr class="tot">${b.cols.map(c => `<td>${totale(c.lista.length, c.prima)}</td>`).join("")}</tr></table></div>`;
+  };
+  const schermo = `<div class="xl-tab"><div class="xl-g">VENERDÌ ${casoDataBreve(ed.sabato, -1)}</div><div class="xl-sc"><b>SCARICO</b> (${scarico.length}): ${esc(scarico.map(p => p.nome).join(", ")) || "nessuno"}</div>`
+    + giorni.map(gi => `<div class="xl-g">${esc(gi.titolo)}</div><div class="xl-r">${gi.blocchi.map(bloccoXl).join("")}</div><div class="xl-sc"><b>Senza ruolo / a disposizione:</b> ${esc(gi.senza.map(senzaTesto).join(", ")) || "nessuno"}</div>`).join("") + `</div>`;
+
   // --- stampa (due riquadri affiancati, come il foglio) ---
   const bloccoStampa = b => {
     const n = Math.max(...b.cols.map(c => c.lista.length), 0);
