@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "9.10";
+const APP_VERSION = "9.11";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -5420,11 +5420,14 @@ function renderCasoncellata() {
           <button type="button" class="btn" data-caso="tabellone" data-id="${ed.id}" title="Chi c'è in ogni reparto, pranzo e cena">📋 Tabellone</button>
         </div>
         <div class="ben-tasti" style="margin-top:8px;">
+          <button type="button" class="btn" data-caso="reparto" data-id="${ed.id}" title="La tabella degli alpini e simpatizzanti disponibili, reparto per reparto">📑 Per reparto</button>
           <button type="button" class="btn" data-caso="ruoli" data-id="${ed.id}" title="Assegna il ruolo a chi ha dato disponibilità">🧑‍🍳 Assegna ruoli</button>
-          <button type="button" class="btn secondary" data-caso="mano" data-id="${ed.id}" title="Inserisci le disponibilità di chi non usa l'app o dal foglio cartaceo">📝 Inserisci a mano</button>
         </div>
         <div class="ben-tasti" style="margin-top:8px;">
+          <button type="button" class="btn secondary" data-caso="mano" data-id="${ed.id}" title="Inserisci le disponibilità di chi non usa l'app o dal foglio cartaceo">📝 Inserisci a mano</button>
           <button type="button" class="btn secondary" data-caso="${ed.aperta === false ? "riapri" : "chiudi"}" data-id="${ed.id}">${ed.aperta === false ? "Riapri ai soci" : "Chiudi ai soci"}</button>
+        </div>
+        <div class="ben-tasti" style="margin-top:8px;">
           <button type="button" class="btn danger" data-caso="elimina" data-id="${ed.id}" title="Elimina la richiesta e tutte le risposte">🗑️ Elimina</button>
         </div>
       </div>`).join("") : `<div class="card-sub">Nessuna richiesta ancora creata.</div>`}
@@ -5450,6 +5453,7 @@ function attachCasoncellataEvents() {
     else if (az === "mano") apriInserimentoCaso(el.dataset.id);
     else if (az === "ruoli") apriAssegnaRuoliCaso(el.dataset.id);
     else if (az === "tabellone") apriTabelloneCaso(el.dataset.id);
+    else if (az === "reparto") apriScegliRepartoCaso(el.dataset.id);
     else if (az === "reparti") apriRepartiCaso();
     else if (az === "associa") apriAssociaRuoliCaso();
     else if (az === "chiudi") impostaApertaCaso(el.dataset.id, false);
@@ -6002,6 +6006,110 @@ async function apriTabelloneCaso(edId) {
   apriAnteprimaReportGenerico(`Tabellone ${casoTitolo(ed)}`, [], [["x"]], testo,
     { corpoHtml: schermo, stampaHtml: stampa, sottotitolo: `Chi c'è in ogni reparto, pranzo e cena${prec.ultima ? ". In fondo i totali, tra parentesi il " + esc(prec.ultima.anno) : ""}.`, senzaPdf: true, senzaConteggio: true, nota: note,
       csv: { nome: `casoncellata_${String(ed.sabato).slice(0, 4)}_tabellone.csv`, testo: csv.map(r => r.map(virgolette).join(";")).join("\r\n") } });
+}
+
+// ---- Report per reparto: la tabella "Alpini e simpatizzanti disponibili" di un reparto, in stile Excel ----
+const CASO_WEEKEND = ["sabP", "sabC", "domP", "domC"];
+const CASO_WEEKEND_NOMI = ["Sabato pranzo", "Sabato cena", "Domenica pranzo", "Domenica cena"];
+
+// Chi ha almeno una spunta nel weekend ed è in quel reparto (repId "senza" = chi non ha un incarico dell'elenco), in ordine alfabetico.
+function casoPersoneRepartoCaso(risposte, repId) {
+  return Object.keys(risposte).map(k => {
+    const id = k.replace(/^socio_/, ""), r = risposte[k], s = state.socios.find(x => x.id === id);
+    return { id, r, s, nome: s ? `${s.cognome} ${s.nome}`.trim() : String(r.nome || id) };
+  }).filter(p => {
+    if ((p.s && p.s.andatoAvanti) || !CASO_WEEKEND.some(mo => p.r[mo])) return false;
+    const m = incaricoDiRuolo(p.r.ruolo);
+    return repId === "senza" ? !m : !!m && m.reparto.id === repId;
+  }).sort((x, y) => x.nome.localeCompare(y.nome, "it", { sensitivity: "base" }));
+}
+
+async function apriScegliRepartoCaso(edId) {
+  if (currentRole === "socio") return;
+  const ed = (state.casoncellata || []).find(x => x.id === edId);
+  if (!ed) return;
+  const dati = await leggiDocCaso(edId);
+  if (!dati) { alert("Non riesco a leggere le risposte: controlla la connessione e riprova."); return; }
+  const risposte = dati.risposte || {};
+  const voci = casoReparti().map(rep => ({ id: rep.id, nome: rep.nome, sotto: rep.incarichi.join(", "), n: casoPersoneRepartoCaso(risposte, rep.id).length }));
+  const nSenza = casoPersoneRepartoCaso(risposte, "senza").length;
+  if (nSenza) voci.push({ id: "senza", nome: "Senza ruolo", sotto: "Hanno dato disponibilità ma non hanno un incarico (o un ruolo scritto a mano)", n: nSenza });
+  showModal(`<div id="rp-root">
+    <div class="modal-title">📑 Report per reparto</div>
+    <div class="card-sub" style="margin-bottom:8px;">${esc(casoTitolo(ed))} · scegli il reparto.</div>
+    ${voci.map(v => `<button type="button" class="rp-b" data-rp="${esc(v.id)}">${esc(v.nome)} <span>${v.n} ${v.n === 1 ? "persona" : "persone"}</span><small>${esc(v.sotto)}</small></button>`).join("")}
+    <div class="modal-actions"><button type="button" class="btn secondary" id="rp-chiudi">Chiudi</button></div>
+  </div>`);
+  document.getElementById("rp-chiudi").addEventListener("click", closeModal);
+  document.getElementById("rp-root").addEventListener("click", e => {
+    const b = e.target.closest("[data-rp]");
+    if (b) apriReportRepartoCaso(edId, b.dataset.rp);
+  });
+}
+
+async function apriReportRepartoCaso(edId, repId) {
+  if (currentRole === "socio") return;
+  const ed = (state.casoncellata || []).find(x => x.id === edId);
+  const rep = repId === "senza" ? { id: "senza", nome: "Senza ruolo" } : casoReparti().find(r => r.id === repId);
+  if (!ed || !rep) return;
+  const dati = await leggiDocCaso(edId);
+  if (!dati) { alert("Non riesco a leggere le risposte: controlla la connessione e riprova."); return; }
+  const persone = casoPersoneRepartoCaso(dati.risposte || {}, repId);
+  if (!persone.length) { alert("Nessuno ha ancora dato disponibilità in questo reparto."); return; }
+  const prec = repId === "senza" ? { ultima: null } : await ruoliPrecedentiCaso(ed);
+  const sabD = casoDataBreve(ed.sabato, 0), domD = casoDataBreve(ed.sabato, 1);
+  const tot = CASO_WEEKEND.map(mo => persone.filter(p => p.r[mo]).length);
+  // l'anno scorso: chi era disponibile nello stesso momento, nello stesso reparto
+  const prima = [0, 0, 0, 0];
+  if (prec.ultima) Object.keys(prec.ultima.risposte).forEach(k => {
+    const rp = prec.ultima.risposte[k], s = state.socios.find(x => "socio_" + x.id === k);
+    if (!rp || !rp.ruolo || (s && s.andatoAvanti)) return;
+    const m = incaricoDiRuolo(rp.ruolo);
+    if (!m || m.reparto.id !== repId) return;
+    CASO_WEEKEND.forEach((mo, i) => { if (rp[mo]) prima[i]++; });
+  });
+  const incarico = p => { const m = incaricoDiRuolo(p.r.ruolo); return (m ? m.incarico : String(p.r.ruolo || "")) + (p.r.ruolo && p.r.ruoloProposto ? " *" : ""); };
+  const proposti = persone.some(p => p.r.ruolo && p.r.ruoloProposto);
+  const X = '<b style="display:block; text-align:center;">X</b>';
+  const righe = persone.map((p, i) => [`${i + 1}. ${esc(p.nome)}`].concat(CASO_WEEKEND.map(mo => p.r[mo] ? X : ""), [esc(incarico(p))]));
+  righe.push(["<b>Totale</b>"].concat(tot.map(t => `<b style="display:block; text-align:center;">${t}</b>`), [""]));
+  if (prec.ultima) righe.push(['<span style="color:#777;">Anno scorso</span>'].concat(prima.map(t => `<span style="display:block; text-align:center; color:#777;">${t}</span>`), [""]));
+  const testata = stile => {
+    const cella = `text-align:center; font-weight:700; border:1px solid #444; background:#f7f3e8; padding:${stile === "pdf" ? "6px" : "4px 3px"};${stile === "pdf" ? " font-family:Arial,sans-serif; font-size:13px;" : ""}`;
+    const th = (t, a) => `<th style="${cella}" ${a || ""}>${t}</th>`;
+    return `<tr>${th("Cognome e nome", 'rowspan="2"')}${th("Sabato " + sabD, 'colspan="2"')}${th("Domenica " + domD, 'colspan="2"')}${th("Ruolo", 'rowspan="2"')}</tr><tr>${th("Pranzo")}${th("Cena")}${th("Pranzo")}${th("Cena")}</tr>`;
+  };
+  // --- stampa: con il numero di riga e 4 righe vuote per aggiungere altri nomi a mano ---
+  const td = (t, st) => `<td style="border:1px solid #666; padding:5px 7px; height:20px; ${st || ""}">${t}</td>`;
+  const th2 = (t, a) => `<th style="border:1px solid #666; background:#f1ede0; padding:5px 7px; text-align:center;" ${a || ""}>${t}</th>`;
+  const num = n => td(n, "text-align:center; color:#555;");
+  const stampa = `<div style="font-family:Arial,sans-serif;">
+    <div style="font-size:17px; font-weight:700; margin:8px 0 2px;">Alpini e simpatizzanti disponibili</div>
+    <div style="font-size:11px; color:#555; margin-bottom:10px;">${esc(rep.nome)} · ${esc(casoTitolo(ed))}</div>
+    <table style="width:100%; border-collapse:collapse; font-size:12px;"><thead>
+      <tr>${th2("", 'rowspan="2"')}${th2("Cognome e nome", 'rowspan="2"')}${th2("Sabato " + sabD, 'colspan="2"')}${th2("Domenica " + domD, 'colspan="2"')}${th2("Ruolo", 'rowspan="2"')}</tr>
+      <tr>${th2("Pranzo")}${th2("Cena")}${th2("Pranzo")}${th2("Cena")}</tr></thead><tbody>
+      ${persone.map((p, i) => `<tr>${num(i + 1)}${td(esc(p.nome))}${CASO_WEEKEND.map(mo => td(p.r[mo] ? "X" : "", "text-align:center; font-weight:700;")).join("")}${td(esc(incarico(p)))}</tr>`).join("")}
+      ${[1, 2, 3, 4].map(k => `<tr>${num(persone.length + k)}${td("")}${td("")}${td("")}${td("")}${td("")}${td("")}</tr>`).join("")}
+      <tr>${td("")}${td("Totale", "font-weight:700; background:#f1ede0;")}${tot.map(t => td(t, "text-align:center; font-weight:700; background:#f1ede0;")).join("")}${td("", "background:#f1ede0;")}</tr>
+      ${prec.ultima ? `<tr>${td("")}${td("Anno scorso", "color:#777; font-size:11px;")}${prima.map(t => td(t, "text-align:center; color:#777; font-size:11px;")).join("")}${td("")}</tr>` : ""}
+    </tbody></table></div>`;
+  // --- file per Excel e testo per WhatsApp/email ---
+  const csv = [["N.", "Cognome e nome", "Sabato " + sabD, "", "Domenica " + domD, "", "Ruolo"], ["", "", "Pranzo", "Cena", "Pranzo", "Cena", ""]];
+  persone.forEach((p, i) => csv.push([String(i + 1), p.nome].concat(CASO_WEEKEND.map(mo => p.r[mo] ? "X" : ""), [incarico(p)])));
+  csv.push(["", "Totale"].concat(tot.map(String), [""]));
+  if (prec.ultima) csv.push(["", "Anno scorso"].concat(prima.map(String), [""]));
+  if (proposti) csv.push(["* Ruolo ancora da confermare."]);
+  const testo = persone.map((p, i) => `${i + 1}. ${p.nome}${p.r.ruolo ? " - " + incarico(p) : ""}: ${CASO_WEEKEND.map((mo, k) => p.r[mo] ? CASO_WEEKEND_NOMI[k] : "").filter(Boolean).join(", ")}`);
+  testo.push("", "Totale: " + CASO_WEEKEND_NOMI.map((n, k) => `${n} ${tot[k]}`).join(", "));
+  if (prec.ultima) testo.push(`Nel ${prec.ultima.anno}: ` + CASO_WEEKEND_NOMI.map((n, k) => `${n} ${prima[k]}`).join(", "));
+  if (proposti) testo.push("", "* Ruolo ancora da confermare.");
+  const virgolette = c => /[;"\n]/.test(c) ? `"${String(c).replace(/"/g, '""')}"` : String(c);
+  apriAnteprimaReportGenerico(`Alpini e simpatizzanti disponibili — ${rep.nome}`, ["Cognome e nome", "Sabato - Pranzo", "Sabato - Cena", "Domenica - Pranzo", "Domenica - Cena", "Ruolo"], righe, testo,
+    { sottotitolo: `${esc(rep.nome)} · ${esc(casoTitolo(ed))} · ${persone.length} ${persone.length === 1 ? "persona" : "persone"}`, senzaConteggio: true, compatto: true, griglia: true, primaFissa: true, testata, stampaHtml: stampa,
+      suggerimento: "↔ Scorri la tabella verso destra per vedere tutte le colonne." + (prec.ultima ? ` «Anno scorso»: persone disponibili nello stesso momento nel ${esc(prec.ultima.anno)}.` : ""),
+      nota: proposti ? "* Ruolo ancora da confermare." : "",
+      csv: { nome: `casoncellata_${String(ed.sabato).slice(0, 4)}_${chiaveRuolo(rep.nome).replace(/[^a-z0-9]+/g, "_")}.csv`, testo: csv.map(r => r.map(virgolette).join(";")).join("\r\n") } });
 }
 
 // Intestazione a due livelli, come il foglio cartaceo: Venerdì | Sabato (data) | Domenica (data) | Note/Ruolo, e sotto i momenti.

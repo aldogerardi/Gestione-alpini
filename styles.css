@@ -469,3 +469,8 @@ body.menu-aperto { overflow: hidden; }
 .tb-v { color: #aaa; }
 .sr { font-size: .82rem; margin: 6px 2px; }
 .sr b { color: #7a5a00; }
+
+/* Casoncellata: scelta del reparto per il report */
+.rp-b { display: block; width: 100%; box-sizing: border-box; margin: 6px 0; padding: 12px; text-align: left; font-weight: 800; font-size: 1rem; font-family: inherit; border: 2px solid #1a1a1a; border-radius: 12px; background: #fff; box-shadow: 3px 3px 0 #1a1a1a; cursor: pointer; }
+.rp-b span { float: right; color: #1a6b3c; }
+.rp-b small { display: block; font-weight: 600; color: #666; font-size: .78rem; margin-top: 2px; }
