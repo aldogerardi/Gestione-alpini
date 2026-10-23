@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "9.11";
+const APP_VERSION = "9.12";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -6071,13 +6071,13 @@ async function apriReportRepartoCaso(edId, repId) {
   const incarico = p => { const m = incaricoDiRuolo(p.r.ruolo); return (m ? m.incarico : String(p.r.ruolo || "")) + (p.r.ruolo && p.r.ruoloProposto ? " *" : ""); };
   const proposti = persone.some(p => p.r.ruolo && p.r.ruoloProposto);
   const X = '<b style="display:block; text-align:center;">X</b>';
-  const righe = persone.map((p, i) => [`${i + 1}. ${esc(p.nome)}`].concat(CASO_WEEKEND.map(mo => p.r[mo] ? X : ""), [esc(incarico(p))]));
-  righe.push(["<b>Totale</b>"].concat(tot.map(t => `<b style="display:block; text-align:center;">${t}</b>`), [""]));
-  if (prec.ultima) righe.push(['<span style="color:#777;">Anno scorso</span>'].concat(prima.map(t => `<span style="display:block; text-align:center; color:#777;">${t}</span>`), [""]));
+  const righe = persone.map((p, i) => [String(i + 1), esc(p.nome)].concat(CASO_WEEKEND.map(mo => p.r[mo] ? X : ""), [esc(incarico(p))]));
+  righe.push(["", "<b>Totale</b>"].concat(tot.map(t => `<b style="display:block; text-align:center;">${t}</b>`), [""]));
+  if (prec.ultima) righe.push(["", '<span style="color:#777;">Anno scorso</span>'].concat(prima.map(t => `<span style="display:block; text-align:center; color:#777;">${t}</span>`), [""]));
   const testata = stile => {
     const cella = `text-align:center; font-weight:700; border:1px solid #444; background:#f7f3e8; padding:${stile === "pdf" ? "6px" : "4px 3px"};${stile === "pdf" ? " font-family:Arial,sans-serif; font-size:13px;" : ""}`;
     const th = (t, a) => `<th style="${cella}" ${a || ""}>${t}</th>`;
-    return `<tr>${th("Cognome e nome", 'rowspan="2"')}${th("Sabato " + sabD, 'colspan="2"')}${th("Domenica " + domD, 'colspan="2"')}${th("Ruolo", 'rowspan="2"')}</tr><tr>${th("Pranzo")}${th("Cena")}${th("Pranzo")}${th("Cena")}</tr>`;
+    return `<tr>${th("", 'rowspan="2"')}${th("Cognome e nome", 'rowspan="2"')}${th("Sabato " + sabD, 'colspan="2"')}${th("Domenica " + domD, 'colspan="2"')}${th("Ruolo", 'rowspan="2"')}</tr><tr>${th("Pranzo")}${th("Cena")}${th("Pranzo")}${th("Cena")}</tr>`;
   };
   // --- stampa: con il numero di riga e 4 righe vuote per aggiungere altri nomi a mano ---
   const td = (t, st) => `<td style="border:1px solid #666; padding:5px 7px; height:20px; ${st || ""}">${t}</td>`;
@@ -6105,8 +6105,8 @@ async function apriReportRepartoCaso(edId, repId) {
   if (prec.ultima) testo.push(`Nel ${prec.ultima.anno}: ` + CASO_WEEKEND_NOMI.map((n, k) => `${n} ${prima[k]}`).join(", "));
   if (proposti) testo.push("", "* Ruolo ancora da confermare.");
   const virgolette = c => /[;"\n]/.test(c) ? `"${String(c).replace(/"/g, '""')}"` : String(c);
-  apriAnteprimaReportGenerico(`Alpini e simpatizzanti disponibili — ${rep.nome}`, ["Cognome e nome", "Sabato - Pranzo", "Sabato - Cena", "Domenica - Pranzo", "Domenica - Cena", "Ruolo"], righe, testo,
-    { sottotitolo: `${esc(rep.nome)} · ${esc(casoTitolo(ed))} · ${persone.length} ${persone.length === 1 ? "persona" : "persone"}`, senzaConteggio: true, compatto: true, griglia: true, primaFissa: true, testata, stampaHtml: stampa,
+  apriAnteprimaReportGenerico(`Alpini e simpatizzanti disponibili — ${rep.nome}`, ["N.", "Cognome e nome", "Sabato - Pranzo", "Sabato - Cena", "Domenica - Pranzo", "Domenica - Cena", "Ruolo"], righe, testo,
+    { sottotitolo: `${esc(rep.nome)} · ${esc(casoTitolo(ed))} · ${persone.length} ${persone.length === 1 ? "persona" : "persone"}`, senzaConteggio: true, compatto: true, griglia: true, fisse: 2, sopraTabella: '<div class="xl-tit">Alpini e simpatizzanti disponibili</div>', testata, stampaHtml: stampa,
       suggerimento: "↔ Scorri la tabella verso destra per vedere tutte le colonne." + (prec.ultima ? ` «Anno scorso»: persone disponibili nello stesso momento nel ${esc(prec.ultima.anno)}.` : ""),
       nota: proposti ? "* Ruolo ancora da confermare." : "",
       csv: { nome: `casoncellata_${String(ed.sabato).slice(0, 4)}_${chiaveRuolo(rep.nome).replace(/[^a-z0-9]+/g, "_")}.csv`, testo: csv.map(r => r.map(virgolette).join(";")).join("\r\n") } });
@@ -7052,7 +7052,7 @@ function apriAnteprimaReportGenerico(titolo, headers, rows, testoRighe, opzioni)
     <div class="modal-title">🖨️ Anteprima — ${esc(titolo)}</div>
     <div class="card-sub" style="margin-bottom:12px;">${opzioni && opzioni.sottotitolo ? opzioni.sottotitolo : rows.length + " righe"} — generato il ${fmtDateTime(new Date().toISOString())}</div>
     ${opzioni && opzioni.corpoHtml ? `<div style="max-height:56vh; overflow-y:auto; margin-bottom:12px;">${opzioni.corpoHtml}</div>` : `<div style="max-height:50vh; overflow-y:auto; border:2px solid var(--ink); border-radius:10px; margin-bottom:16px;">
-      <table class="${opzioni && opzioni.primaFissa ? "rep-prima-fissa" : ""}" style="width:100%; border-collapse:collapse; font-size:${opzioni && opzioni.compatto ? "0.76rem" : "0.82rem"};">
+      ${opzioni && opzioni.sopraTabella ? opzioni.sopraTabella : ""}<table class="${opzioni && opzioni.fisse === 2 ? "rep-due-fisse" : opzioni && opzioni.primaFissa ? "rep-prima-fissa" : ""}" style="width:100%; border-collapse:collapse; font-size:${opzioni && opzioni.compatto ? "0.76rem" : "0.82rem"};">
         <thead>${theadSchermo}</thead>
         <tbody>${righeHtml}</tbody>
       </table>

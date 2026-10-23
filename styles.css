@@ -474,3 +474,12 @@ body.menu-aperto { overflow: hidden; }
 .rp-b { display: block; width: 100%; box-sizing: border-box; margin: 6px 0; padding: 12px; text-align: left; font-weight: 800; font-size: 1rem; font-family: inherit; border: 2px solid #1a1a1a; border-radius: 12px; background: #fff; box-shadow: 3px 3px 0 #1a1a1a; cursor: pointer; }
 .rp-b span { float: right; color: #1a6b3c; }
 .rp-b small { display: block; font-weight: 600; color: #666; font-size: .78rem; margin-top: 2px; }
+
+/* Anteprima in stile Excel: numero di riga e nome restano fermi mentre si scorre; il titolo è come la cella A1 del foglio */
+.xl-tit { font-weight: 800; padding: 6px 8px; font-size: .9rem; background: #fff; border-bottom: 1px solid #999; position: sticky; left: 0; }
+.rep-due-fisse thead tr:first-child th:nth-child(1), .rep-due-fisse tbody td:nth-child(1) { position: sticky; left: 0; z-index: 2; width: 28px; min-width: 28px; text-align: center; color: #555; }
+.rep-due-fisse thead tr:first-child th:nth-child(2), .rep-due-fisse tbody td:nth-child(2) { position: sticky; left: 28px; z-index: 1; border-right: 2px solid #444; }
+.rep-due-fisse tbody td:nth-child(1), .rep-due-fisse tbody td:nth-child(2) { background: #fff; }
+.rep-due-fisse tbody tr:last-child td:nth-child(1), .rep-due-fisse tbody tr:last-child td:nth-child(2) { background: #faf8f2; }
+.rep-due-fisse td, .rep-due-fisse th { white-space: nowrap; }
+.rep-due-fisse td:last-child { white-space: normal; min-width: 90px; }
