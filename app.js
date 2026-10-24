@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "9.15";
+const APP_VERSION = "9.16";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -3218,24 +3218,21 @@ function renderCena() {
   const cene = [...state.cene].sort((a, b) => (b.data || "").localeCompare(a.data || ""));
   const listaHtml = cene.length ? cene.map(c => `
     <div class="card" data-cena-id="${c.id}">
-      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
-        <div>
-          <div style="font-weight:800;">${esc(c.titolo || "Cena")}</div>
-          <div class="card-sub">${fmtDate(c.data)}${c.ora ? " · " + esc(c.ora) : ""}${c.luogo ? " · " + esc(c.luogo) : ""}</div>
-        </div>
-        ${soloLettura ? "" : `<button type="button" class="btn danger" data-elimina-cena="${c.id}" style="padding:5px 10px; font-size:0.8rem;">🗑️</button>`}
+      <div class="cc-top">
+        <div class="cc-tit">${esc(c.titolo || "Cena")}</div>
+        ${soloLettura ? "" : `<button type="button" class="cc-del" data-elimina-cena="${c.id}" title="Elimina la cena">🗑️</button>`}
       </div>
-      <div class="card-sub" data-tally="${c.id}" style="margin-top:8px;">Caricamento risposte...</div>
-      ${c.scadenza ? `<div class="card-sub" style="margin-top:4px;">${cenaChiusa(c.scadenza) ? "Iscrizioni chiuse (scadenza il " + fmtDate(c.scadenza) + ")" : "Iscrizioni aperte fino al " + fmtDate(c.scadenza)}</div>` : ""}
+      <div class="cc-sub">${fmtDate(c.data)}${c.ora ? " · " + esc(c.ora) : ""}${c.luogo ? " · " + esc(c.luogo) : ""}</div>
+      <div class="cc-stato"><span class="cc-chip" data-tally="${c.id}">Caricamento…</span>${c.scadenza ? `<span class="cc-chip">${cenaChiusa(c.scadenza) ? "Iscrizioni chiuse (scad. " + fmtDate(c.scadenza).slice(0, 5) + ")" : "Iscrizioni fino al " + fmtDate(c.scadenza).slice(0, 5)}</span>` : ""}</div>
       <div data-iscr="${c.id}"></div>
-      <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
-        <button type="button" class="btn secondary" data-copia-link="${c.id}" style="font-size:0.82rem; padding:7px 10px;">🔗 Copia link</button>
-        ${soloLettura ? "" : `<button type="button" class="btn" data-wa-link="${c.id}" style="background:#25D366; color:#fff; font-size:0.82rem; padding:7px 10px;">${WA_ICON} Invia su WhatsApp</button>`}
-        <button type="button" class="btn secondary" data-report-cena="${c.id}" style="font-size:0.82rem; padding:7px 10px;">📋 Report nomi</button>
+      <div class="cc-az">
+        <button type="button" class="btn secondary" data-copia-link="${c.id}">🔗 Link</button>
+        ${soloLettura ? "" : `<button type="button" class="btn" data-wa-link="${c.id}" style="background:#25D366; color:#fff;">${WA_ICON} WhatsApp</button>`}
+        <button type="button" class="btn secondary" data-report-cena="${c.id}">📋 Nomi</button>
       </div>
-      ${soloLettura ? "" : `<div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
-        <button type="button" class="btn" data-cena-aggiungi="${c.id}" style="font-size:0.82rem; padding:7px 10px;">➕ Aggiungi adesione</button>
-        <button type="button" class="btn secondary" data-cena-scadenza="${c.id}" style="font-size:0.82rem; padding:7px 10px;">📅 Scadenza iscrizioni</button>
+      ${soloLettura ? "" : `<div class="cc-az">
+        <button type="button" class="btn" data-cena-aggiungi="${c.id}">➕ Adesione</button>
+        <button type="button" class="btn secondary" data-cena-scadenza="${c.id}">📅 Scadenza</button>
       </div>`}
     </div>
   `).join("") : `<div class="card-sub">Nessuna cena creata finora.</div>`;
@@ -3374,9 +3371,10 @@ async function caricaTallyCena(cenaId, el) {
     const dati = doc.exists ? doc.data() : null;
     const blocco = document.querySelector(`[data-iscr="${cenaId}"]`);
     if (blocco) disegnaIscrizioneCena(cenaId, blocco, dati);
-    if (!dati) { el.textContent = "Nessuna conferma ancora"; return; }
+    if (!dati) { el.classList.remove("ok"); el.textContent = "Nessuna conferma ancora"; return; }
     const totale = risposteCenaUniche(dati.risposte).reduce((sum, r) => sum + (r.persone || 1), 0);
-    el.innerHTML = totale > 0 ? `✅ <strong>${totale}</strong> persone confermate` : "Nessuna conferma ancora";
+    el.classList.toggle("ok", totale > 0);
+    el.innerHTML = totale > 0 ? `✅ ${totale} ${totale === 1 ? "persona" : "persone"}` : "Nessuna conferma ancora";
   } catch (err) {
     console.error(err);
     el.textContent = "Errore nel caricamento delle conferme";

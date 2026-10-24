@@ -508,3 +508,18 @@ body.menu-aperto { overflow: hidden; }
 .xl-t td.xl-i .tb-n { font-size: .66rem; }
 
 .gr .c .rc-ico { font-size: .78rem; padding: 2px 3px; }
+
+/* Cene: scheda compatta (titolo e cestino, data e luogo, etichette, due file di tasti) */
+.cc-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.cc-tit { font-weight: 800; font-size: 1.05rem; line-height: 1.2; }
+.cc-del { flex: none; width: 34px; height: 34px; border-radius: 10px; border: 2px solid #1a1a1a; background: var(--red, #b3261e); color: #fff; font-size: .95rem; padding: 0; cursor: pointer; }
+.cc-sub { color: #555; font-size: .8rem; margin: 3px 0 6px; line-height: 1.25; }
+.cc-stato { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.cc-chip { font-size: .76rem; font-weight: 700; padding: 2px 9px; border-radius: 12px; border: 1.5px solid #bbb; background: #f7f3e8; }
+.cc-chip.ok { border-color: #1a6b3c; background: #e3f4e8; color: #1a6b3c; }
+.cc-az { display: flex; gap: 6px; margin-top: 6px; }
+.cc-az .btn { flex: 1 1 0; min-width: 0; padding: 8px 3px; font-size: .8rem; white-space: nowrap; }
+@media (max-width: 350px) {
+  .cc-az .btn { font-size: .72rem; padding: 8px 2px; }
+  .cc-az .btn svg { width: 13px; height: 13px; }
+}
