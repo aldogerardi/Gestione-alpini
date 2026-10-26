@@ -529,3 +529,11 @@ body.menu-aperto { overflow: hidden; }
 .ore-gr { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin: 14px 0 2px; padding: 5px 8px; background: #f1ede0; border-radius: 8px; color: #555; font-weight: 800; font-size: .85rem; }
 .ore-gr.con { background: #e3f4e8; color: #1a6b3c; }
 .ore-gr.con span + span { font-weight: 700; }
+
+/* Panettoni & C: tre tasti in fila (Rendiconto, Consegne, Ordini) anche sugli schermi stretti */
+@media (max-width: 380px) {
+  .ben-tasti-3 .btn { font-size: .78rem; padding: 7px 3px; }
+}
+@media (max-width: 340px) {
+  .ben-tasti-3 .btn { font-size: .68rem; padding: 7px 1px; }
+}

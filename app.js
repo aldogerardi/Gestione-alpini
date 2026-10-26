@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "9.17";
+const APP_VERSION = "9.18";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -4303,6 +4303,15 @@ function benStatoPagamento(c, r) {
 }
 function benTestoDifferenza(diff) { return diff > 0.004 ? "+" + benEuro(diff) + " in più" : (diff < -0.004 ? "mancano " + benEuro(-diff) : ""); }
 
+// Gli ordini: come l'elenco delle consegne, ma senza prezzi, incassi e differenze (da dare a chi prepara la merce)
+function benElencoOrdini(c) {
+  if (!c) return;
+  const lista = [...(c.prenotazioni || [])].sort((a, b) => (a.nome || "").localeCompare(b.nome || "", "it"));
+  const righe = lista.map(r => [esc(r.nome), esc(benArticoli(c, r)), r.consegnato ? "Sì" : "No", esc(r.note || "")]);
+  const testo = lista.map(r => `${r.nome}: ${benArticoli(c, r)} - ${r.consegnato ? "consegnato" : "da consegnare"}`);
+  apriAnteprimaReportGenerico(`Ordini - ${c.titolo}`, ["Nome", "Articoli", "Consegnato", "Note"], righe, testo);
+}
+
 function benArticoli(c, r) { return (c.prodotti || []).filter(p => Number((r.q || {})[p.id]) > 0).map(p => `${r.q[p.id]}× ${p.nome}`).join(", "); }
 
 function benTotali(c) {
@@ -4461,9 +4470,10 @@ function renderBenDettaglio(c) {
         ${riga("Costo della merce", t.costo)}${riga("Ricavato per la beneficenza", t.ricavato, true)}
         ${c.versatoImporto ? riga("Già versato" + (c.destinazione ? " a " + esc(c.destinazione) : ""), c.versatoImporto) : ""}
       </div>
-      <div class="ben-tasti" style="margin-top:12px;">
+      <div class="ben-tasti ben-tasti-3" style="margin-top:12px;">
         <button type="button" class="btn" data-ben="rendiconto" data-id="${c.id}" title="Rendiconto della campagna">📄 Rendiconto</button>
-        <button type="button" class="btn secondary" data-ben="elenco" data-id="${c.id}" title="Elenco consegne">📋 Consegne</button>
+        <button type="button" class="btn secondary" data-ben="elenco" data-id="${c.id}" title="Elenco consegne, con gli importi">📋 Consegne</button>
+        <button type="button" class="btn secondary" data-ben="ordini" data-id="${c.id}" title="Elenco degli ordini, senza prezzi">📦 Ordini</button>
       </div>
     </div>
     <button type="button" class="btn block" data-ben="nuova-pren" data-id="${c.id}" style="margin-bottom:10px;">➕ Nuova prenotazione</button>
@@ -4522,6 +4532,7 @@ function attachBeneficenzaEvents() {
     else if (az === "pagato" || az === "consegnato") benImposta(id, pid, az, el.dataset.val === "1");
     else if (az === "rendiconto") benRendiconto(benTrova(id));
     else if (az === "elenco") benElencoConsegne(benTrova(id));
+    else if (az === "ordini" && gestore) benElencoOrdini(benTrova(id));
   });
   const filtro = document.getElementById("ben-filtro");
   if (filtro) filtro.addEventListener("input", () => {
