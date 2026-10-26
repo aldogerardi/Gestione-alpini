@@ -523,3 +523,9 @@ body.menu-aperto { overflow: hidden; }
   .cc-az .btn { font-size: .72rem; padding: 8px 2px; }
   .cc-az .btn svg { width: 13px; height: 13px; }
 }
+
+/* Ore Alpine: chi ha le ore in alto, poi gli altri soci; campo di ricerca */
+.ore-cerca { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 2px solid var(--ink); border-radius: 8px; font-size: .95rem; }
+.ore-gr { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin: 14px 0 2px; padding: 5px 8px; background: #f1ede0; border-radius: 8px; color: #555; font-weight: 800; font-size: .85rem; }
+.ore-gr.con { background: #e3f4e8; color: #1a6b3c; }
+.ore-gr.con span + span { font-weight: 700; }

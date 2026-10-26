@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "9.16";
+const APP_VERSION = "9.17";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -2168,11 +2168,22 @@ function renderOreAlpine() {
     if (sociosSorted.length === 0) {
       rosterHtml = `<div class="card-sub">Nessun socio in Anagrafica.</div>`;
     } else {
-      rosterHtml = sociosSorted.map(s => `
-        <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:7px 0; border-bottom:1px solid #eee;">
+      // chi ha già delle ore va in alto (in ordine alfabetico), poi gli altri soci; i nomi non si spostano mentre si scrive
+      const haOre = s => (parseFloat(map[s.id]) || 0) > 0;
+      const con = sociosSorted.filter(haOre), altri = sociosSorted.filter(s => !haOre(s));
+      const normNome = s => `${s.cognome} ${s.nome}`.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      const riga = (s, g) => `
+        <div data-ore-riga="${esc(normNome(s))}" data-g="${g}" style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:7px 0; border-bottom:1px solid #eee;">
           <span style="flex:1;">${esc(s.cognome)} ${esc(s.nome)}</span>
           <input type="number" min="0" step="0.5" data-ore-socio="${s.id}" value="${map[s.id] || ""}" placeholder="0" style="width:70px; padding:6px; border:2px solid var(--ink); border-radius:8px; text-align:center;">
-        </div>`).join("");
+        </div>`;
+      const totCon = Math.round(con.reduce((t, s) => t + (parseFloat(map[s.id]) || 0), 0) * 10) / 10;
+      rosterHtml = `<input type="text" id="ore-cerca" placeholder="🔍 Cerca alpino…" autocomplete="off" class="ore-cerca">`
+        + (con.length
+          ? `<div class="ore-gr con" data-ore-gruppo="con"><span>⭐ Con ore assegnate (${con.length})</span><span>${totCon} ore in tutto</span></div>${con.map(s => riga(s, "con")).join("")}`
+            + (altri.length ? `<div class="ore-gr" data-ore-gruppo="altri"><span>Altri soci (${altri.length})</span></div>${altri.map(s => riga(s, "altri")).join("")}` : "")
+          : sociosSorted.map(s => riga(s, "tutti")).join(""))
+        + `<div id="ore-nessuno" class="card-sub" style="display:none; margin-top:8px;">Nessun alpino trovato.</div>`;
     }
   }
 
@@ -2239,6 +2250,19 @@ function attachOreAlpineEvents() {
   document.getElementById("ore-iniziativa-select").addEventListener("change", e => {
     selectedOreIniziativaId = e.target.value || null;
     renderSection();
+  });
+
+  // ricerca: nasconde le righe che non corrispondono (restano nella pagina, quindi le ore già scritte si salvano comunque)
+  const cerca = document.getElementById("ore-cerca");
+  if (cerca) cerca.addEventListener("input", () => {
+    const parole = cerca.value.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(/\s+/).filter(Boolean);
+    const righe = [...document.querySelectorAll("[data-ore-riga]")];
+    righe.forEach(r => { r.style.display = parole.every(p => r.dataset.oreRiga.includes(p)) ? "flex" : "none"; });
+    document.querySelectorAll("[data-ore-gruppo]").forEach(h => {
+      h.style.display = righe.some(r => r.dataset.g === h.dataset.oreGruppo && r.style.display !== "none") ? "" : "none";
+    });
+    const nessuno = document.getElementById("ore-nessuno");
+    if (nessuno) nessuno.style.display = righe.some(r => r.style.display !== "none") ? "none" : "";
   });
 
   const saveBtn = document.getElementById("ore-save-btn");
