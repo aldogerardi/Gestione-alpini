@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "9.59";
+const APP_VERSION = "9.60";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -376,8 +376,8 @@ const FASCIA_ORDER = ["pranzo", "cena", "giornata"];
 
 const PLACEHOLDER_SECTIONS = {
   "conv-casoncellata": { title: "Casoncellata", icon: "🥟", desc: "Disponibilità dei soci per la Casoncellata." },
-  "conv-festa-alpina": { title: "Festa Alpina", icon: "🎪", desc: "Disponibilità dei soci per la Festa Alpina." },
-  "conv-merenda-alpina": { title: "Merenda Alpina", icon: "☕", desc: "Disponibilità dei soci per la Merenda Alpina." },
+  "conv-festa-alpina": { title: "Festa Alpina", icon: "🍺", desc: "Disponibilità dei soci per la Festa Alpina." },
+  "conv-merenda-alpina": { title: "Merenda Alpina", icon: "🥪", desc: "Disponibilità dei soci per la Merenda Alpina." },
   "presenza-adunata": { title: "Presenza Adunata", icon: "🎖️", desc: "Registro presenze soci alle adunate." },
   "cassa": { title: "Cassa", icon: "💰", desc: "Qui gestirai entrate e uscite del gruppo." }
 };
@@ -5335,7 +5335,7 @@ const CASO_TIPI = {
     ],
   },
   festa: {
-    id: "festa", sezione: "conv-festa-alpina", nome: "Festa Alpina", icona: "🎪", articolo: "la", della: "della Festa Alpina", plurale: "Feste Alpine",
+    id: "festa", sezione: "conv-festa-alpina", nome: "Festa Alpina", icona: "🍺", articolo: "la", della: "della Festa Alpina", plurale: "Feste Alpine",
     stato: "festaAlpina", repartiStato: "festaReparti", docPrefix: "festaalpina_", fileBase: "festaalpina", ancora: { nome: "sabato", wd: 6 }, etichettaPrep: "Preparativi",
     intro: "Richiesta di disponibilità ai soci: preparativi del martedì, mercoledì e giovedì, e le tre serate della festa (venerdì, sabato e domenica).",
     nuovaLabel: "Sabato della Festa Alpina", nuovaSub: "I preparativi (martedì, mercoledì, giovedì) e le serate di venerdì e domenica si ricavano dal sabato.", msgData: "Scegli la data del sabato della Festa Alpina.",
@@ -5351,7 +5351,7 @@ const CASO_TIPI = {
     ],
   },
   merenda: {
-    id: "merenda", sezione: "conv-merenda-alpina", nome: "Merenda Alpina", icona: "☕", articolo: "la", della: "della Merenda Alpina", plurale: "Merende Alpine",
+    id: "merenda", sezione: "conv-merenda-alpina", nome: "Merenda Alpina", icona: "🥪", articolo: "la", della: "della Merenda Alpina", plurale: "Merende Alpine",
     stato: "merendaAlpina", repartiStato: "merendaReparti", docPrefix: "merendaalpina_", fileBase: "merendaalpina", ancora: { nome: "domenica", wd: 0 }, etichettaPrep: "Preparativi",
     intro: "Richiesta di disponibilità ai soci: preparativi del sabato e merenda della domenica pomeriggio.",
     nuovaLabel: "Domenica della Merenda Alpina", nuovaSub: "I preparativi di sabato si ricavano dalla domenica.", msgData: "Scegli la data della domenica della Merenda Alpina.",
@@ -7824,7 +7824,7 @@ function apriCambioPassword(primoAccesso) {
 const MENU_GRUPPI = [
   { titolo: "", voci: [["home", "🏠", "Home"]] },
   { titolo: "Soci e tesseramento", voci: [["anagrafica", "👤", "Anagrafica"], ["conv-consiglio", "📋", "Consiglio"], ["bollino", "🎫", "Bollino"], ["bollino-amici", "🤝", "Bollino Amici"]] },
-  { titolo: "Eventi", voci: [["cena", "🍽️", "Cena"], ["iniziative", "🎉", "Attività"], ["presenza-adunata", "🎖️", "Adunata"], ["prenotazioni", "🗓️", "Prenotaz. Sede"], ["beneficenza", "🎁", "Panettoni &amp; C"], ["conv-casoncellata", "🥟", "Casoncellata"], ["conv-festa-alpina", "🎪", "Festa Alpina"], ["conv-merenda-alpina", "☕", "Merenda Alpina"]] },
+  { titolo: "Eventi", voci: [["cena", "🍽️", "Cena"], ["iniziative", "🎉", "Attività"], ["presenza-adunata", "🎖️", "Adunata"], ["prenotazioni", "🗓️", "Prenotaz. Sede"], ["beneficenza", "🎁", "Panettoni &amp; C"], ["conv-casoncellata", "🥟", "Casoncellata"], ["conv-festa-alpina", "🍺", "Festa Alpina"], ["conv-merenda-alpina", "🥪", "Merenda Alpina"]] },
   { titolo: "Comunicazione", voci: [["bacheca", "📌", "Bacheca"], ["verbali", "📑", "Verbali Consiglio"], ["libretto", "📖", "Preghiera e Canto"], ["canzoni", "🎵", "Canzoni"]] },
   { titolo: "Gestione e report", voci: [["archivio-bui", "🗄️", "Archivio BUI"], ["cassa", "💰", "Cassa"], ["ore-alpine", "⏱️", "Ore Alpine"], ["ringraziamenti", "🙏", "Ringraziamenti"], ["sponsor", "💼", "Sponsor"], ["report", "📊", "Report 1"], ["report2", "📊", "Report 2"], ["log", "📜", "Log"]] }
 ];
