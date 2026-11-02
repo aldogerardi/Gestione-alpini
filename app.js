@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "9.19";
+const APP_VERSION = "9.59";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -306,6 +306,10 @@ function applyStateFields(source) {
   state.manuali = source.manuali || [];
   state.casoncellata = source.casoncellata || [];
   state.casoReparti = source.casoReparti || [];
+  state.festaAlpina = source.festaAlpina || [];
+  state.festaReparti = source.festaReparti || [];
+  state.merendaAlpina = source.merendaAlpina || [];
+  state.merendaReparti = source.merendaReparti || [];
 }
 
 const SYNC_STATO = { ok: null, quando: null, errore: "", ricevuto: null, daCache: false };
@@ -372,6 +376,8 @@ const FASCIA_ORDER = ["pranzo", "cena", "giornata"];
 
 const PLACEHOLDER_SECTIONS = {
   "conv-casoncellata": { title: "Casoncellata", icon: "🥟", desc: "Disponibilità dei soci per la Casoncellata." },
+  "conv-festa-alpina": { title: "Festa Alpina", icon: "🎪", desc: "Disponibilità dei soci per la Festa Alpina." },
+  "conv-merenda-alpina": { title: "Merenda Alpina", icon: "☕", desc: "Disponibilità dei soci per la Merenda Alpina." },
   "presenza-adunata": { title: "Presenza Adunata", icon: "🎖️", desc: "Registro presenze soci alle adunate." },
   "cassa": { title: "Cassa", icon: "💰", desc: "Qui gestirai entrate e uscite del gruppo." }
 };
@@ -425,6 +431,10 @@ let state = {
   manuali: [],
   casoncellata: [],
   casoReparti: [],
+  festaAlpina: [],
+  festaReparti: [],
+  merendaAlpina: [],
+  merendaReparti: [],
   meta: { ultimaModifica: null, ultimoImport: null }
 };
 let bollinoAnno = new Date().getFullYear();
@@ -501,6 +511,8 @@ const LOG_TRACK = [
   { id: "canzoni", nome: "Canzoni", get: st => st.canzoni, label: c => c.titolo },
   { id: "manuali", nome: "Manuali", get: st => st.manuali, label: m => m.titolo },
   { id: "casoncellata", nome: "Casoncellata", get: st => st.casoncellata, label: e => "Casoncellata " + String(e.sabato || "").slice(0, 4) },
+  { id: "festaAlpina", nome: "Festa Alpina", get: st => st.festaAlpina, label: e => "Festa Alpina " + String(e.sabato || "").slice(0, 4) },
+  { id: "merendaAlpina", nome: "Merenda Alpina", get: st => st.merendaAlpina, label: e => "Merenda Alpina " + String(e.sabato || "").slice(0, 4) },
   { id: "bollino", nome: "Bollino", get: st => st.pagamentiBollino, label: p => `${nomeSocioPerLog(p.socioId)} ${p.anno || ""}`.trim() },
   { id: "convocazioni", nome: "Consiglio (convocazione)", get: st => (st.consiglio || {}).storico, label: c => c.data || "" },
   { id: "gruppoInfo", nome: "Home (dati del Gruppo)", obj: true, get: st => st.gruppoInfo },
@@ -752,7 +764,8 @@ function renderSection() {
   } else if (currentSection === "manuali") {
     content.innerHTML = renderManuali();
     attachManualiEvents();
-  } else if (currentSection === "conv-casoncellata") {
+  } else if (casoTipoDiSezione(currentSection)) {
+    casoImposta(casoTipoDiSezione(currentSection).id);
     content.innerHTML = renderCasoncellata();
     attachCasoncellataEvents();
   } else if (currentSection === "beneficenza") {
@@ -5295,27 +5308,112 @@ function controlloAssegna() {
 }
 
 // ---------- Casoncellata: disponibilità dei soci ----------
-const CASO_VOCI = [
-  { k: "ven", giorno: -1, lungo: "Preparativi", corto: "Prep. ven", breve: "Ven" },
-  { k: "sabP", giorno: 0, lungo: "Sabato pranzo", corto: "Sab pranzo", breve: "Sab pr." },
-  { k: "sabC", giorno: 0, lungo: "Sabato cena", corto: "Sab cena", breve: "Sab ce." },
-  { k: "domP", giorno: 1, lungo: "Domenica pranzo", corto: "Dom pranzo", breve: "Dom pr." },
-  { k: "domC", giorno: 1, lungo: "Domenica cena", corto: "Dom cena", breve: "Dom ce." },
-];
 const CASO_GIORNI = ["domenica", "lunedì", "martedì", "mercoledì", "giovedì", "venerdì", "sabato"];
 const CASO_MESI = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre"];
+
+// Le sezioni di disponibilità dei soci hanno tutte la stessa logica; cambiano i giorni e i momenti.
+// Il giorno di riferimento si salva sempre in ed.sabato (per la Merenda Alpina è la domenica).
+const CASO_TIPI = {
+  casoncellata: {
+    id: "casoncellata", sezione: "conv-casoncellata", nome: "Casoncellata", icona: "🥟", articolo: "la", della: "della Casoncellata", plurale: "Casoncellate",
+    stato: "casoncellata", repartiStato: "casoReparti", docPrefix: "casoncellata_", fileBase: "casoncellata", ancora: { nome: "sabato", wd: 6 }, legacyGriglia: true, etichettaPrep: "Scarico",
+    intro: "Richiesta di disponibilità ai soci: preparativi del venerdì, pranzo e cena del sabato e della domenica.",
+    nuovaLabel: "Sabato della Casoncellata", nuovaSub: "Venerdì e domenica si ricavano dal sabato.", msgData: "Scegli la data del sabato della Casoncellata.",
+    sottoTab: "Chi c'è in ogni reparto, pranzo e cena", suggerimentoReport: "↔ Scorri la tabella verso destra (o ruota il telefono) per vedere Domenica, Ruolo e Note.",
+    giorniFissi: { "-1": { nome: "Venerdì", corto: "Ven", data: false }, "0": { nome: "Sabato", corto: "Sab", data: true }, "1": { nome: "Domenica", corto: "Dom", data: true } },
+    periodo: ed => {
+      const s = casoData(ed.sabato, 0), d = casoData(ed.sabato, 1);
+      return s.getMonth() === d.getMonth() ? `sabato ${s.getDate()} e domenica ${d.getDate()} ${CASO_MESI[d.getMonth()]} ${d.getFullYear()}`
+        : `sabato ${s.getDate()} ${CASO_MESI[s.getMonth()]} e domenica ${d.getDate()} ${CASO_MESI[d.getMonth()]} ${d.getFullYear()}`;
+    },
+    voci: [
+      { k: "ven", giorno: -1, lungo: "Preparativi", corto: "Prep. ven", breve: "Ven", parte: "Preparativi", sigla: "Prep.", prep: true },
+      { k: "sabP", giorno: 0, lungo: "Sabato pranzo", corto: "Sab pranzo", breve: "Sab pr.", parte: "Pranzo", sigla: "Pr." },
+      { k: "sabC", giorno: 0, lungo: "Sabato cena", corto: "Sab cena", breve: "Sab ce.", parte: "Cena", sigla: "Ce." },
+      { k: "domP", giorno: 1, lungo: "Domenica pranzo", corto: "Dom pranzo", breve: "Dom pr.", parte: "Pranzo", sigla: "Pr." },
+      { k: "domC", giorno: 1, lungo: "Domenica cena", corto: "Dom cena", breve: "Dom ce.", parte: "Cena", sigla: "Ce." },
+    ],
+  },
+  festa: {
+    id: "festa", sezione: "conv-festa-alpina", nome: "Festa Alpina", icona: "🎪", articolo: "la", della: "della Festa Alpina", plurale: "Feste Alpine",
+    stato: "festaAlpina", repartiStato: "festaReparti", docPrefix: "festaalpina_", fileBase: "festaalpina", ancora: { nome: "sabato", wd: 6 }, etichettaPrep: "Preparativi",
+    intro: "Richiesta di disponibilità ai soci: preparativi del martedì, mercoledì e giovedì, e le tre serate della festa (venerdì, sabato e domenica).",
+    nuovaLabel: "Sabato della Festa Alpina", nuovaSub: "I preparativi (martedì, mercoledì, giovedì) e le serate di venerdì e domenica si ricavano dal sabato.", msgData: "Scegli la data del sabato della Festa Alpina.",
+    sottoTab: "Chi c'è in ogni reparto, serata per serata", suggerimentoReport: "↔ Scorri la tabella verso destra (o ruota il telefono) per vedere tutti i giorni, Ruolo e Note.",
+    periodo: ed => casoPeriodoDa(ed, -4, 1),
+    voci: [
+      { k: "mar", giorno: -4, lungo: "Preparativi martedì", corto: "Prep. mar", breve: "Mar", parte: "Preparativi", g: "Prep.", sigla: "Prep.", prep: true },
+      { k: "mer", giorno: -3, lungo: "Preparativi mercoledì", corto: "Prep. mer", breve: "Mer", parte: "Preparativi", g: "Prep.", sigla: "Prep.", prep: true },
+      { k: "gio", giorno: -2, lungo: "Preparativi giovedì", corto: "Prep. gio", breve: "Gio", parte: "Preparativi", g: "Prep.", sigla: "Prep.", prep: true },
+      { k: "ven", giorno: -1, lungo: "Serata venerdì", corto: "Ven sera", breve: "Ven", parte: "Serata", g: "Serata", sigla: "Sera" },
+      { k: "sab", giorno: 0, lungo: "Serata sabato", corto: "Sab sera", breve: "Sab", parte: "Serata", g: "Serata", sigla: "Sera" },
+      { k: "dom", giorno: 1, lungo: "Serata domenica", corto: "Dom sera", breve: "Dom", parte: "Serata", g: "Serata", sigla: "Sera" },
+    ],
+  },
+  merenda: {
+    id: "merenda", sezione: "conv-merenda-alpina", nome: "Merenda Alpina", icona: "☕", articolo: "la", della: "della Merenda Alpina", plurale: "Merende Alpine",
+    stato: "merendaAlpina", repartiStato: "merendaReparti", docPrefix: "merendaalpina_", fileBase: "merendaalpina", ancora: { nome: "domenica", wd: 0 }, etichettaPrep: "Preparativi",
+    intro: "Richiesta di disponibilità ai soci: preparativi del sabato e merenda della domenica pomeriggio.",
+    nuovaLabel: "Domenica della Merenda Alpina", nuovaSub: "I preparativi di sabato si ricavano dalla domenica.", msgData: "Scegli la data della domenica della Merenda Alpina.",
+    sottoTab: "Chi c'è in ogni reparto alla merenda", suggerimentoReport: "↔ Scorri la tabella verso destra (o ruota il telefono) per vedere Ruolo e Note.",
+    periodo: ed => `domenica ${casoData(ed.sabato, 0).getDate()} ${CASO_MESI[casoData(ed.sabato, 0).getMonth()]} ${casoData(ed.sabato, 0).getFullYear()} (preparativi: sabato ${casoData(ed.sabato, -1).getDate()} ${CASO_MESI[casoData(ed.sabato, -1).getMonth()]})`,
+    voci: [
+      { k: "prep", giorno: -1, lungo: "Preparativi sabato", corto: "Prep. sab", breve: "Prep. sab", parte: "Preparativi", sigla: "Prep.", prep: true },
+      { k: "mer", giorno: 0, lungo: "Merenda domenica", corto: "Merenda dom", breve: "Merenda", parte: "Merenda", sigla: "Mer." },
+    ],
+  },
+};
+let casoTipoCorrente = "casoncellata";
+let CASO_VOCI = CASO_TIPI.casoncellata.voci;
+let CASO_WEEKEND = [], CASO_WEEKEND_NOMI = [];   // i momenti "di servizio" (senza i preparativi), per il report per reparto
+function casoImposta(tipoId) {
+  casoTipoCorrente = tipoId;
+  CASO_VOCI = CASO_TIPI[tipoId].voci;
+  CASO_WEEKEND = CASO_VOCI.filter(v => !v.prep).map(v => v.k);
+  CASO_WEEKEND_NOMI = CASO_VOCI.filter(v => !v.prep).map(v => v.lungo);
+}
+casoImposta("casoncellata");
+function casoTipo() { return CASO_TIPI[casoTipoCorrente]; }
+function casoTipoDiSezione(sez) { return Object.values(CASO_TIPI).find(t => t.sezione === sez) || null; }
+function casoLista() { return state[casoTipo().stato] || []; }
+// il tipo di una richiesta si riconosce da quale elenco la contiene
+function casoTipoDiId(edId) { return Object.values(CASO_TIPI).find(t => (state[t.stato] || []).some(e => e.id === edId)) || casoTipo(); }
+function casoTipoDiEd(ed) { return ed ? casoTipoDiId(ed.id) : casoTipo(); }
+function casoDocId(edId) { return casoTipoDiId(edId).docPrefix + edId; }
+// Trova la richiesta e, nel farlo, passa alla sezione giusta (momenti, reparti, ...).
+function casoTrovaEd(edId) {
+  for (const t of Object.values(CASO_TIPI)) {
+    const e = (state[t.stato] || []).find(x => x.id === edId);
+    if (e) { casoImposta(t.id); return e; }
+  }
+  return undefined;
+}
+// I giorni che compaiono nelle voci, in ordine: [{ delta, voci }]
+function casoGruppiGiorni(voci) {
+  const g = [];
+  voci.forEach(v => { const x = g.find(y => y.delta === v.giorno); if (x) x.voci.push(v); else g.push({ delta: v.giorno, voci: [v] }); });
+  return g.sort((x, y) => x.delta - y.delta);
+}
+function casoInfoGiorno(ed, delta) {
+  const f = casoTipoDiEd(ed).giorniFissi;
+  if (f && f[String(delta)]) return f[String(delta)];
+  const n = CASO_GIORNI[casoData(ed.sabato, delta).getDay()], nome = n.charAt(0).toUpperCase() + n.slice(1);
+  return { nome, corto: nome.slice(0, 3), data: true };
+}
+function casoTitoloGiorno(ed, delta) { const i = casoInfoGiorno(ed, delta); return `${i.nome}${i.data ? " " + casoDataBreve(ed.sabato, delta) : ""}`; }
+function casoPeriodoDa(ed, d1, d2) {
+  const a = casoData(ed.sabato, d1), b = casoData(ed.sabato, d2);
+  return `da ${CASO_GIORNI[a.getDay()]} ${a.getDate()}${a.getMonth() === b.getMonth() ? "" : " " + CASO_MESI[a.getMonth()]} a ${CASO_GIORNI[b.getDay()]} ${b.getDate()} ${CASO_MESI[b.getMonth()]} ${b.getFullYear()}`;
+}
 
 function casoData(sabatoISO, delta) { const [a, m, g] = String(sabatoISO).split("-").map(Number); return new Date(a, m - 1, g + delta, 12); }
 function casoDataBreve(sabatoISO, delta) { const d = casoData(sabatoISO, delta); return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`; }
 function casoGiornoTesto(sabatoISO, delta) { const d = casoData(sabatoISO, delta); return `${CASO_GIORNI[d.getDay()]} ${d.getDate()} ${CASO_MESI[d.getMonth()]}`; }
-function casoPeriodoTesto(ed) {
-  const s = casoData(ed.sabato, 0), d = casoData(ed.sabato, 1);
-  return s.getMonth() === d.getMonth() ? `sabato ${s.getDate()} e domenica ${d.getDate()} ${CASO_MESI[d.getMonth()]} ${d.getFullYear()}`
-    : `sabato ${s.getDate()} ${CASO_MESI[s.getMonth()]} e domenica ${d.getDate()} ${CASO_MESI[d.getMonth()]} ${d.getFullYear()}`;
-}
-function casoTitolo(ed) { return `Casoncellata ${String(ed.sabato).slice(0, 4)}`; }
-// La richiesta resta aperta finché il Direttivo non la chiude, e comunque non oltre la domenica della Casoncellata.
-function casoScaduta(ed) { return casoData(ed.sabato, 1).getTime() + 12 * 3600 * 1000 < Date.now(); }
+function casoPeriodoTesto(ed) { return casoTipoDiEd(ed).periodo(ed); }
+function casoTitolo(ed) { return `${casoTipoDiEd(ed).nome} ${String(ed.sabato).slice(0, 4)}`; }
+// La richiesta resta aperta finché il Direttivo non la chiude, e comunque non oltre l'ultimo giorno dell'evento.
+function casoUltimoGiorno(t) { return Math.max(...t.voci.map(v => v.giorno)); }
+function casoScaduta(ed) { return casoData(ed.sabato, casoUltimoGiorno(casoTipoDiEd(ed))).getTime() + 12 * 3600 * 1000 < Date.now(); }
 function casoAperta(ed) { return !!ed && ed.aperta !== false && !casoScaduta(ed); }
 function casoRiassunto(r) { const v = CASO_VOCI.filter(x => r && r[x.k]).map(x => x.lungo); return v.length ? v.join(", ") : "non sono disponibile"; }
 
@@ -5337,7 +5435,9 @@ const CASO_REPARTI_BASE = [
   { id: "sala", nome: "Sala", incarichi: ["Resp. piani", "Sala", "Portinaio"] },
   { id: "vendita", nome: "Vendita", incarichi: ["Vendita"] },
 ];
-function casoReparti() { return state.casoReparti && state.casoReparti.length ? state.casoReparti : CASO_REPARTI_BASE; }
+function casoRepartiDi(t) { const l = state[t.repartiStato]; return l && l.length ? l : null; }
+// Le sezioni nuove usano una copia dell'elenco della Casoncellata finché nessuno lo modifica o apre la prima richiesta (allora si salva a parte).
+function casoReparti() { const t = casoTipo(); return casoRepartiDi(t) || (t.id === "casoncellata" ? CASO_REPARTI_BASE : (casoRepartiDi(CASO_TIPI.casoncellata) || CASO_REPARTI_BASE)); }
 function chiaveRuolo(r) { return String(r || "").trim().toLowerCase().replace(/\s+/g, " "); }
 // Dato un ruolo (testo), il reparto e l'incarico dell'elenco a cui corrisponde (senza badare a maiuscole), oppure null.
 function incaricoDiRuolo(ruolo) {
@@ -5350,7 +5450,7 @@ function casoRuoloCanonico(ruolo) { const m = incaricoDiRuolo(ruolo); return m ?
 
 // Ruoli delle Casoncellate precedenti: per ogni socio l'ultimo ruolo avuto, i ruoli già usati e l'ultima edizione in cui qualcuno ne aveva uno.
 async function ruoliPrecedentiCaso(ed) {
-  const prec = (state.casoncellata || []).filter(e => e.id !== ed.id && String(e.sabato) < String(ed.sabato)).sort((x, y) => String(y.sabato).localeCompare(String(x.sabato)));
+  const prec = (state[casoTipoDiEd(ed).stato] || []).filter(e => e.id !== ed.id && String(e.sabato) < String(ed.sabato)).sort((x, y) => String(y.sabato).localeCompare(String(x.sabato)));
   const docs = await Promise.all(prec.map(e => leggiDocCaso(e.id)));
   const mappa = {}, ruoli = new Set(); let ultima = null;
   prec.forEach((e, i) => {
@@ -5370,7 +5470,7 @@ async function ruoliPrecedentiCaso(ed) {
 // La proposta (ruolo dell'ultima edizione) si aggiunge solo se la risposta ha almeno una spunta e non ha già un ruolo.
 async function scriviRispostaCaso(edId, socioId, valore, proposta) {
   if (!window.db) return { errore: "Non sono collegato: controlla la connessione e riprova." };
-  const ref = db.collection(FIRESTORE_COLLECTION).doc(`casoncellata_${edId}`);
+  const ref = db.collection(FIRESTORE_COLLECTION).doc(casoDocId(edId));
   let esito = {};
   try {
     await conTimeout(db.runTransaction(async tx => {
@@ -5399,7 +5499,7 @@ async function scriviRispostaCaso(edId, socioId, valore, proposta) {
 async function scriviRisposteCasoMolte(edId, modifiche) {
   if (currentRole === "socio") return { errore: "Operazione riservata al Direttivo." };
   if (!window.db) return { errore: "Non sono collegato: controlla la connessione e riprova." };
-  const ref = db.collection(FIRESTORE_COLLECTION).doc(`casoncellata_${edId}`);
+  const ref = db.collection(FIRESTORE_COLLECTION).doc(casoDocId(edId));
   let esito = {};
   try {
     await conTimeout(db.runTransaction(async tx => {
@@ -5414,27 +5514,28 @@ async function scriviRisposteCasoMolte(edId, modifiche) {
 }
 async function leggiDocCaso(edId) {
   if (!window.db) return null;
-  try { const d = await db.collection(FIRESTORE_COLLECTION).doc(`casoncellata_${edId}`).get(); return d.exists ? d.data() : null; } catch (e) { console.error(e); return null; }
+  try { const d = await db.collection(FIRESTORE_COLLECTION).doc(casoDocId(edId)).get(); return d.exists ? d.data() : null; } catch (e) { console.error(e); return null; }
 }
 
 function renderCasoncellata() {
   const gestore = currentRole !== "socio";
-  const tutte = [...(state.casoncellata || [])].sort((x, y) => (y.sabato || "").localeCompare(x.sabato || ""));
+  const tp = casoTipo();
+  const tutte = [...casoLista()].sort((x, y) => (y.sabato || "").localeCompare(x.sabato || ""));
   if (!gestore) {
     const ed = tutte.find(e => !casoScaduta(e));   // aperta, oppure chiusa dal Direttivo ma non ancora svolta: il socio rivede la sua risposta
     return `<div id="caso-root">
-      <div class="section-title">🥟 Casoncellata</div>
+      <div class="section-title">${tp.icona} ${esc(tp.nome)}</div>
       ${ed ? `<div class="card-sub" style="margin-bottom:12px;">${esc(casoTitolo(ed))} · ${esc(casoPeriodoTesto(ed))}</div><div data-caso-form="${ed.id}" class="card-sub">Caricamento...</div>`
-           : `<div class="card"><div class="card-sub">Al momento non c'è nessuna richiesta di disponibilità per la Casoncellata.</div></div>`}
+           : `<div class="card"><div class="card-sub">Al momento non c'è nessuna richiesta di disponibilità per ${tp.articolo} ${esc(tp.nome)}.</div></div>`}
     </div>`;
   }
   return `<div id="caso-root">
-    <div class="section-title">🥟 Casoncellata</div>
-    <div class="card-sub" style="margin-bottom:12px;">Richiesta di disponibilità ai soci: preparativi del venerdì, pranzo e cena del sabato e della domenica.</div>
+    <div class="section-title">${tp.icona} ${esc(tp.nome)}</div>
+    <div class="card-sub" style="margin-bottom:12px;">${esc(tp.intro)}</div>
     <div class="card">
       <div style="font-weight:800; margin-bottom:8px;">Nuova richiesta</div>
-      <div class="form-group"><label>Sabato della Casoncellata</label><input type="date" id="caso-sabato"></div>
-      <div class="card-sub" style="margin-bottom:8px;">Venerdì e domenica si ricavano dal sabato.</div>
+      <div class="form-group"><label>${esc(tp.nuovaLabel)}</label><input type="date" id="caso-sabato"></div>
+      <div class="card-sub" style="margin-bottom:8px;">${esc(tp.nuovaSub)}</div>
       <button type="button" class="btn block" data-caso="crea">➕ Apri la richiesta di disponibilità</button>
     </div>
     <div class="ben-tasti" style="margin:0 0 10px;">
@@ -5450,7 +5551,7 @@ function renderCasoncellata() {
         <div class="card-sub" data-caso-conta="${ed.id}" style="margin-top:8px;">Caricamento risposte...</div>
         <div class="ben-tasti" style="margin-top:10px;">
           <button type="button" class="btn" data-caso="report" data-id="${ed.id}">📊 Report</button>
-          <button type="button" class="btn" data-caso="tabellone" data-id="${ed.id}" title="Chi c'è in ogni reparto, pranzo e cena">📋 Tabellone</button>
+          <button type="button" class="btn" data-caso="tabellone" data-id="${ed.id}" title="${esc(tp.sottoTab)}">📋 Tabellone</button>
         </div>
         <div class="ben-tasti" style="margin-top:8px;">
           <button type="button" class="btn" data-caso="reparto" data-id="${ed.id}" title="La tabella degli alpini e simpatizzanti disponibili, reparto per reparto">📑 Per reparto</button>
@@ -5467,10 +5568,10 @@ function renderCasoncellata() {
   </div>`;
 }
 
-function contaCaso(dati) {
+function contaCaso(dati, voci) {
   const r = Object.values((dati && dati.risposte) || {});
   const tot = { risposto: r.length };
-  CASO_VOCI.forEach(v => { tot[v.k] = r.filter(x => x && x[v.k]).length; });
+  (voci || CASO_VOCI).forEach(v => { tot[v.k] = r.filter(x => x && x[v.k]).length; });
   return tot;
 }
 
@@ -5494,19 +5595,33 @@ function attachCasoncellataEvents() {
     else if (az === "elimina") eliminaRichiestaCaso(el.dataset.id);
   });
   root.querySelectorAll("[data-caso-form]").forEach(async el => {
-    const ed = (state.casoncellata || []).find(x => x.id === el.dataset.casoForm);
+    const ed = casoTrovaEd(el.dataset.casoForm);
     if (ed) disegnaFormCaso(ed, el, await leggiDocCaso(ed.id));
   });
+  const vociSez = CASO_VOCI;
   root.querySelectorAll("[data-caso-conta]").forEach(async el => {
     const dati = await leggiDocCaso(el.dataset.casoConta);
     if (!dati) { el.textContent = "Risposte non disponibili (controlla la connessione)."; return; }
-    const t = contaCaso(dati);
-    el.innerHTML = `<b>${t.risposto}</b> ${t.risposto === 1 ? "ha risposto" : "hanno risposto"} · ` + CASO_VOCI.map(v => `${v.corto}: <b>${t[v.k]}</b>`).join(" · ");
+    const t = contaCaso(dati, vociSez);
+    el.innerHTML = `<b>${t.risposto}</b> ${t.risposto === 1 ? "ha risposto" : "hanno risposto"} · ` + vociSez.map(v => `${v.corto}: <b>${t[v.k]}</b>`).join(" · ");
   });
 }
 
 // Il riquadro del socio: cinque voci, una nota facoltativa, un tasto.
+// Titoli dei giorni sopra le caselle. Per la Casoncellata restano quelli di sempre; per le altre sezioni sono calcolati dalle date.
+function casoTitoliGriglia(ed) {
+  const t = casoTipoDiEd(ed), stretta = CASO_VOCI.length >= 6; let col = 1, html = "";
+  casoGruppiGiorni(CASO_VOCI).forEach(g => {
+    const i = casoInfoGiorno(ed, g.delta);
+    const titolo = t.legacyGriglia || !stretta ? casoTitoloGiorno(ed, g.delta) : `${i.corto}<br>${casoDataBreve(ed.sabato, g.delta).slice(0, 5)}`;
+    const pos = t.legacyGriglia ? { "-1": "g-ven", "0": "g-sab", "1": "g-dom" }[String(g.delta)] : "";
+    html += `<div class="g-t${pos ? " " + pos : ""}"${pos ? "" : ` style="grid-column: ${col} / span ${g.voci.length};"`}>${titolo}</div>`;
+    col += g.voci.length;
+  });
+  return html;
+}
 function disegnaFormCaso(ed, el, dati) {
+  casoImposta(casoTipoDiEd(ed).id);
   const mio = benMioId(), s = mio ? socioCorrente() : null;
   el.className = "";
   if (!s) { el.innerHTML = `<div class="iscr info">Per dare la tua disponibilità entra con il tuo nome e la tua data di nascita, non con il profilo condiviso.</div>`; return; }
@@ -5519,9 +5634,9 @@ function disegnaFormCaso(ed, el, dati) {
   }
   el.innerHTML = `<div class="iscr nuova">
     <div class="iscr-t">Dai la tua disponibilità</div>
-    <div class="caso-griglia">
-      <div class="g-t g-ven">Venerdì</div><div class="g-t g-sab">Sabato ${casoDataBreve(ed.sabato, 0)}</div><div class="g-t g-dom">Domenica ${casoDataBreve(ed.sabato, 1)}</div>
-      <div class="g-v">Preparativi</div><div class="g-v">Pranzo</div><div class="g-v">Cena</div><div class="g-v">Pranzo</div><div class="g-v">Cena</div>
+    <div class="caso-griglia"${casoTipo().legacyGriglia ? "" : ` style="grid-template-columns: repeat(${CASO_VOCI.length}, 1fr);"`}>
+      ${casoTitoliGriglia(ed)}
+      ${CASO_VOCI.map(v => `<div class="g-v">${esc(v.g || v.parte)}</div>`).join("")}
       ${CASO_VOCI.map(v => `<label class="g-c" title="${esc(v.lungo)}"><input type="checkbox" data-v="${v.k}" aria-label="${esc(v.lungo)}" ${mia && mia[v.k] ? "checked" : ""}></label>`).join("")}
     </div>
     <div data-caso-errore style="color:var(--red); font-size:0.82rem; min-height:1.1em; margin-bottom:6px;"></div>
@@ -5536,7 +5651,7 @@ function disegnaFormCaso(ed, el, dati) {
     const prec = await ruoliPrecedentiCaso(ed);
     const esito = await scriviRispostaCaso(ed.id, mio, valore, prec.mappa[mio] || null);
     if (esito.errore) { el.querySelector("[data-caso-errore]").textContent = esito.errore; btn.disabled = false; if (esito.chiusa) disegnaFormCaso(ed, el, await leggiDocCaso(ed.id)); return; }
-    scriviLog([{ ev: `🥟 ${casoTitolo(ed)}: ${valore.nome} ${mia ? "ha cambiato la disponibilità" : "ha dato la disponibilità"} (${casoRiassunto(valore)})` }]);
+    scriviLog([{ ev: `${casoTipoDiEd(ed).icona} ${casoTitolo(ed)}: ${valore.nome} ${mia ? "ha cambiato la disponibilità" : "ha dato la disponibilità"} (${casoRiassunto(valore)})` }]);
     toast("Disponibilità salvata ✅");
     disegnaFormCaso(ed, el, await leggiDocCaso(ed.id));
   });
@@ -5545,18 +5660,20 @@ function disegnaFormCaso(ed, el, dati) {
 // ---- Direttivo e Admin ----
 async function creaRichiestaCaso() {
   if (currentRole === "socio") return;
+  const tp = casoTipo();
   const sabato = document.getElementById("caso-sabato").value;
-  if (!sabato) { alert("Scegli la data del sabato della Casoncellata."); return; }
-  if (casoData(sabato, 0).getDay() !== 6 && !confirm("La data scelta non è un sabato. Continuare lo stesso?")) return;
-  if ((state.casoncellata || []).some(e => e.sabato === sabato)) { alert("Esiste già una richiesta per questa data."); return; }
-  if (casoData(sabato, 1).getTime() + 12 * 3600 * 1000 < Date.now() && !confirm("Questa Casoncellata è già passata: per i soci la richiesta resterà chiusa, ma tu potrai inserire le disponibilità a mano (per esempio dal foglio cartaceo). Continuare?")) return;
+  if (!sabato) { alert(tp.msgData); return; }
+  if (casoData(sabato, 0).getDay() !== tp.ancora.wd && !confirm(`La data scelta non è ${tp.ancora.wd === 0 ? "una" : "un"} ${tp.ancora.nome}. Continuare lo stesso?`)) return;
+  if (casoLista().some(e => e.sabato === sabato)) { alert("Esiste già una richiesta per questa data."); return; }
+  if (casoData(sabato, casoUltimoGiorno(tp)).getTime() + 12 * 3600 * 1000 < Date.now() && !confirm(`Questa ${tp.nome} è già passata: per i soci la richiesta resterà chiusa, ma tu potrai inserire le disponibilità a mano (per esempio dal foglio cartaceo). Continuare?`)) return;
   const id = uid();
   if (window.db) {
-    try { await db.collection(FIRESTORE_COLLECTION).doc(`casoncellata_${id}`).set({ sabato, chiusa: false, risposte: {} }); }
+    try { await db.collection(FIRESTORE_COLLECTION).doc(`${tp.docPrefix}${id}`).set({ sabato, chiusa: false, risposte: {} }); }
     catch (e) { console.error(e); alert("Non sono riuscito a creare la richiesta: controlla la connessione e riprova."); return; }
   }
-  state.casoncellata = state.casoncellata || [];
-  state.casoncellata.push({ id, sabato, aperta: true, creato: new Date().toISOString() });
+  if (tp.id !== "casoncellata") repartiModificabili();   // l'elenco dei reparti della nuova sezione si salva a parte (copia di quello della Casoncellata)
+  state[tp.stato] = state[tp.stato] || [];
+  state[tp.stato].push({ id, sabato, aperta: true, creato: new Date().toISOString() });
   saveState();
   renderSection();
   toast("Richiesta aperta ai soci");
@@ -5564,10 +5681,10 @@ async function creaRichiestaCaso() {
 
 async function impostaApertaCaso(edId, aperta) {
   if (currentRole === "socio") return;
-  const ed = (state.casoncellata || []).find(x => x.id === edId);
+  const ed = casoTrovaEd(edId);
   if (!ed) return;
   if (window.db) {
-    try { await db.collection(FIRESTORE_COLLECTION).doc(`casoncellata_${edId}`).update({ chiusa: !aperta }); }
+    try { await db.collection(FIRESTORE_COLLECTION).doc(casoDocId(edId)).update({ chiusa: !aperta }); }
     catch (e) { console.error(e); alert("Non sono riuscito ad aggiornare la richiesta: controlla la connessione e riprova."); return; }
   }
   ed.aperta = aperta;
@@ -5578,10 +5695,10 @@ async function impostaApertaCaso(edId, aperta) {
 
 async function eliminaRichiestaCaso(edId) {
   if (currentRole === "socio") return;
-  const ed = (state.casoncellata || []).find(x => x.id === edId);
+  const ed = casoTrovaEd(edId);
   if (!ed || !confirm(`Eliminare la richiesta «${casoTitolo(ed)}» e tutte le risposte dei soci?`)) return;
-  if (window.db) { try { await db.collection(FIRESTORE_COLLECTION).doc(`casoncellata_${edId}`).delete(); } catch (e) { console.error(e); } }
-  state.casoncellata = state.casoncellata.filter(x => x.id !== edId);
+  if (window.db) { try { await db.collection(FIRESTORE_COLLECTION).doc(casoDocId(edId)).delete(); } catch (e) { console.error(e); } }
+  state[casoTipo().stato] = state[casoTipo().stato].filter(x => x.id !== edId);
   saveState();
   renderSection();
 }
@@ -5589,7 +5706,7 @@ async function eliminaRichiestaCaso(edId) {
 // "Inserisci a mano": l'elenco dei soci con le cinque colonne da spuntare, come sul foglio cartaceo.
 async function apriInserimentoCaso(edId) {
   if (currentRole === "socio") return;
-  const ed = (state.casoncellata || []).find(x => x.id === edId);
+  const ed = casoTrovaEd(edId);
   if (!ed) return;
   const dati = await leggiDocCaso(edId);
   if (!dati) { alert("Non riesco a leggere le risposte: controlla la connessione e riprova."); return; }
@@ -5599,13 +5716,15 @@ async function apriInserimentoCaso(edId) {
   const flag = r => { const o = {}; CASO_VOCI.forEach(v => { o[v.k] = !!(r && r[v.k]); }); return o; };
   const iniziale = {};
   soci.forEach(s => { iniziale[s.id] = risposte["socio_" + s.id] ? flag(risposte["socio_" + s.id]) : null; });
-  showModal(`<div id="cm-root">
+  const cmw = CASO_VOCI.length >= 6 ? 32 : 38;   // con sei colonne si stringono un po'
+  const titoloCm = g => { const i = casoInfoGiorno(ed, g.delta), d = casoDataBreve(ed.sabato, g.delta).slice(0, 5); return !i.data ? i.corto : (g.voci.length > 1 ? `${i.corto} ${d}` : `${i.corto}<br>${d}`); };
+  showModal(`<div id="cm-root"${cmw !== 38 ? ` style="--cmw:${cmw}px"` : ""}>
     <div class="modal-title">📝 Inserisci a mano</div>
     <div class="card-sub" style="margin-bottom:8px;">${esc(casoTitolo(ed))}. Per i soci senza app o dal foglio cartaceo. Spunta i momenti: una riga senza spunte non compare nel report. Chi ha risposto dall'app è già spuntato.</div>
     <input type="text" id="cm-cerca" placeholder="Cerca un socio..." style="width:100%; box-sizing:border-box; margin-bottom:6px;">
     <div class="cm-testa">
-      <div class="cm-riga"><span class="cm-nome"></span><span class="cm-g" style="width:38px;">Ven</span><span class="cm-g" style="width:80px;">Sab ${casoDataBreve(ed.sabato, 0).slice(0, 5)}</span><span class="cm-g" style="width:80px;">Dom ${casoDataBreve(ed.sabato, 1).slice(0, 5)}</span></div>
-      <div class="cm-riga"><span class="cm-nome"></span><span class="cm-c">Prep.</span><span class="cm-c">Pr.</span><span class="cm-c">Ce.</span><span class="cm-c">Pr.</span><span class="cm-c">Ce.</span></div>
+      <div class="cm-riga"><span class="cm-nome"></span>${casoGruppiGiorni(CASO_VOCI).map(g => `<span class="cm-g" style="width:${g.voci.length * cmw + (g.voci.length - 1) * 4}px;">${titoloCm(g)}</span>`).join("")}</div>
+      <div class="cm-riga"><span class="cm-nome"></span>${CASO_VOCI.map(v => `<span class="cm-c">${v.sigla}</span>`).join("")}</div>
     </div>
     <div id="cm-lista" style="max-height:42vh; overflow-y:auto;">${soci.map(s => `
       <div class="cm-riga" data-id="${s.id}" data-nome="${esc(`${s.cognome} ${s.nome}`.toLowerCase())}">
@@ -5644,7 +5763,7 @@ async function apriInserimentoCaso(edId) {
     const btn = document.getElementById("cm-salva"); btn.disabled = true;
     const esito = await scriviRisposteCasoMolte(edId, modifiche);
     if (esito.errore) { document.getElementById("cm-errore").textContent = esito.errore; btn.disabled = false; return; }
-    scriviLog([{ ev: `🥟 ${casoTitolo(ed)}: disponibilità inserite a mano dal Direttivo (${aggiornate} ${aggiornate === 1 ? "riga" : "righe"}${tolte ? ", " + tolte + " tolte" : ""})` }]);
+    scriviLog([{ ev: `${casoTipoDiEd(ed).icona} ${casoTitolo(ed)}: disponibilità inserite a mano dal Direttivo (${aggiornate} ${aggiornate === 1 ? "riga" : "righe"}${tolte ? ", " + tolte + " tolte" : ""})` }]);
     closeModal();
     toast("Disponibilità salvate");
     renderSection();
@@ -5655,7 +5774,7 @@ async function apriInserimentoCaso(edId) {
 async function scriviRuoliCaso(edId, modifiche) {
   if (currentRole === "socio") return { errore: "Operazione riservata al Direttivo." };
   if (!window.db) return { errore: "Non sono collegato: controlla la connessione e riprova." };
-  const ref = db.collection(FIRESTORE_COLLECTION).doc(`casoncellata_${edId}`);
+  const ref = db.collection(FIRESTORE_COLLECTION).doc(casoDocId(edId));
   let esito = {};
   try {
     await conTimeout(db.runTransaction(async tx => {
@@ -5688,7 +5807,7 @@ function opzioniRuoloCaso(corrente) {
 
 async function apriAssegnaRuoliCaso(edId) {
   if (currentRole === "socio") return;
-  const ed = (state.casoncellata || []).find(x => x.id === edId);
+  const ed = casoTrovaEd(edId);
   if (!ed) return;
   const dati = await leggiDocCaso(edId);
   if (!dati) { alert("Non riesco a leggere le risposte: controlla la connessione e riprova."); return; }
@@ -5811,7 +5930,7 @@ async function apriAssegnaRuoliCaso(edId) {
     const btn = document.getElementById("ar-salva"); btn.disabled = true;
     const esito = await scriviRuoliCaso(edId, modifiche);
     if (esito.errore) { document.getElementById("ar-errore").textContent = esito.errore; btn.disabled = false; return; }
-    scriviLog([{ ev: `🥟 ${casoTitolo(ed)}: ruoli e note assegnati dal Direttivo (${n} ${n === 1 ? "riga" : "righe"})` }]);
+    scriviLog([{ ev: `${casoTipoDiEd(ed).icona} ${casoTitolo(ed)}: ruoli e note assegnati dal Direttivo (${n} ${n === 1 ? "riga" : "righe"})` }]);
     closeModal();
     toast("Ruoli salvati");
     renderSection();
@@ -5820,13 +5939,14 @@ async function apriAssegnaRuoliCaso(edId) {
 
 // ---- Reparti e incarichi (solo Admin) ----
 function repartiModificabili() {
-  if (!state.casoReparti || !state.casoReparti.length) state.casoReparti = JSON.parse(JSON.stringify(CASO_REPARTI_BASE));
-  return state.casoReparti;
+  const t = casoTipo();
+  if (!casoRepartiDi(t)) state[t.repartiStato] = JSON.parse(JSON.stringify(casoReparti()));
+  return state[t.repartiStato];
 }
 // Quante risposte (in tutti gli anni) hanno questo incarico: serve ad avvisare prima di toglierlo.
 async function usoIncarichiCaso(incarichi) {
   const chiavi = new Set(incarichi.map(chiaveRuolo)); let n = 0;
-  const docs = await Promise.all((state.casoncellata || []).map(e => leggiDocCaso(e.id)));
+  const docs = await Promise.all(casoLista().map(e => leggiDocCaso(e.id)));
   docs.forEach(d => { if (d) Object.values(d.risposte || {}).forEach(r => { if (r && chiavi.has(chiaveRuolo(r.ruolo))) n++; }); });
   return n;
 }
@@ -5834,8 +5954,8 @@ async function usoIncarichiCaso(incarichi) {
 async function rinominaIncaricoCaso(vecchio, nuovo) {
   if (currentRole !== "admin" || !window.db) return null;
   const chiave = chiaveRuolo(vecchio); let totale = 0;
-  for (const e of state.casoncellata || []) {
-    const ref = db.collection(FIRESTORE_COLLECTION).doc(`casoncellata_${e.id}`);
+  for (const e of casoLista()) {
+    const ref = db.collection(FIRESTORE_COLLECTION).doc(`${casoTipo().docPrefix}${e.id}`);
     let parziale = 0;
     try {
       await conTimeout(db.runTransaction(async tx => {
@@ -5868,7 +5988,7 @@ function apriRepartiCaso() {
     <div class="modal-actions"><button type="button" class="btn" data-rc="chiudi">Chiudi</button></div>
   </div>`);
   const errore = t => { document.getElementById("rc-errore").textContent = t; };
-  const fatto = ev => { saveState(); scriviLog([{ ev: `🥟 Reparti e incarichi della Casoncellata: ${ev}` }]); apriRepartiCaso(); };
+  const fatto = ev => { saveState(); scriviLog([{ ev: `${casoTipo().icona} Reparti e incarichi ${casoTipo().della}: ${ev}` }]); apriRepartiCaso(); };
   document.getElementById("rc-root").addEventListener("click", async e => {
     const b = e.target.closest("[data-rc]");
     if (!b) return;
@@ -5917,8 +6037,9 @@ function apriRepartiCaso() {
     if (az === "elimina-rep") {
       const uso = await usoIncarichiCaso(rep.incarichi);
       if (!confirm(`Eliminare il reparto «${rep.nome}»${rep.incarichi.length ? ` e i suoi ${rep.incarichi.length} ${rep.incarichi.length === 1 ? "incarico" : "incarichi"}` : ""}?${uso ? `\n\n${uso} ${uso === 1 ? "risposta ha" : "risposte hanno"} uno di questi incarichi (in tutti gli anni): resteranno con il ruolo scritto, da associare di nuovo.` : ""}`)) return;
-      state.casoReparti = repartiModificabili().filter(r => r.id !== rep.id);
-      if (!state.casoReparti.length) state.casoReparti = [{ id: uid(), nome: "Nuovo reparto", incarichi: [] }];   // l'elenco non resta mai vuoto (tornerebbe a quello iniziale)
+      const chiaveRep = casoTipo().repartiStato;
+      state[chiaveRep] = repartiModificabili().filter(r => r.id !== rep.id);
+      if (!state[chiaveRep].length) state[chiaveRep] = [{ id: uid(), nome: "Nuovo reparto", incarichi: [] }];   // l'elenco non resta mai vuoto (tornerebbe a quello iniziale)
       fatto(`eliminato il reparto «${rep.nome}»`); return;
     }
   });
@@ -5927,7 +6048,7 @@ function apriRepartiCaso() {
 // ---- Associare i vecchi ruoli (scritti a mano) agli incarichi ----
 async function apriAssociaRuoliCaso() {
   if (currentRole === "socio") return;
-  const edizioni = [...(state.casoncellata || [])].sort((x, y) => String(x.sabato).localeCompare(String(y.sabato)));
+  const edizioni = [...casoLista()].sort((x, y) => String(x.sabato).localeCompare(String(y.sabato)));
   const docs = await Promise.all(edizioni.map(e => leggiDocCaso(e.id)));
   if (docs.some(d => !d) && !window.db) { alert("Non riesco a leggere le risposte: controlla la connessione e riprova."); return; }
   const trovati = {};   // chiave → { etichette: {testo: n}, n, anni:Set }
@@ -5946,7 +6067,7 @@ async function apriAssociaRuoliCaso() {
   const opzioni = `<option value="">— scegli l'incarico —</option>${casoReparti().map(rep => `<optgroup label="${esc(rep.nome)}">${rep.incarichi.map(i => `<option value="${esc(i)}">${esc(i)}</option>`).join("")}</optgroup>`).join("")}`;
   showModal(`<div id="as-root">
     <div class="modal-title">🔁 Associa i vecchi ruoli</div>
-    <div class="card-sub" style="margin-bottom:6px;">Nelle Casoncellate già caricate ci sono ruoli scritti a mano. Dì a quale incarico corrisponde ognuno: l'app li aggiorna in tutti gli anni, così i confronti con l'anno scorso funzionano.</div>
+    <div class="card-sub" style="margin-bottom:6px;">Nelle ${casoTipo().plurale} già caricate ci sono ruoli scritti a mano. Dì a quale incarico corrisponde ognuno: l'app li aggiorna in tutti gli anni, così i confronti con l'anno scorso funzionano.</div>
     ${chiavi.map(k => `<div class="ar-riga"><div class="ar-nome">«${esc(etichetta(k))}» <span style="font-weight:600; color:#666; font-size:.85rem;">· ${trovati[k].n} ${trovati[k].n === 1 ? "risposta" : "risposte"} ${trovati[k].anni.size > 1 ? "in " + trovati[k].anni.size + " anni" : "nel " + [...trovati[k].anni][0]}</span></div>
       <div class="ar-campi" style="margin-top:4px;"><div><label>Diventa</label><select data-k="${esc(k)}" class="sel-ruolo">${opzioni}</select></div></div></div>`).join("")}
     <div id="as-errore" style="color:var(--red); font-size:0.82rem; min-height:1.1em; margin-top:6px;"></div>
@@ -5961,7 +6082,7 @@ async function apriAssociaRuoliCaso() {
     let aggiornate = 0, errori = 0;
     for (const e of edizioni) {
       if (!window.db) break;
-      const ref = db.collection(FIRESTORE_COLLECTION).doc(`casoncellata_${e.id}`);
+      const ref = db.collection(FIRESTORE_COLLECTION).doc(`${casoTipo().docPrefix}${e.id}`);
       try {
         await conTimeout(db.runTransaction(async tx => {
           const snap = await tx.get(ref);
@@ -5973,7 +6094,7 @@ async function apriAssociaRuoliCaso() {
       } catch (err) { console.error(err); errori++; }
     }
     if (errori) { document.getElementById("as-errore").textContent = "Alcuni anni non sono stati aggiornati: controlla la connessione e riprova."; btn.disabled = false; return; }
-    scriviLog([{ ev: `🥟 Casoncellata: ruoli scritti a mano associati agli incarichi (${aggiornate} ${aggiornate === 1 ? "risposta" : "risposte"})` }]);
+    scriviLog([{ ev: `${casoTipo().icona} ${casoTipo().nome}: ruoli scritti a mano associati agli incarichi (${aggiornate} ${aggiornate === 1 ? "risposta" : "risposte"})` }]);
     closeModal();
     toast(`${aggiornate} ${aggiornate === 1 ? "ruolo aggiornato" : "ruoli aggiornati"}`);
     renderSection();
@@ -5981,15 +6102,11 @@ async function apriAssociaRuoliCaso() {
 }
 
 // ---- Tabellone per reparto: chi c'è in ogni reparto, pranzo e cena, giorno per giorno (come il foglio) ----
-const CASO_GIORNI_TAB = [
-  { nome: "SABATO", delta: 0, momenti: [{ k: "sabP", nome: "Pranzo" }, { k: "sabC", nome: "Cena" }] },
-  { nome: "DOMENICA", delta: 1, momenti: [{ k: "domP", nome: "Pranzo" }, { k: "domC", nome: "Cena" }] },
-];
 const CASO_COLORI_REPARTO = ["#b3541e", "#1a6b3c", "#2d6a9f", "#8a6500", "#6b3fa0", "#a02d55", "#4a6b1a"];
 
 async function apriTabelloneCaso(edId) {
   if (currentRole === "socio") return;
-  const ed = (state.casoncellata || []).find(x => x.id === edId);
+  const ed = casoTrovaEd(edId);
   if (!ed) return;
   const dati = await leggiDocCaso(edId);
   if (!dati) { alert("Non riesco a leggere le risposte: controlla la connessione e riprova."); return; }
@@ -6017,8 +6134,14 @@ async function apriTabelloneCaso(edId) {
   const proposti = persone.some(p => p.r.ruolo && p.r.ruoloProposto && CASO_VOCI.some(v => p.r[v.k]));
   // l'incarico si scrive sempre (anche quando ha lo stesso nome del reparto): così le persone si vedono raggruppate per incarico
   const etichetta = p => { const m = info(p); return m ? m.incarico : ""; };
-  const scarico = persone.filter(p => p.r.ven);
-  const giorni = CASO_GIORNI_TAB.map(g => ({
+  const tp = casoTipo();
+  // giorni di preparativi: una riga con i nomi (lo "Scarico" della Casoncellata, i "Preparativi" delle altre sezioni)
+  const prepGiorni = casoGruppiGiorni(CASO_VOCI.filter(v => v.prep)).map(g => ({ delta: g.delta, nome: casoInfoGiorno(ed, g.delta).nome, lista: persone.filter(p => g.voci.some(v => p.r[v.k])) }));
+  const prepTitolo = d => `${d.nome.toUpperCase()} ${casoDataBreve(ed.sabato, d.delta)}`;
+  const prepEt = tp.etichettaPrep.toUpperCase();
+  // giorni di servizio: un riquadro per reparto, con una colonna per momento
+  const giorniTab = casoGruppiGiorni(CASO_VOCI.filter(v => !v.prep)).map(gr => ({ nome: casoInfoGiorno(ed, gr.delta).nome.toUpperCase(), delta: gr.delta, momenti: gr.voci.map(v => ({ k: v.k, nome: v.parte })) }));
+  const giorni = giorniTab.map(g => ({
     g, titolo: `${g.nome} ${casoDataBreve(ed.sabato, g.delta)}`,
     blocchi: reparti.map((rep, i) => ({ rep, mom: g.momenti, colore: CASO_COLORI_REPARTO[i % CASO_COLORI_REPARTO.length],
       righe: persone.filter(p => { const m = info(p); return m && m.reparto.id === rep.id && g.momenti.some(mo => p.r[mo.k]); })
@@ -6038,34 +6161,36 @@ async function apriTabelloneCaso(edId) {
   const nomeXl = p => `<span class="xl-n">${esc(p.nome)}${p.r.ruolo && p.r.ruoloProposto ? " *" : ""}</span>`;
   const incXl = p => `${etichetta(p) ? `<span class="xl-ic">${esc(etichetta(p))}</span>` : ""}${p.r.nota ? ` <span class="tb-n">${esc(p.r.nota)}</span>` : ""}`;
   const bloccoXl = b => {
-    const righe = b.righe.length ? b.righe.map(p => `<tr class="xl-p"><td>${p.r[b.mom[0].k] ? nomeXl(p) : ""}</td><td>${p.r[b.mom[1].k] ? nomeXl(p) : ""}</td><td class="xl-i">${incXl(p)}</td></tr>`).join("")
-      : '<tr class="xl-p"><td class="xl-v">—</td><td class="xl-v">—</td><td></td></tr>';
-    return `<div class="xl-b"><div class="xl-h">${esc(b.rep.nome.toUpperCase())}</div><table class="xl-t"><colgroup><col style="width:33%"><col style="width:33%"><col style="width:34%"></colgroup><tr>${b.cols.map(c => `<th>${c.mo.nome}</th>`).join("")}<th>Incarico</th></tr>${righe}<tr class="tot">${b.cols.map(c => `<td>${totale(c.lista.length, c.prima)}</td>`).join("")}<td></td></tr></table></div>`;
+    const w = Math.floor(66 / b.mom.length);
+    const righe = b.righe.length ? b.righe.map(p => `<tr class="xl-p">${b.mom.map(m => `<td>${p.r[m.k] ? nomeXl(p) : ""}</td>`).join("")}<td class="xl-i">${incXl(p)}</td></tr>`).join("")
+      : `<tr class="xl-p">${b.mom.map(() => '<td class="xl-v">—</td>').join("")}<td></td></tr>`;
+    return `<div class="xl-b"><div class="xl-h">${esc(b.rep.nome.toUpperCase())}</div><table class="xl-t"><colgroup>${b.mom.map(() => `<col style="width:${w}%">`).join("")}<col style="width:${100 - w * b.mom.length}%"></colgroup><tr>${b.cols.map(c => `<th>${c.mo.nome}</th>`).join("")}<th>Incarico</th></tr>${righe}<tr class="tot">${b.cols.map(c => `<td>${totale(c.lista.length, c.prima)}</td>`).join("")}<td></td></tr></table></div>`;
   };
-  const schermo = `<div class="xl-tab"><div class="xl-g">VENERDÌ ${casoDataBreve(ed.sabato, -1)}</div><div class="xl-sc"><b>SCARICO</b> (${scarico.length}): ${esc(scarico.map(p => p.nome).join(", ")) || "nessuno"}</div>`
+  const schermo = `<div class="xl-tab">${prepGiorni.map(d => `<div class="xl-g">${esc(prepTitolo(d))}</div><div class="xl-sc"><b>${esc(prepEt)}</b> (${d.lista.length}): ${esc(d.lista.map(p => p.nome).join(", ")) || "nessuno"}</div>`).join("")}`
     + giorni.map(gi => `<div class="xl-g">${esc(gi.titolo)}</div><div class="xl-r">${gi.blocchi.map(bloccoXl).join("")}</div><div class="xl-sc"><b>Senza ruolo / a disposizione:</b> ${esc(gi.senza.map(senzaTesto).join(", ")) || "nessuno"}</div>`).join("") + `</div>`;
 
   // --- stampa (due riquadri affiancati, come il foglio) ---
   const bloccoStampa = b => {
     const cella = "border:1px solid #777; padding:2px 5px; height:15px;";
     const nomeS = p => `${esc(p.nome)}${p.r.ruolo && p.r.ruoloProposto ? " *" : ""}`;
-    const righe = b.righe.map(p => `<tr><td style="${cella}">${p.r[b.mom[0].k] ? nomeS(p) : ""}</td><td style="${cella}">${p.r[b.mom[1].k] ? nomeS(p) : ""}</td><td style="${cella} color:#7a5a00; font-size:9px;"><b>${esc(etichetta(p))}</b>${p.r.nota ? ` <i style="font-weight:400; color:#555;">(${esc(p.r.nota)})</i>` : ""}</td></tr>`).join("");
+    const w = Math.floor(66 / b.mom.length);
+    const righe = b.righe.map(p => `<tr>${b.mom.map(m => `<td style="${cella}">${p.r[m.k] ? nomeS(p) : ""}</td>`).join("")}<td style="${cella} color:#7a5a00; font-size:9px;"><b>${esc(etichetta(p))}</b>${p.r.nota ? ` <i style="font-weight:400; color:#555;">(${esc(p.r.nota)})</i>` : ""}</td></tr>`).join("");
     return `<div style="flex:1 1 0; min-width:0;"><div style="text-align:center; font-weight:800; font-size:12px;">${esc(b.rep.nome.toUpperCase())}</div>
-      <table style="width:100%; border-collapse:collapse; font-size:10px; table-layout:fixed;"><colgroup><col style="width:33%"><col style="width:33%"><col style="width:34%"></colgroup><tr>${b.cols.map(c => `<th style="border:1px solid #777; background:#f1ede0; padding:2px;">${c.mo.nome}</th>`).join("")}<th style="border:1px solid #777; background:#f1ede0; padding:2px;">Incarico</th></tr>${righe}
+      <table style="width:100%; border-collapse:collapse; font-size:10px; table-layout:fixed;"><colgroup>${b.mom.map(() => `<col style="width:${w}%">`).join("")}<col style="width:${100 - w * b.mom.length}%"></colgroup><tr>${b.cols.map(c => `<th style="border:1px solid #777; background:#f1ede0; padding:2px;">${c.mo.nome}</th>`).join("")}<th style="border:1px solid #777; background:#f1ede0; padding:2px;">Incarico</th></tr>${righe}
       <tr>${b.cols.map(c => `<td style="border:1px solid #777; padding:2px 5px; font-weight:700; background:#f7f5ee;">Totale ${totale(c.lista.length, c.prima).replace(/<small>/, '<span style="color:#777; font-weight:400;">').replace(/<\/small>/, "</span>")}</td>`).join("")}<td style="border:1px solid #777; background:#f7f5ee;"></td></tr></table></div>`;
   };
 
   const stampa = `<div style="font-family:Arial,sans-serif;">
-    <div style="text-align:center; font-weight:800; font-size:15px; color:#b3261e; margin:6px 0;">VENERDÌ ${casoDataBreve(ed.sabato, -1)}</div>
-    <div style="font-size:11px; margin-bottom:8px;"><b>SCARICO</b> &nbsp; ${esc(scarico.map(p => p.nome).join(", ")) || "nessuno"}</div>
+    ${prepGiorni.map(d => `<div style="text-align:center; font-weight:800; font-size:15px; color:#b3261e; margin:6px 0;">${esc(prepTitolo(d))}</div>
+    <div style="font-size:11px; margin-bottom:8px;"><b>${esc(prepEt)}</b> &nbsp; ${esc(d.lista.map(p => p.nome).join(", ")) || "nessuno"}</div>`).join("\n    ")}
     ${giorni.map(gi => { const righe = []; for (let i = 0; i < gi.blocchi.length; i += 2) righe.push(gi.blocchi.slice(i, i + 2));
       return `<div style="page-break-inside:avoid;"><div style="text-align:center; font-weight:800; font-size:15px; color:#b3261e; margin:12px 0 6px;">${esc(gi.titolo)}</div>
         ${righe.map(r => `<div style="display:flex; gap:22px; margin-bottom:10px;">${r.map(bloccoStampa).join("")}${r.length === 1 ? '<div style="flex:1 1 0;"></div>' : ""}</div>`).join("")}
         <div style="font-size:11px; margin:2px 0 6px;">Senza ruolo / a disposizione: ${esc(gi.senza.map(senzaTesto).join(", ")) || "nessuno"}</div></div>`; }).join("")}</div>`;
   // --- testo per WhatsApp e email, e file per Excel ---
-  const testo = [`VENERDÌ ${casoDataBreve(ed.sabato, -1)} · SCARICO (${scarico.length}): ${scarico.map(p => p.nome).join(", ") || "nessuno"}`];
+  const testo = prepGiorni.map(d => `${prepTitolo(d)} · ${prepEt} (${d.lista.length}): ${d.lista.map(p => p.nome).join(", ") || "nessuno"}`);
   const csv = [["Giorno", "Momento", "Reparto", "Incarico", "Cognome e nome", "Note"]];
-  scarico.forEach(p => csv.push([`Venerdì ${casoDataBreve(ed.sabato, -1)}`, "Scarico", "", "", p.nome, p.r.nota || ""]));
+  prepGiorni.forEach(d => d.lista.forEach(p => csv.push([`${d.nome} ${casoDataBreve(ed.sabato, d.delta)}`, tp.etichettaPrep, "", "", p.nome, p.r.nota || ""])));
   giorni.forEach(gi => {
     testo.push("", gi.titolo);
     gi.blocchi.forEach(b => { testo.push(b.rep.nome.toUpperCase()); b.cols.forEach(c => testo.push(`  ${c.mo.nome} (${c.lista.length}${prec.ultima ? ", nel " + prec.ultima.anno + ": " + c.prima : ""}): ${c.lista.map(p => p.nome + (p.r.ruolo && p.r.ruoloProposto ? "*" : "") + (etichetta(p) ? " - " + etichetta(p) : "")).join(", ") || "—"}`));
@@ -6079,13 +6204,11 @@ async function apriTabelloneCaso(edId) {
   const note = [prec.ultima ? `Totali: tra parentesi il ${prec.ultima.anno}.` : "", proposti ? "* Ruolo ancora da confermare." : "",
     daAssociare.size ? `Ci sono ${daAssociare.size} ${daAssociare.size === 1 ? "ruolo scritto a mano" : "ruoli scritti a mano"} da associare agli incarichi (tasto «Associa i vecchi ruoli»): finché non lo fai quelle persone compaiono in «Senza ruolo» e i confronti sono parziali.` : ""].filter(Boolean).join("<br>");
   apriAnteprimaReportGenerico(`Tabellone ${casoTitolo(ed)}`, [], [["x"]], testo,
-    { corpoHtml: schermo, stampaHtml: stampa, sottotitolo: `Chi c'è in ogni reparto, pranzo e cena${prec.ultima ? ". In fondo i totali, tra parentesi il " + esc(prec.ultima.anno) : ""}.`, senzaPdf: true, senzaConteggio: true, nota: note,
-      csv: { nome: `casoncellata_${String(ed.sabato).slice(0, 4)}_tabellone.csv`, testo: csv.map(r => r.map(virgolette).join(";")).join("\r\n") } });
+    { corpoHtml: schermo, stampaHtml: stampa, sottotitolo: `${tp.sottoTab}${prec.ultima ? ". In fondo i totali, tra parentesi il " + esc(prec.ultima.anno) : ""}.`, senzaPdf: true, senzaConteggio: true, nota: note,
+      csv: { nome: `${tp.fileBase}_${String(ed.sabato).slice(0, 4)}_tabellone.csv`, testo: csv.map(r => r.map(virgolette).join(";")).join("\r\n") } });
 }
 
 // ---- Report per reparto: la tabella "Alpini e simpatizzanti disponibili" di un reparto, in stile Excel ----
-const CASO_WEEKEND = ["sabP", "sabC", "domP", "domC"];
-const CASO_WEEKEND_NOMI = ["Sabato pranzo", "Sabato cena", "Domenica pranzo", "Domenica cena"];
 
 // Chi ha almeno una spunta nel weekend ed è in quel reparto (repId "senza" = chi non ha un incarico dell'elenco), in ordine alfabetico.
 function casoPersoneRepartoCaso(risposte, repId) {
@@ -6101,7 +6224,7 @@ function casoPersoneRepartoCaso(risposte, repId) {
 
 async function apriScegliRepartoCaso(edId) {
   if (currentRole === "socio") return;
-  const ed = (state.casoncellata || []).find(x => x.id === edId);
+  const ed = casoTrovaEd(edId);
   if (!ed) return;
   const dati = await leggiDocCaso(edId);
   if (!dati) { alert("Non riesco a leggere le risposte: controlla la connessione e riprova."); return; }
@@ -6124,7 +6247,7 @@ async function apriScegliRepartoCaso(edId) {
 
 async function apriReportRepartoCaso(edId, repId) {
   if (currentRole === "socio") return;
-  const ed = (state.casoncellata || []).find(x => x.id === edId);
+  const ed = casoTrovaEd(edId);
   const rep = repId === "senza" ? { id: "senza", nome: "Senza ruolo" } : casoReparti().find(r => r.id === repId);
   if (!ed || !rep) return;
   const dati = await leggiDocCaso(edId);
@@ -6132,10 +6255,10 @@ async function apriReportRepartoCaso(edId, repId) {
   const persone = casoPersoneRepartoCaso(dati.risposte || {}, repId);
   if (!persone.length) { alert("Nessuno ha ancora dato disponibilità in questo reparto."); return; }
   const prec = repId === "senza" ? { ultima: null } : await ruoliPrecedentiCaso(ed);
-  const sabD = casoDataBreve(ed.sabato, 0), domD = casoDataBreve(ed.sabato, 1);
+  const tp = casoTipo(), serv = CASO_VOCI.filter(v => !v.prep), gruppiServ = casoGruppiGiorni(serv);
   const tot = CASO_WEEKEND.map(mo => persone.filter(p => p.r[mo]).length);
   // l'anno scorso: chi era disponibile nello stesso momento, nello stesso reparto
-  const prima = [0, 0, 0, 0];
+  const prima = CASO_WEEKEND.map(() => 0);
   if (prec.ultima) Object.keys(prec.ultima.risposte).forEach(k => {
     const rp = prec.ultima.risposte[k], s = state.socios.find(x => "socio_" + x.id === k);
     if (!rp || !rp.ruolo || (s && s.andatoAvanti)) return;
@@ -6152,7 +6275,7 @@ async function apriReportRepartoCaso(edId, repId) {
   const testata = stile => {
     const cella = `text-align:center; font-weight:700; border:1px solid #444; background:#f7f3e8; padding:${stile === "pdf" ? "6px" : "4px 3px"};${stile === "pdf" ? " font-family:Arial,sans-serif; font-size:13px;" : ""}`;
     const th = (t, a) => `<th style="${cella}" ${a || ""}>${t}</th>`;
-    return `<tr>${th("", 'rowspan="2"')}${th("Cognome e nome", 'rowspan="2"')}${th("Sabato " + sabD, 'colspan="2"')}${th("Domenica " + domD, 'colspan="2"')}${th("Ruolo", 'rowspan="2"')}</tr><tr>${th("Pranzo")}${th("Cena")}${th("Pranzo")}${th("Cena")}</tr>`;
+    return `<tr>${th("", 'rowspan="2"')}${th("Cognome e nome", 'rowspan="2"')}${gruppiServ.map(g => th(casoTitoloGiorno(ed, g.delta), `colspan="${g.voci.length}"`)).join("")}${th("Ruolo", 'rowspan="2"')}</tr><tr>${serv.map(v => th(v.parte)).join("")}</tr>`;
   };
   // --- stampa: con il numero di riga e 4 righe vuote per aggiungere altri nomi a mano ---
   const td = (t, st) => `<td style="border:1px solid #666; padding:5px 7px; height:20px; ${st || ""}">${t}</td>`;
@@ -6162,15 +6285,15 @@ async function apriReportRepartoCaso(edId, repId) {
     <div style="font-size:17px; font-weight:700; margin:8px 0 2px;">Alpini e simpatizzanti disponibili</div>
     <div style="font-size:11px; color:#555; margin-bottom:10px;">${esc(rep.nome)} · ${esc(casoTitolo(ed))}</div>
     <table style="width:100%; border-collapse:collapse; font-size:12px;"><thead>
-      <tr>${th2("", 'rowspan="2"')}${th2("Cognome e nome", 'rowspan="2"')}${th2("Sabato " + sabD, 'colspan="2"')}${th2("Domenica " + domD, 'colspan="2"')}${th2("Ruolo", 'rowspan="2"')}</tr>
-      <tr>${th2("Pranzo")}${th2("Cena")}${th2("Pranzo")}${th2("Cena")}</tr></thead><tbody>
+      <tr>${th2("", 'rowspan="2"')}${th2("Cognome e nome", 'rowspan="2"')}${gruppiServ.map(g => th2(casoTitoloGiorno(ed, g.delta), `colspan="${g.voci.length}"`)).join("")}${th2("Ruolo", 'rowspan="2"')}</tr>
+      <tr>${serv.map(v => th2(v.parte)).join("")}</tr></thead><tbody>
       ${persone.map((p, i) => `<tr>${num(i + 1)}${td(esc(p.nome))}${CASO_WEEKEND.map(mo => td(p.r[mo] ? "X" : "", "text-align:center; font-weight:700;")).join("")}${td(esc(incarico(p)))}</tr>`).join("")}
-      ${[1, 2, 3, 4].map(k => `<tr>${num(persone.length + k)}${td("")}${td("")}${td("")}${td("")}${td("")}${td("")}</tr>`).join("")}
+      ${[1, 2, 3, 4].map(k => `<tr>${num(persone.length + k)}${Array(CASO_WEEKEND.length + 2).fill(0).map(() => td("")).join("")}</tr>`).join("")}
       <tr>${td("")}${td("Totale", "font-weight:700; background:#f1ede0;")}${tot.map(t => td(t, "text-align:center; font-weight:700; background:#f1ede0;")).join("")}${td("", "background:#f1ede0;")}</tr>
       ${prec.ultima ? `<tr>${td("")}${td("Anno scorso", "color:#777; font-size:11px;")}${prima.map(t => td(t, "text-align:center; color:#777; font-size:11px;")).join("")}${td("")}</tr>` : ""}
     </tbody></table></div>`;
   // --- file per Excel e testo per WhatsApp/email ---
-  const csv = [["N.", "Cognome e nome", "Sabato " + sabD, "", "Domenica " + domD, "", "Ruolo"], ["", "", "Pranzo", "Cena", "Pranzo", "Cena", ""]];
+  const csv = [["N.", "Cognome e nome"].concat(...gruppiServ.map(g => [casoTitoloGiorno(ed, g.delta)].concat(Array(g.voci.length - 1).fill(""))), ["Ruolo"]), ["", ""].concat(serv.map(v => v.parte), [""])];
   persone.forEach((p, i) => csv.push([String(i + 1), p.nome].concat(CASO_WEEKEND.map(mo => p.r[mo] ? "X" : ""), [incarico(p)])));
   csv.push(["", "Totale"].concat(tot.map(String), [""]));
   if (prec.ultima) csv.push(["", "Anno scorso"].concat(prima.map(String), [""]));
@@ -6180,26 +6303,26 @@ async function apriReportRepartoCaso(edId, repId) {
   if (prec.ultima) testo.push(`Nel ${prec.ultima.anno}: ` + CASO_WEEKEND_NOMI.map((n, k) => `${n} ${prima[k]}`).join(", "));
   if (proposti) testo.push("", "* Ruolo ancora da confermare.");
   const virgolette = c => /[;"\n]/.test(c) ? `"${String(c).replace(/"/g, '""')}"` : String(c);
-  apriAnteprimaReportGenerico(`Alpini e simpatizzanti disponibili — ${rep.nome}`, ["N.", "Cognome e nome", "Sabato - Pranzo", "Sabato - Cena", "Domenica - Pranzo", "Domenica - Cena", "Ruolo"], righe, testo,
+  apriAnteprimaReportGenerico(`Alpini e simpatizzanti disponibili — ${rep.nome}`, ["N.", "Cognome e nome"].concat(serv.map(v => `${casoInfoGiorno(ed, v.giorno).nome} - ${v.parte}`), ["Ruolo"]), righe, testo,
     { sottotitolo: `${esc(rep.nome)} · ${esc(casoTitolo(ed))} · ${persone.length} ${persone.length === 1 ? "persona" : "persone"}`, senzaConteggio: true, compatto: true, griglia: true, fisse: 2, sopraTabella: '<div class="xl-tit">Alpini e simpatizzanti disponibili</div>', testata, stampaHtml: stampa,
       suggerimento: "↔ Scorri la tabella verso destra per vedere tutte le colonne." + (prec.ultima ? ` «Anno scorso»: persone disponibili nello stesso momento nel ${esc(prec.ultima.anno)}.` : ""),
       nota: proposti ? "* Ruolo ancora da confermare." : "",
-      csv: { nome: `casoncellata_${String(ed.sabato).slice(0, 4)}_${chiaveRuolo(rep.nome).replace(/[^a-z0-9]+/g, "_")}.csv`, testo: csv.map(r => r.map(virgolette).join(";")).join("\r\n") } });
+      csv: { nome: `${tp.fileBase}_${String(ed.sabato).slice(0, 4)}_${chiaveRuolo(rep.nome).replace(/[^a-z0-9]+/g, "_")}.csv`, testo: csv.map(r => r.map(virgolette).join(";")).join("\r\n") } });
 }
 
 // Intestazione a due livelli, come il foglio cartaceo: Venerdì | Sabato (data) | Domenica (data) | Note/Ruolo, e sotto i momenti.
 function testataCaso(ed, stile) {
   const cella = `text-align:center; font-weight:700; border:1px solid #444; background:#f7f3e8; padding:${stile === "pdf" ? "6px" : "4px 3px"};${stile === "pdf" ? " font-family:Arial,sans-serif; font-size:13px;" : ""}`;
   const th = (testo, attr) => `<th style="${cella}" ${attr || ""}>${testo}</th>`;
-  return `<tr>${th("Cognome e nome", 'rowspan="2"')}${th("Venerdì")}${th("Sabato " + casoDataBreve(ed.sabato, 0), 'colspan="2"')}${th("Domenica " + casoDataBreve(ed.sabato, 1), 'colspan="2"')}${th("Ruolo", 'rowspan="2"')}${th("Note", 'rowspan="2"')}</tr>`
-    + `<tr>${th("Preparativi")}${th("Pranzo")}${th("Cena")}${th("Pranzo")}${th("Cena")}</tr>`;
+  return `<tr>${th("Cognome e nome", 'rowspan="2"')}${casoGruppiGiorni(CASO_VOCI).map(g => th(casoTitoloGiorno(ed, g.delta), g.voci.length > 1 ? `colspan="${g.voci.length}"` : "")).join("")}${th("Ruolo", 'rowspan="2"')}${th("Note", 'rowspan="2"')}</tr>`
+    + `<tr>${CASO_VOCI.map(v => th(v.parte)).join("")}</tr>`;
 }
 
 // Report "stile Excel": come il foglio cartaceo. Una riga per socio che ha risposto, una X dove ha dato la disponibilità, i totali in fondo.
 // Il file per Excel ha la stessa intestazione su due righe, più il cellulare in una colonna.
 async function apriReportCaso(edId) {
   if (currentRole === "socio") return;
-  const ed = (state.casoncellata || []).find(x => x.id === edId);
+  const ed = casoTrovaEd(edId);
   if (!ed) return;
   const dati = await leggiDocCaso(edId);
   if (!dati) { alert("Non riesco a leggere le risposte: controlla la connessione e riprova."); return; }
@@ -6210,11 +6333,11 @@ async function apriReportCaso(edId) {
   const hannoRisposto = soci.filter(s => risposte["socio_" + s.id]).sort(ordina);
   const nonRisposto = soci.filter(s => s.accessoApp && !risposte["socio_" + s.id]).sort(ordina);
   if (!hannoRisposto.length) { alert(`Nessun socio ha ancora risposto.${nonRisposto.length ? "\n\nNon hanno ancora risposto: " + nonRisposto.map(nome).join(", ") + "." : ""}`); return; }
-  const intestazioni = ["Cognome e nome", "Venerdì - Preparativi", "Sabato - Pranzo", "Sabato - Cena", "Domenica - Pranzo", "Domenica - Cena", "Ruolo", "Note"];
+  const intestazioni = ["Cognome e nome"].concat(CASO_VOCI.map(v => `${casoInfoGiorno(ed, v.giorno).nome} - ${v.parte}`), ["Ruolo", "Note"]);
   const tot = {}; CASO_VOCI.forEach(v => { tot[v.k] = 0; });
   const anniProposti = new Set();
   const righe = [], testo = [];
-  const csv = [["Cognome e nome", "Cellulare", "Venerdì", "Sabato " + casoDataBreve(ed.sabato, 0), "", "Domenica " + casoDataBreve(ed.sabato, 1), "", "Ruolo", "Note"], ["", "", "Preparativi", "Pranzo", "Cena", "Pranzo", "Cena", "", ""]];
+  const csv = [["Cognome e nome", "Cellulare"].concat(...casoGruppiGiorni(CASO_VOCI).map(g => [casoTitoloGiorno(ed, g.delta)].concat(Array(g.voci.length - 1).fill(""))), ["Ruolo", "Note"]), ["", ""].concat(CASO_VOCI.map(v => v.parte), ["", ""])];
   const X = '<b style="display:block; text-align:center;">X</b>';
   hannoRisposto.forEach(s => {
     const r = risposte["socio_" + s.id];
@@ -6235,8 +6358,8 @@ async function apriReportCaso(edId) {
   if (notaProp) { testo.push(notaProp); csv.push([notaProp]); }
   const virgolette = c => /[;"\n]/.test(c) ? `"${String(c).replace(/"/g, '""')}"` : String(c);
   apriAnteprimaReportGenerico(`Disponibilità ${casoTitolo(ed)}`, intestazioni, righe, testo,
-    { nota, suggerimento: "↔ Scorri la tabella verso destra (o ruota il telefono) per vedere Domenica, Ruolo e Note.", compatto: true, griglia: true, primaFissa: true, testata: stile => testataCaso(ed, stile),
-      csv: { nome: `casoncellata_${String(ed.sabato).slice(0, 4)}_disponibilita.csv`, testo: csv.map(r => r.map(virgolette).join(";")).join("\r\n") } });
+    { nota, suggerimento: casoTipo().suggerimentoReport, compatto: true, griglia: true, primaFissa: true, testata: stile => testataCaso(ed, stile),
+      csv: { nome: `${casoTipo().fileBase}_${String(ed.sabato).slice(0, 4)}_disponibilita.csv`, testo: csv.map(r => r.map(virgolette).join(";")).join("\r\n") } });
 }
 
 // ---------- Sezione Log ----------
@@ -7476,7 +7599,7 @@ function setupScrollHide() {
 }
 
 // ---------- Init ----------
-const SECTION_ORDER = ["home","anagrafica","conv-consiglio","bollino","bollino-amici","ringraziamenti","sponsor","cena","iniziative","ore-alpine","report","report2","conv-casoncellata","presenza-adunata","prenotazioni","beneficenza","canzoni","manuali","cassa","bacheca","verbali","libretto","archivio-bui","log"];
+const SECTION_ORDER = ["home","anagrafica","conv-consiglio","bollino","bollino-amici","ringraziamenti","sponsor","cena","iniziative","ore-alpine","report","report2","conv-casoncellata","conv-festa-alpina","conv-merenda-alpina","presenza-adunata","prenotazioni","beneficenza","canzoni","manuali","cassa","bacheca","verbali","libretto","archivio-bui","log"];
 
 function vaiASezione(section) {
   if (!sezionePermessa(section)) return;
@@ -7701,7 +7824,7 @@ function apriCambioPassword(primoAccesso) {
 const MENU_GRUPPI = [
   { titolo: "", voci: [["home", "🏠", "Home"]] },
   { titolo: "Soci e tesseramento", voci: [["anagrafica", "👤", "Anagrafica"], ["conv-consiglio", "📋", "Consiglio"], ["bollino", "🎫", "Bollino"], ["bollino-amici", "🤝", "Bollino Amici"]] },
-  { titolo: "Eventi", voci: [["cena", "🍽️", "Cena"], ["iniziative", "🎉", "Attività"], ["presenza-adunata", "🎖️", "Adunata"], ["prenotazioni", "🗓️", "Prenotaz. Sede"], ["beneficenza", "🎁", "Panettoni &amp; C"], ["conv-casoncellata", "🥟", "Casoncellata"]] },
+  { titolo: "Eventi", voci: [["cena", "🍽️", "Cena"], ["iniziative", "🎉", "Attività"], ["presenza-adunata", "🎖️", "Adunata"], ["prenotazioni", "🗓️", "Prenotaz. Sede"], ["beneficenza", "🎁", "Panettoni &amp; C"], ["conv-casoncellata", "🥟", "Casoncellata"], ["conv-festa-alpina", "🎪", "Festa Alpina"], ["conv-merenda-alpina", "☕", "Merenda Alpina"]] },
   { titolo: "Comunicazione", voci: [["bacheca", "📌", "Bacheca"], ["verbali", "📑", "Verbali Consiglio"], ["libretto", "📖", "Preghiera e Canto"], ["canzoni", "🎵", "Canzoni"]] },
   { titolo: "Gestione e report", voci: [["archivio-bui", "🗄️", "Archivio BUI"], ["cassa", "💰", "Cassa"], ["ore-alpine", "⏱️", "Ore Alpine"], ["ringraziamenti", "🙏", "Ringraziamenti"], ["sponsor", "💼", "Sponsor"], ["report", "📊", "Report 1"], ["report2", "📊", "Report 2"], ["log", "📜", "Log"]] }
 ];
@@ -7727,9 +7850,9 @@ function sezionePermessa(sezione) {
 // Rosso (ai soci): c'è una pubblicazione nuova nella sezione, o la sezione è nuova.
 // Azzurro (a Direttivo e Admin): un socio ha fatto qualcosa (scheda aggiornata, ordine, iscrizione alla cena).
 // Si ragiona per telefono: ogni telefono si ricorda quando è stata aperta l'ultima volta ogni sezione.
-const PALLINI_SEZIONI_ROSSO = ["bacheca", "iniziative", "cena", "presenza-adunata", "verbali", "beneficenza", "conv-casoncellata", "manuali"];
-const PALLINI_SEZIONI_AZZURRO = ["anagrafica", "beneficenza", "cena", "conv-casoncellata"];
-let pallinoCasoTs = "";        // ultima disponibilità data da un socio per la Casoncellata
+const PALLINI_SEZIONI_ROSSO = ["bacheca", "iniziative", "cena", "presenza-adunata", "verbali", "beneficenza", "conv-casoncellata", "conv-festa-alpina", "conv-merenda-alpina", "manuali"];
+const PALLINI_SEZIONI_AZZURRO = ["anagrafica", "beneficenza", "cena", "conv-casoncellata", "conv-festa-alpina", "conv-merenda-alpina"];
+let pallinoCasoTs = {};        // ultima disponibilità data da un socio, per ogni sezione di disponibilità (Casoncellata, Festa Alpina, Merenda Alpina)
 let pallinoCenaTs = "";        // ultima iscrizione alla cena fatta da un socio (letta dai documenti delle cene)
 let vistoPrima = {};           // com'era "l'ultima apertura" prima di entrare nella sezione (serve per le etichette azzurre)
 let ultimaSezioneVista = "";
@@ -7762,8 +7885,9 @@ function ultimaPubblicazione(sez) {
     case "verbali": return ultimoTesto((state.verbali || []).map(x => x.creato));
     case "beneficenza": return ultimoTesto((state.campagneBeneficenza || []).filter(c => c.stato === "aperta").map(x => x.creato));
     case "manuali": return ultimoTesto((state.manuali || []).filter(m => m.visibilita === "tutti").map(x => x.caricato));
-    case "conv-casoncellata": return ultimoTesto((state.casoncellata || []).filter(casoAperta).map(x => x.creato));
   }
+  const tc = casoTipoDiSezione(sez);
+  if (tc) return ultimoTesto((state[tc.stato] || []).filter(casoAperta).map(x => x.creato));
   return "";
 }
 // Data dell'ultima cosa fatta da un socio in una sezione (per l'azzurro di chi gestisce).
@@ -7772,8 +7896,9 @@ function ultimaAzioneSoci(sez) {
     case "anagrafica": return ultimoTesto((state.socios || []).map(s => s.aggiornatoDaSocio));
     case "beneficenza": return ultimoTesto((state.campagneBeneficenza || []).reduce((acc, c) => acc.concat((c.prenotazioni || []).filter(r => r.daSocio).map(r => r.aggiornato || r.creato)), []));
     case "cena": return pallinoCenaTs;
-    case "conv-casoncellata": return pallinoCasoTs;
   }
+  const tc = casoTipoDiSezione(sez);
+  if (tc) return pallinoCasoTs[tc.id] || "";
   return "";
 }
 
@@ -7852,10 +7977,14 @@ function controllaPallinoCena() {
       let max = "";
       docs.forEach(d => { if (d && d.exists) Object.values(d.data().risposte || {}).forEach(r => { if (r && r.da !== "direttivo" && r.ts && r.ts > max) max = r.ts; }); });
       pallinoCenaTs = max;
-      const docsCaso = await Promise.all((state.casoncellata || []).filter(casoAperta).map(e => db.collection(FIRESTORE_COLLECTION).doc(`casoncellata_${e.id}`).get().catch(() => null)));
-      let maxCaso = "";
-      docsCaso.forEach(d => { if (d && d.exists) Object.values(d.data().risposte || {}).forEach(r => { if (r && r.ts && r.da !== "direttivo" && r.ts > maxCaso) maxCaso = r.ts; }); });
-      pallinoCasoTs = maxCaso;
+      const nuoviCasoTs = {};
+      for (const tc of Object.values(CASO_TIPI)) {
+        const docsCaso = await Promise.all((state[tc.stato] || []).filter(casoAperta).map(e => db.collection(FIRESTORE_COLLECTION).doc(`${tc.docPrefix}${e.id}`).get().catch(() => null)));
+        let maxCaso = "";
+        docsCaso.forEach(d => { if (d && d.exists) Object.values(d.data().risposte || {}).forEach(r => { if (r && r.ts && r.da !== "direttivo" && r.ts > maxCaso) maxCaso = r.ts; }); });
+        nuoviCasoTs[tc.id] = maxCaso;
+      }
+      pallinoCasoTs = nuoviCasoTs;
       aggiornaPallini();
       const aperto = document.getElementById("menu-overlay") && document.getElementById("menu-overlay").classList.contains("open");
       if (aperto) renderMenuDrawer();
@@ -7978,7 +8107,7 @@ function init() {
   }
 }
 
-const SOCIO_SEZIONI = ["home", "bacheca", "libretto", "cena", "presenza-adunata", "iniziative", "prenotazioni", "verbali", "beneficenza", "conv-casoncellata", "manuali"];
+const SOCIO_SEZIONI = ["home", "bacheca", "libretto", "cena", "presenza-adunata", "iniziative", "prenotazioni", "verbali", "beneficenza", "conv-casoncellata", "conv-festa-alpina", "conv-merenda-alpina", "manuali"];
 const SEZIONI_SOLO_ADMIN = ["cassa", "log"];
 
 function sezioniAttive() {

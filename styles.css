@@ -388,7 +388,7 @@ body.menu-aperto { overflow: hidden; }
 /* Casoncellata: inserimento a mano, come un foglio */
 .cm-riga { display: flex; align-items: center; gap: 4px; padding: 5px 0; border-bottom: 1px solid #eee; }
 .cm-nome { flex: 1; min-width: 0; font-size: .9rem; line-height: 1.15; }
-.cm-c { width: 38px; flex: none; text-align: center; font-size: .72rem; font-weight: 700; }
+.cm-c { width: var(--cmw, 38px); flex: none; text-align: center; font-size: .72rem; font-weight: 700; }
 .cm-c input { width: 24px; height: 24px; accent-color: #1a6b3c; margin: 0; }
 .cm-tot { border-top: 2px solid #1a1a1a; border-bottom: none; margin-top: 4px; }
 
