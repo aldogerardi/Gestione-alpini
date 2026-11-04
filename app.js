@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "9.60";
+const APP_VERSION = "9.83";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -512,7 +512,7 @@ const LOG_TRACK = [
   { id: "manuali", nome: "Manuali", get: st => st.manuali, label: m => m.titolo },
   { id: "casoncellata", nome: "Casoncellata", get: st => st.casoncellata, label: e => "Casoncellata " + String(e.sabato || "").slice(0, 4) },
   { id: "festaAlpina", nome: "Festa Alpina", get: st => st.festaAlpina, label: e => "Festa Alpina " + String(e.sabato || "").slice(0, 4) },
-  { id: "merendaAlpina", nome: "Merenda Alpina", get: st => st.merendaAlpina, label: e => "Merenda Alpina " + String(e.sabato || "").slice(0, 4) },
+  { id: "merendaAlpina", nome: "Merenda Alpina", get: st => st.merendaAlpina, label: e => casoNomeEdizione("merenda", e.sabato || "") },
   { id: "bollino", nome: "Bollino", get: st => st.pagamentiBollino, label: p => `${nomeSocioPerLog(p.socioId)} ${p.anno || ""}`.trim() },
   { id: "convocazioni", nome: "Consiglio (convocazione)", get: st => (st.consiglio || {}).storico, label: c => c.data || "" },
   { id: "gruppoInfo", nome: "Home (dati del Gruppo)", obj: true, get: st => st.gruppoInfo },
@@ -5316,7 +5316,7 @@ const CASO_MESI = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno",
 const CASO_TIPI = {
   casoncellata: {
     id: "casoncellata", sezione: "conv-casoncellata", nome: "Casoncellata", icona: "🥟", articolo: "la", della: "della Casoncellata", plurale: "Casoncellate",
-    stato: "casoncellata", repartiStato: "casoReparti", docPrefix: "casoncellata_", fileBase: "casoncellata", ancora: { nome: "sabato", wd: 6 }, legacyGriglia: true, etichettaPrep: "Scarico",
+    stato: "casoncellata", repartiStato: "casoReparti", docPrefix: "casoncellata_", fileBase: "casoncellata", ancora: { nome: "sabato", wd: 6 }, legacyGriglia: true, etichettaPrep: "Scarico", perGiorno: true, perTesto: "per ogni momento (sabato e domenica, pranzo e cena)", etichettaTutti: "Tutti i momenti",
     intro: "Richiesta di disponibilità ai soci: preparativi del venerdì, pranzo e cena del sabato e della domenica.",
     nuovaLabel: "Sabato della Casoncellata", nuovaSub: "Venerdì e domenica si ricavano dal sabato.", msgData: "Scegli la data del sabato della Casoncellata.",
     sottoTab: "Chi c'è in ogni reparto, pranzo e cena", suggerimentoReport: "↔ Scorri la tabella verso destra (o ruota il telefono) per vedere Domenica, Ruolo e Note.",
@@ -5329,18 +5329,18 @@ const CASO_TIPI = {
     voci: [
       { k: "ven", giorno: -1, lungo: "Preparativi", corto: "Prep. ven", breve: "Ven", parte: "Preparativi", sigla: "Prep.", prep: true },
       { k: "sabP", giorno: 0, lungo: "Sabato pranzo", corto: "Sab pranzo", breve: "Sab pr.", parte: "Pranzo", sigla: "Pr." },
-      { k: "sabC", giorno: 0, lungo: "Sabato cena", corto: "Sab cena", breve: "Sab ce.", parte: "Cena", sigla: "Ce." },
+      { k: "sabC", giorno: 0, lungo: "Sabato cena", corto: "Sab cena", breve: "Sab ce.", parte: "Cena", sigla: "Cena" },
       { k: "domP", giorno: 1, lungo: "Domenica pranzo", corto: "Dom pranzo", breve: "Dom pr.", parte: "Pranzo", sigla: "Pr." },
-      { k: "domC", giorno: 1, lungo: "Domenica cena", corto: "Dom cena", breve: "Dom ce.", parte: "Cena", sigla: "Ce." },
+      { k: "domC", giorno: 1, lungo: "Domenica cena", corto: "Dom cena", breve: "Dom ce.", parte: "Cena", sigla: "Cena" },
     ],
   },
   festa: {
     id: "festa", sezione: "conv-festa-alpina", nome: "Festa Alpina", icona: "🍺", articolo: "la", della: "della Festa Alpina", plurale: "Feste Alpine",
-    stato: "festaAlpina", repartiStato: "festaReparti", docPrefix: "festaalpina_", fileBase: "festaalpina", ancora: { nome: "sabato", wd: 6 }, etichettaPrep: "Preparativi",
-    intro: "Richiesta di disponibilità ai soci: preparativi del martedì, mercoledì e giovedì, e le tre serate della festa (venerdì, sabato e domenica).",
-    nuovaLabel: "Sabato della Festa Alpina", nuovaSub: "I preparativi (martedì, mercoledì, giovedì) e le serate di venerdì e domenica si ricavano dal sabato.", msgData: "Scegli la data del sabato della Festa Alpina.",
+    stato: "festaAlpina", repartiStato: "festaReparti", docPrefix: "festaalpina_", fileBase: "festaalpina", ancora: { nome: "sabato", wd: 6 }, etichettaPrep: "Preparativi", perGiorno: true, repartiBase: "festa", responsabile: true, perTesto: "per ogni giorno", etichettaTutti: "Tutti i giorni",
+    intro: "Richiesta di disponibilità ai soci: preparativi del martedì, mercoledì e giovedì, le tre serate della festa (venerdì, sabato e domenica) e lo smontaggio del lunedì e del martedì dopo.",
+    nuovaLabel: "Sabato della Festa Alpina", nuovaSub: "I preparativi (martedì, mercoledì, giovedì), le serate di venerdì e domenica e lo smontaggio (lunedì, martedì) si ricavano dal sabato.", msgData: "Scegli la data del sabato della Festa Alpina.",
     sottoTab: "Chi c'è in ogni reparto, serata per serata", suggerimentoReport: "↔ Scorri la tabella verso destra (o ruota il telefono) per vedere tutti i giorni, Ruolo e Note.",
-    periodo: ed => casoPeriodoDa(ed, -4, 1),
+    periodo: ed => casoPeriodoDa(ed, -4, 3),
     voci: [
       { k: "mar", giorno: -4, lungo: "Preparativi martedì", corto: "Prep. mar", breve: "Mar", parte: "Preparativi", g: "Prep.", sigla: "Prep.", prep: true },
       { k: "mer", giorno: -3, lungo: "Preparativi mercoledì", corto: "Prep. mer", breve: "Mer", parte: "Preparativi", g: "Prep.", sigla: "Prep.", prep: true },
@@ -5348,13 +5348,16 @@ const CASO_TIPI = {
       { k: "ven", giorno: -1, lungo: "Serata venerdì", corto: "Ven sera", breve: "Ven", parte: "Serata", g: "Serata", sigla: "Sera" },
       { k: "sab", giorno: 0, lungo: "Serata sabato", corto: "Sab sera", breve: "Sab", parte: "Serata", g: "Serata", sigla: "Sera" },
       { k: "dom", giorno: 1, lungo: "Serata domenica", corto: "Dom sera", breve: "Dom", parte: "Serata", g: "Serata", sigla: "Sera" },
+      { k: "slun", giorno: 2, lungo: "Smontaggio lunedì", corto: "Smont. lun", breve: "Lun", parte: "Smontaggio", g: "Smont.", sigla: "Sm.", prep: true },
+      { k: "smar", giorno: 3, lungo: "Smontaggio martedì", corto: "Smont. mar", breve: "Mar", parte: "Smontaggio", g: "Smont.", sigla: "Sm.", prep: true },
     ],
   },
   merenda: {
     id: "merenda", sezione: "conv-merenda-alpina", nome: "Merenda Alpina", icona: "🥪", articolo: "la", della: "della Merenda Alpina", plurale: "Merende Alpine",
-    stato: "merendaAlpina", repartiStato: "merendaReparti", docPrefix: "merendaalpina_", fileBase: "merendaalpina", ancora: { nome: "domenica", wd: 0 }, etichettaPrep: "Preparativi",
+    stato: "merendaAlpina", repartiStato: "merendaReparti", docPrefix: "merendaalpina_", fileBase: "merendaalpina", ancora: { nome: "domenica", wd: 0 }, etichettaPrep: "Preparativi", perGiorno: true, responsabile: true, perTesto: "per ogni giorno", etichettaTutti: "Tutti i giorni",
     intro: "Richiesta di disponibilità ai soci: preparativi del sabato e merenda della domenica pomeriggio.",
     nuovaLabel: "Domenica della Merenda Alpina", nuovaSub: "I preparativi di sabato si ricavano dalla domenica.", msgData: "Scegli la data della domenica della Merenda Alpina.",
+    stagioni: [{ id: "primavera", nome: "di Primavera", da: "03-01", a: "05-30" }, { id: "autunno", nome: "d'Autunno", da: "09-01", a: "10-31" }],
     sottoTab: "Chi c'è in ogni reparto alla merenda", suggerimentoReport: "↔ Scorri la tabella verso destra (o ruota il telefono) per vedere Ruolo e Note.",
     periodo: ed => `domenica ${casoData(ed.sabato, 0).getDate()} ${CASO_MESI[casoData(ed.sabato, 0).getMonth()]} ${casoData(ed.sabato, 0).getFullYear()} (preparativi: sabato ${casoData(ed.sabato, -1).getDate()} ${CASO_MESI[casoData(ed.sabato, -1).getMonth()]})`,
     voci: [
@@ -5363,6 +5366,14 @@ const CASO_TIPI = {
     ],
   },
 };
+const CASO_REPARTI_FESTA = [
+  { id: "cucina", nome: "Cucina", incarichi: ["Pane e Salamina", "Formaggio Polenta", "Piatto Alpino", "Cinghiale", "Tagliata", "Cucina", "Patatine", "Chicken-Nuggets", "Servizio Cucina"] },
+  { id: "distribuzione", nome: "Distribuzione", incarichi: ["Distribuzione"] },
+  { id: "bar", nome: "Bar", incarichi: ["Bar"] },
+  { id: "cassa", nome: "Cassa", incarichi: ["Cassa"] },
+  { id: "picnic", nome: "Area Pic-nic / Jolly", incarichi: ["Pic-Nic / Pulizia"] },
+  { id: "varie", nome: "Varie", incarichi: ["Biglietti / Lotteria", "Jolly"] },
+];
 let casoTipoCorrente = "casoncellata";
 let CASO_VOCI = CASO_TIPI.casoncellata.voci;
 let CASO_WEEKEND = [], CASO_WEEKEND_NOMI = [];   // i momenti "di servizio" (senza i preparativi), per il report per reparto
@@ -5374,6 +5385,41 @@ function casoImposta(tipoId) {
 }
 casoImposta("casoncellata");
 function casoTipo() { return CASO_TIPI[casoTipoCorrente]; }
+// ---- Un incarico per ogni giorno (Festa Alpina, Merenda Alpina) ----
+// r.ruoli = { momento: incarico } per i giorni di servizio; r.resp = responsabile del suo settore.
+// Le risposte con un solo r.ruolo (versioni precedenti) valgono per tutti i giorni spuntati.
+function casoRuoloK(r, k) { if (!casoTipo().perGiorno) return (r && r.ruolo) || ""; return r && r.ruoli ? (r.ruoli[k] || "") : ((r && r.ruolo) || ""); }
+function casoRuoliDi(r) { return [r && r.ruolo].concat(Object.values((r && r.ruoli) || {})).filter(Boolean); }
+function casoHaRuoli(r) { return casoRuoliDi(r).length > 0; }
+function casoNomeR(p) { return (p.nome || "") + (p.r && p.r.resp ? " (R)" : ""); }
+// Per riusare i report: una risposta diventa una "persona" per ogni incarico diverso, con le spunte dei soli giorni di quell'incarico
+// (più una per i giorni senza incarico). I giorni di preparativi e smontaggio, che non hanno incarichi, restano alla prima.
+function casoEspandiRisposta(r) {
+  const t = casoTipo();
+  if (!t.perGiorno || !r) return [r];
+  const servizio = t.voci.filter(v => !v.prep), prep = t.voci.filter(v => v.prep);
+  const gruppi = [], indice = {};
+  servizio.forEach(v => {
+    if (!r[v.k]) return;
+    const ruolo = casoRuoloK(r, v.k), c = chiaveRuolo(ruolo);
+    if (!(c in indice)) { indice[c] = gruppi.length; gruppi.push({ ruolo, k: [] }); }
+    gruppi[indice[c]].k.push(v.k);
+  });
+  const base = Object.assign({}, r); delete base.ruoli; delete base.ruolo; servizio.forEach(v => { base[v.k] = false; });
+  if (!gruppi.length) return [base];
+  const out = gruppi.map(g => { const x = Object.assign({}, base, g.ruolo ? { ruolo: g.ruolo } : {}); g.k.forEach(k => { x[k] = true; }); return x; });
+  prep.forEach(v => { out.forEach((x, i) => { x[v.k] = i === 0 ? !!r[v.k] : false; }); });
+  return out;
+}
+// Il ruolo di una risposta, come testo: l'incarico (o "Ven Jolly · Dom Patatine" se cambia da un giorno all'altro).
+function casoRuoloTesto(r) {
+  if (!r) return "";
+  if (!casoTipo().perGiorno) return r.ruolo || "";
+  const dl = casoTipo().voci.filter(v => !v.prep && r[v.k]).map(v => ({ v, ruolo: casoRuoloK(r, v.k) })).filter(x => x.ruolo);
+  if (!dl.length) return "";
+  const diversi = new Set(dl.map(x => chiaveRuolo(x.ruolo)));
+  return diversi.size === 1 && dl.length === casoTipo().voci.filter(v => !v.prep && r[v.k]).length ? dl[0].ruolo : dl.map(x => `${x.v.breve} ${x.ruolo}`).join(" · ");
+}
 function casoTipoDiSezione(sez) { return Object.values(CASO_TIPI).find(t => t.sezione === sez) || null; }
 function casoLista() { return state[casoTipo().stato] || []; }
 // il tipo di una richiesta si riconosce da quale elenco la contiene
@@ -5410,7 +5456,17 @@ function casoData(sabatoISO, delta) { const [a, m, g] = String(sabatoISO).split(
 function casoDataBreve(sabatoISO, delta) { const d = casoData(sabatoISO, delta); return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`; }
 function casoGiornoTesto(sabatoISO, delta) { const d = casoData(sabatoISO, delta); return `${CASO_GIORNI[d.getDay()]} ${d.getDate()} ${CASO_MESI[d.getMonth()]}`; }
 function casoPeriodoTesto(ed) { return casoTipoDiEd(ed).periodo(ed); }
-function casoTitolo(ed) { return `${casoTipoDiEd(ed).nome} ${String(ed.sabato).slice(0, 4)}`; }
+// Se la sezione ha le stagioni (Merenda Alpina) il nome dipende dalla data: "Merenda Alpina di Primavera 2031", "Merenda Alpina d'Autunno 2031"; fuori dalle stagioni resta "Merenda Alpina 2031".
+function casoStagione(tipoId, giornoISO) {
+  const t = CASO_TIPI[tipoId], md = String(giornoISO).slice(5, 10);
+  return (t && t.stagioni && t.stagioni.find(s => md >= s.da && md <= s.a)) || null;
+}
+function casoNomeEdizione(tipoId, giornoISO) {
+  const s = casoStagione(tipoId, giornoISO);
+  return `${CASO_TIPI[tipoId].nome}${s ? " " + s.nome : ""} ${String(giornoISO).slice(0, 4)}`;
+}
+function casoTitolo(ed) { return casoNomeEdizione(casoTipoDiEd(ed).id, ed.sabato); }
+function casoFileBase(ed) { const t = casoTipoDiEd(ed), s = casoStagione(t.id, ed.sabato); return t.fileBase + (s ? "_" + s.id : ""); }
 // La richiesta resta aperta finché il Direttivo non la chiude, e comunque non oltre l'ultimo giorno dell'evento.
 function casoUltimoGiorno(t) { return Math.max(...t.voci.map(v => v.giorno)); }
 function casoScaduta(ed) { return casoData(ed.sabato, casoUltimoGiorno(casoTipoDiEd(ed))).getTime() + 12 * 3600 * 1000 < Date.now(); }
@@ -5437,7 +5493,8 @@ const CASO_REPARTI_BASE = [
 ];
 function casoRepartiDi(t) { const l = state[t.repartiStato]; return l && l.length ? l : null; }
 // Le sezioni nuove usano una copia dell'elenco della Casoncellata finché nessuno lo modifica o apre la prima richiesta (allora si salva a parte).
-function casoReparti() { const t = casoTipo(); return casoRepartiDi(t) || (t.id === "casoncellata" ? CASO_REPARTI_BASE : (casoRepartiDi(CASO_TIPI.casoncellata) || CASO_REPARTI_BASE)); }
+function casoRepartiPredefiniti(t) { return t.repartiBase === "festa" ? CASO_REPARTI_FESTA : (t.id === "casoncellata" ? CASO_REPARTI_BASE : (casoRepartiDi(CASO_TIPI.casoncellata) || CASO_REPARTI_BASE)); }
+function casoReparti() { const t = casoTipo(); return casoRepartiDi(t) || casoRepartiPredefiniti(t); }
 function chiaveRuolo(r) { return String(r || "").trim().toLowerCase().replace(/\s+/g, " "); }
 // Dato un ruolo (testo), il reparto e l'incarico dell'elenco a cui corrisponde (senza badare a maiuscole), oppure null.
 function incaricoDiRuolo(ruolo) {
@@ -5458,15 +5515,25 @@ async function ruoliPrecedentiCaso(ed) {
     const anno = String(e.sabato).slice(0, 4);
     Object.keys(rs).forEach(k => {
       const r = rs[k], id = k.replace(/^socio_/, "");
-      if (!r || !r.ruolo) return;
-      ruoli.add(r.ruolo);
-      if (!mappa[id]) mappa[id] = { ruolo: casoRuoloCanonico(r.ruolo), anno };
+      if (!r || !casoHaRuoli(r)) return;
+      casoRuoliDi(r).forEach(x => ruoli.add(x));
+      if (!mappa[id]) {
+        mappa[id] = { ruolo: casoRuoloCanonico(casoRuoliDi(r)[0]), anno };
+        if (casoTipo().perGiorno) { mappa[id].ruoli = {}; casoTipo().voci.filter(v => !v.prep).forEach(v => { const x = casoRuoloK(r, v.k); if (x) mappa[id].ruoli[v.k] = casoRuoloCanonico(x); }); mappa[id].resp = !!r.resp; }
+      }
       if (!ultima) ultima = { anno, risposte: rs };
     });
   });
   return { mappa, ruoli, ultima };
 }
 
+// Per le sezioni con un incarico per ogni giorno: la proposta è l'incarico dello stesso giorno dell'edizione precedente (o, se manca, l'ultimo che aveva).
+function casoRuoliProposti(proposta, valore) {
+  if (!casoTipo().perGiorno || !proposta) return null;
+  const m = {};
+  casoTipo().voci.filter(v => !v.prep && valore[v.k]).forEach(v => { const x = (proposta.ruoli && proposta.ruoli[v.k]) || proposta.ruolo; if (x) m[v.k] = x; });
+  return Object.keys(m).length ? m : null;
+}
 // La proposta (ruolo dell'ultima edizione) si aggiunge solo se la risposta ha almeno una spunta e non ha già un ruolo.
 async function scriviRispostaCaso(edId, socioId, valore, proposta) {
   if (!window.db) return { errore: "Non sono collegato: controlla la connessione e riprova." };
@@ -5479,14 +5546,17 @@ async function scriviRispostaCaso(edId, socioId, valore, proposta) {
       if (snap.data().chiusa) { esito = { errore: "La richiesta di disponibilità è chiusa.", chiusa: true }; return; }
       const upd = {};
       const esistente = (snap.data().risposte || {})["socio_" + socioId];
-      const proponi = !!proposta && CASO_VOCI.some(v => valore[v.k]) && !(esistente && esistente.ruolo);
+      const proponi = !!proposta && CASO_VOCI.some(v => valore[v.k]) && !(esistente && casoHaRuoli(esistente));
+      const ruoliProposti = proponi ? casoRuoliProposti(proposta, valore) : null;   // un incarico per ogni giorno spuntato (solo sezioni "per giorno")
       if (esistente) {
         // già risposto: si aggiornano solo i campi del socio, così ruolo e note assegnati dal Direttivo restano
         Object.keys(valore).forEach(k => { upd[`risposte.socio_${socioId}.${k}`] = valore[k]; });
-        if (proponi) { upd[`risposte.socio_${socioId}.ruolo`] = proposta.ruolo; upd[`risposte.socio_${socioId}.ruoloProposto`] = proposta.anno; }
+        if (proponi && ruoliProposti) { upd[`risposte.socio_${socioId}.ruoli`] = ruoliProposti; upd[`risposte.socio_${socioId}.ruoloProposto`] = proposta.anno; if (proposta.resp) upd[`risposte.socio_${socioId}.resp`] = true; }
+        else if (proponi && !casoTipo().perGiorno) { upd[`risposte.socio_${socioId}.ruolo`] = proposta.ruolo; upd[`risposte.socio_${socioId}.ruoloProposto`] = proposta.anno; }
       } else {
         const nuovo = Object.assign({}, valore);   // prima risposta: si scrive la voce intera
-        if (proponi) { nuovo.ruolo = proposta.ruolo; nuovo.ruoloProposto = proposta.anno; }
+        if (proponi && ruoliProposti) { nuovo.ruoli = ruoliProposti; nuovo.ruoloProposto = proposta.anno; if (proposta.resp) nuovo.resp = true; }
+        else if (proponi && !casoTipo().perGiorno) { nuovo.ruolo = proposta.ruolo; nuovo.ruoloProposto = proposta.anno; }
         upd[`risposte.socio_${socioId}`] = nuovo;
       }
       tx.update(ref, upd);
@@ -5716,24 +5786,37 @@ async function apriInserimentoCaso(edId) {
   const flag = r => { const o = {}; CASO_VOCI.forEach(v => { o[v.k] = !!(r && r[v.k]); }); return o; };
   const iniziale = {};
   soci.forEach(s => { iniziale[s.id] = risposte["socio_" + s.id] ? flag(risposte["socio_" + s.id]) : null; });
-  const cmw = CASO_VOCI.length >= 6 ? 32 : 38;   // con sei colonne si stringono un po'
-  const titoloCm = g => { const i = casoInfoGiorno(ed, g.delta), d = casoDataBreve(ed.sabato, g.delta).slice(0, 5); return !i.data ? i.corto : (g.voci.length > 1 ? `${i.corto} ${d}` : `${i.corto}<br>${d}`); };
+  const nuovoStile = !casoTipo().legacyGriglia;   // Festa e Merenda: giorno della settimana e numero, riquadro sui giorni di servizio
+  const cmw = nuovoStile && window.innerWidth >= 560 ? 38 : CASO_VOCI.length >= 8 && window.innerWidth < 340 ? 24 : CASO_VOCI.length >= 8 ? 28 : CASO_VOCI.length >= 6 ? 32 : 38;   // con più colonne si stringono un po' (non sui monitor larghi)
+  const sv = v => !v.prep ? " cm-sv" : "";
+  const titoloCm = g => { const i = casoInfoGiorno(ed, g.delta), d = casoDataBreve(ed.sabato, g.delta).slice(0, 5); return !i.data ? i.corto : nuovoStile ? `${i.corto}<br>${d.slice(0, 2)}` : (g.voci.length > 1 ? `${i.corto} ${d}` : `${i.corto}<br>${d}`); };
   showModal(`<div id="cm-root"${cmw !== 38 ? ` style="--cmw:${cmw}px"` : ""}>
     <div class="modal-title">📝 Inserisci a mano</div>
-    <div class="card-sub" style="margin-bottom:8px;">${esc(casoTitolo(ed))}. Per i soci senza app o dal foglio cartaceo. Spunta i momenti: una riga senza spunte non compare nel report. Chi ha risposto dall'app è già spuntato.</div>
-    <input type="text" id="cm-cerca" placeholder="Cerca un socio..." style="width:100%; box-sizing:border-box; margin-bottom:6px;">
+    <div class="card-sub" style="margin-bottom:8px;">${esc(casoTitolo(ed))}${nuovoStile ? " · " + esc(casoPeriodoTesto(ed)) : ""}. Per i soci senza app o dal foglio cartaceo. Spunta i momenti: una riga senza spunte non compare nel report. Chi ha risposto dall'app è già spuntato.</div>
+    <input type="text" id="cm-cerca" placeholder="Cerca un socio..." style="width:100%; box-sizing:border-box; margin-bottom:6px;"><div id="cm-tab" style="position:relative;">
     <div class="cm-testa">
-      <div class="cm-riga"><span class="cm-nome"></span>${casoGruppiGiorni(CASO_VOCI).map(g => `<span class="cm-g" style="width:${g.voci.length * cmw + (g.voci.length - 1) * 4}px;">${titoloCm(g)}</span>`).join("")}</div>
-      <div class="cm-riga"><span class="cm-nome"></span>${CASO_VOCI.map(v => `<span class="cm-c">${v.sigla}</span>`).join("")}</div>
+      <div class="cm-riga"><span class="cm-nome"></span>${casoGruppiGiorni(CASO_VOCI).map(g => `<span class="cm-g${g.voci.some(v => !v.prep) ? " cm-sv" : ""}" style="width:${g.voci.length * cmw + (g.voci.length - 1) * 4}px;">${titoloCm(g)}</span>`).join("")}</div>
+      <div class="cm-riga"><span class="cm-nome"></span>${CASO_VOCI.map(v => `<span class="cm-c${sv(v)}">${v.sigla}</span>`).join("")}</div>
     </div>
     <div id="cm-lista" style="max-height:42vh; overflow-y:auto;">${soci.map(s => `
       <div class="cm-riga" data-id="${s.id}" data-nome="${esc(`${s.cognome} ${s.nome}`.toLowerCase())}">
-        <span class="cm-nome">${esc(s.cognome)} ${esc(s.nome)}</span>${CASO_VOCI.map(v => `<span class="cm-c"><input type="checkbox" data-s="${s.id}" data-k="${v.k}" ${iniziale[s.id] && iniziale[s.id][v.k] ? "checked" : ""}></span>`).join("")}
+        <span class="cm-nome">${esc(s.cognome)} ${esc(s.nome)}</span>${CASO_VOCI.map(v => `<span class="cm-c${sv(v)}"><input type="checkbox" data-s="${s.id}" data-k="${v.k}" ${iniziale[s.id] && iniziale[s.id][v.k] ? "checked" : ""}></span>`).join("")}
       </div>`).join("")}</div>
-    <div class="cm-riga cm-tot"><span class="cm-nome"><b>Totale</b></span>${CASO_VOCI.map(v => `<span class="cm-c"><b data-tot="${v.k}">0</b></span>`).join("")}</div>
+    <div class="cm-riga cm-tot"><span class="cm-nome"><b>Totale</b></span>${CASO_VOCI.map(v => `<span class="cm-c${sv(v)}"><b data-tot="${v.k}">0</b></span>`).join("")}</div><div id="cm-cornice" class="cm-cornice"></div></div>
     <div id="cm-errore" style="color:var(--red); font-size:0.82rem; min-height:1.1em; margin-top:6px;"></div>
     <div class="modal-actions"><button type="button" class="btn secondary" id="cm-chiudi">Chiudi</button><button type="button" class="btn" id="cm-salva">Salva</button></div>
   </div>`);
+  // il riquadro sui giorni di servizio (la festa vera e propria): si disegna sopra la tabella, dal titolo dei giorni ai totali
+  {
+    const cornice = () => {
+      const tab = document.getElementById("cm-tab"), box = document.getElementById("cm-cornice"), c = [...document.querySelectorAll("#cm-tab .cm-testa .cm-riga:nth-child(2) .cm-sv")];
+      if (!tab || !box) { window.removeEventListener("resize", cornice); return; }
+      if (!c.length) { box.style.display = "none"; return; }
+      const r = tab.getBoundingClientRect(), x1 = c[0].getBoundingClientRect(), x2 = c[c.length - 1].getBoundingClientRect(), tt = document.querySelector("#cm-tab .cm-testa").getBoundingClientRect();
+      box.style.cssText = `display:block; left:${Math.round(x1.left - r.left - 3)}px; width:${Math.round(x2.right - x1.left + 6)}px; top:${Math.round(tt.top - r.top - 2)}px; height:${Math.round(r.bottom - tt.top + 4)}px;`;
+    };
+    cornice(); window.addEventListener("resize", cornice); setTimeout(cornice, 60);
+  }
   const spunta = (id, k) => document.querySelector(`#cm-lista input[data-s="${id}"][data-k="${k}"]`).checked;
   const totali = () => CASO_VOCI.forEach(v => { document.querySelector(`[data-tot="${v.k}"]`).textContent = soci.filter(s => spunta(s.id, v.k)).length; });
   totali();
@@ -5752,9 +5835,15 @@ async function apriInserimentoCaso(edId) {
       if (uguale) return;
       if (!haX) { modifiche[s.id] = null; tolte++; return; }
       const prima = risposte["socio_" + s.id];
-      let ruolo = prima ? prima.ruolo || "" : "", proposto = prima && prima.ruolo ? String(prima.ruoloProposto || "") : "";
-      if (!ruolo && prec.mappa[s.id]) { ruolo = prec.mappa[s.id].ruolo; proposto = prec.mappa[s.id].anno; }   // ruolo dell'ultima edizione, da confermare
+      let ruolo = prima ? prima.ruolo || "" : "", proposto = prima && prima.ruolo ? String(prima.ruoloProposto || "") : "", ruoli = prima && prima.ruoli ? prima.ruoli : null, resp = !!(prima && prima.resp);
+      if (casoTipo().perGiorno) {
+        // un incarico per ogni giorno: si tengono quelli già assegnati (anche per i giorni tolti non importa) e si propongono quelli dell'edizione precedente per chi non ne ha
+        if (!casoHaRuoli(prima) && prec.mappa[s.id]) { ruoli = casoRuoliProposti(prec.mappa[s.id], nuovo); proposto = ruoli ? prec.mappa[s.id].anno : ""; resp = !!prec.mappa[s.id].resp; }
+        else if (casoHaRuoli(prima)) proposto = String(prima.ruoloProposto || "");
+        ruolo = "";
+      } else if (!ruolo && prec.mappa[s.id]) { ruolo = prec.mappa[s.id].ruolo; proposto = prec.mappa[s.id].anno; }   // ruolo dell'ultima edizione, da confermare
       const voce = Object.assign({ nome: `${s.cognome} ${s.nome}`.trim(), nota: prima ? prima.nota || "" : "", ruolo, ts: new Date().toISOString(), da: "direttivo" }, nuovo);
+      if (casoTipo().perGiorno) { delete voce.ruolo; if (ruoli) voce.ruoli = ruoli; else if (prima && prima.ruolo) voce.ruolo = prima.ruolo; if (resp) voce.resp = true; }
       if (proposto) voce.ruoloProposto = proposto;
       modifiche[s.id] = voce;
       aggiornate++;
@@ -5807,6 +5896,7 @@ function opzioniRuoloCaso(corrente) {
 
 async function apriAssegnaRuoliCaso(edId) {
   if (currentRole === "socio") return;
+  { const e0 = casoTrovaEd(edId); if (e0 && casoTipo().perGiorno) return apriAssegnaRuoliGiorni(edId); }
   const ed = casoTrovaEd(edId);
   if (!ed) return;
   const dati = await leggiDocCaso(edId);
@@ -5937,6 +6027,180 @@ async function apriAssegnaRuoliCaso(edId) {
   });
 }
 
+// Scrive, per più soci, gli incarichi di ogni giorno, la nota e la spunta (R), senza toccare spunte, orario e origine della risposta.
+async function scriviRuoliGiorniCaso(edId, modifiche) {
+  if (currentRole === "socio") return { errore: "Operazione riservata al Direttivo." };
+  if (!window.db) return { errore: "Non sono collegato: controlla la connessione e riprova." };
+  const ref = db.collection(FIRESTORE_COLLECTION).doc(casoDocId(edId));
+  let esito = {};
+  try {
+    await conTimeout(db.runTransaction(async tx => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) { esito = { errore: "Questa richiesta non esiste più." }; return; }
+      const risposte = snap.data().risposte || {}, upd = {}, canc = () => firebase.firestore.FieldValue.delete();
+      Object.keys(modifiche).forEach(id => {
+        const r = risposte["socio_" + id];
+        if (!r) return;   // si assegna solo a chi ha una risposta
+        const m = modifiche[id], pre = `risposte.socio_${id}`;
+        upd[`${pre}.ruoli`] = Object.keys(m.ruoli).length ? m.ruoli : canc();
+        if (r.ruolo !== undefined) upd[`${pre}.ruolo`] = canc();   // il vecchio incarico unico è stato sostituito da quelli dei giorni
+        upd[`${pre}.nota`] = m.nota;
+        upd[`${pre}.resp`] = m.resp ? true : canc();
+        upd[`${pre}.ruoloProposto`] = m.proposto ? m.proposto : canc();   // confermato o cambiato: niente più asterisco
+      });
+      if (Object.keys(upd).length) tx.update(ref, upd);
+    }), 20000);
+  } catch (err) { console.error(err); return { errore: "Non sono riuscito a salvare: controlla la connessione e riprova." }; }
+  return esito;
+}
+
+// "Assegna ruoli" per le sezioni con un incarico per ogni giorno (Festa Alpina, Merenda Alpina):
+// per ogni giorno spuntato un menu con gli incarichi, «Tutti i giorni» per impostarli insieme, la spunta (R) di responsabile e le Note.
+async function apriAssegnaRuoliGiorni(edId) {
+  if (currentRole === "socio") return;
+  const ed = casoTrovaEd(edId);
+  if (!ed) return;
+  const dati = await leggiDocCaso(edId);
+  if (!dati) { alert("Non riesco a leggere le risposte: controlla la connessione e riprova."); return; }
+  const risposte = dati.risposte || {};
+  const nome = s => `${s.cognome} ${s.nome}`.trim();
+  const ordina = (x, y) => nome(x).localeCompare(nome(y), "it", { sensitivity: "base" });
+  const servizio = CASO_VOCI.filter(v => !v.prep);
+  const soci = state.socios.filter(s => {
+    const r = risposte["socio_" + s.id];
+    return !s.andatoAvanti && r && (CASO_VOCI.some(v => r[v.k]) || casoHaRuoli(r) || r.nota);
+  }).sort(ordina);
+  if (!soci.length) { alert("Nessun socio ha ancora dato disponibilità. Aspetta le risposte, oppure usa «Inserisci a mano»."); return; }
+  const prec = await ruoliPrecedentiCaso(ed);
+  const giorniDi = id => servizio.filter(v => risposte["socio_" + id][v.k]);
+  const iniz = {};
+  soci.forEach(s => {
+    const r = risposte["socio_" + s.id], m = {};
+    giorniDi(s.id).forEach(v => { const x = casoRuoloCanonico(casoRuoloK(r, v.k)); if (x) m[v.k] = x; });
+    iniz[s.id] = { ruoli: m, nota: String(r.nota || ""), resp: !!r.resp, prop: String(r.ruoloProposto || "") };
+  });
+  const confermati = new Set();
+  const nonRisposto = [], hannoDettoNo = [];
+  if (prec.ultima) {
+    state.socios.filter(s => !s.andatoAvanti).sort(ordina).forEach(s => {
+      const rp = prec.ultima.risposte["socio_" + s.id];
+      if (!rp || !casoHaRuoli(rp)) return;
+      const cur = risposte["socio_" + s.id], r1 = casoRuoloCanonico(casoRuoliDi(rp)[0]);
+      if (!cur) nonRisposto.push(`${nome(s)} (${r1})`);
+      else if (!CASO_VOCI.some(v => cur[v.k])) hannoDettoNo.push(`${nome(s)} (${r1})`);
+    });
+  }
+  const haProposte = soci.some(s => iniz[s.id].prop);
+  const opzTutti = opzioniRuoloCaso("").replace("— nessun ruolo —", "— tutti i giorni —");
+  showModal(`<div id="ar-root">
+    <div class="modal-title">🧑‍🍳 Assegna ruoli</div>
+    <div class="card-sub" style="margin-bottom:4px;">${esc(casoTitolo(ed))}. Scegli l'incarico di ognuno ${esc(casoTipo().perTesto)} (con «${esc(casoTipo().etichettaTutti)}» lo imposti in un colpo solo).${casoTipo().responsabile ? " Con la spunta (R) il nome compare in grassetto con «(R)»." : ""}</div>
+    ${prec.ultima ? `<div class="box-riep"><div style="font-weight:800;">Riepilogo per reparto</div><div id="ar-riep"></div>
+      ${nonRisposto.length ? `<div style="font-size:.82rem; margin-top:4px;"><b>Non hanno ancora risposto, c'erano nel ${esc(prec.ultima.anno)} (${nonRisposto.length}):</b> ${esc(nonRisposto.join(", "))}.</div>` : ""}
+      ${hannoDettoNo.length ? `<div style="font-size:.82rem; margin-top:4px;"><b>Hanno detto che non possono (${hannoDettoNo.length}):</b> ${esc(hannoDettoNo.join(", "))}.</div>` : ""}</div>` : ""}
+    <div class="box-att" id="ar-banner" style="display:none;"><span id="ar-banner-t"></span><button type="button" class="btn" id="ar-conferma" style="padding:6px 12px; font-size:.85rem;">Conferma tutti</button></div>
+    <input type="text" id="ar-cerca" placeholder="Cerca un socio..." style="width:100%; box-sizing:border-box;">
+    <div class="ar-filtri"><button type="button" class="ar-f att" data-f="tutti"></button><button type="button" class="ar-f" data-f="senza"></button>${haProposte ? '<button type="button" class="ar-f" data-f="conferma"></button>' : ""}</div>
+    <div class="ar-conta" id="ar-conta"></div>
+    <div id="ar-lista" style="max-height:44vh; overflow-y:auto;">${soci.map(s => {
+      const gs = giorniDi(s.id);
+      return `
+      <div class="ar-riga" data-id="${s.id}" data-nome="${esc(nome(s).toLowerCase())}">
+        <div class="ar-nome">${esc(nome(s))}<span class="ar-tag" data-tag="${s.id}" style="display:none;"></span></div>
+        <div class="ar-giorni">${gs.length > 1 ? `<div class="ar-g"><label>${esc(casoTipo().etichettaTutti)}</label><select data-tutti="${s.id}" class="sel-ruolo">${opzTutti}</select></div>` : ""}${gs.map(v => `<div class="ar-g"><label>${esc(casoInfoGiorno(ed, v.giorno).nome + (servizio.filter(x => x.giorno === v.giorno).length > 1 ? " " + v.parte.toLowerCase() : ""))}</label><select data-g="${s.id}" data-k="${v.k}" class="sel-ruolo">${opzioniRuoloCaso(iniz[s.id].ruoli[v.k] || "")}</select></div>`).join("") || '<span class="card-sub">Ha risposto: nessun giorno di servizio</span>'}</div>
+        <div class="ar-campi">${casoTipo().responsabile ? `<div><label class="ar-r"><input type="checkbox" data-resp="${s.id}"${iniz[s.id].resp ? " checked" : ""}> Responsabile (R)</label></div>` : ""}<div><label>Note</label><input type="text" maxlength="120" data-n="${s.id}" placeholder="facoltative" value="${esc(iniz[s.id].nota)}"></div></div>
+      </div>`; }).join("")}</div>
+    <div id="ar-errore" style="color:var(--red); font-size:0.82rem; min-height:1.1em; margin-top:6px;"></div>
+    <div class="modal-actions"><button type="button" class="btn secondary" id="ar-chiudi">Chiudi</button><button type="button" class="btn" id="ar-salva">Salva</button></div>
+  </div>`);
+  let filtro = "tutti";
+  const q = id => [...document.querySelectorAll(`#ar-lista [data-g="${id}"]`)];
+  const ruoliOra = id => { const m = {}; q(id).forEach(sel => { const v = sel.value.trim().replace(/\s+/g, " "); if (v) m[sel.dataset.k] = v; }); return m; };
+  const mancano = id => q(id).filter(sel => !sel.value).length;
+  const uguali = (x, y) => JSON.stringify(x) === JSON.stringify(y);
+  const propAttiva = id => !!iniz[id].prop && !confermati.has(id) && uguali(ruoliOra(id), iniz[id].ruoli);
+  const riepilogo = () => {
+    const box = document.getElementById("ar-riep");
+    if (!box) return;
+    const ora = {}, prima = {}, altroOra = {}, altroPrima = {};
+    const conta = (mappa, altro, r) => casoEspandiRisposta(r).forEach(x => { if (!x.ruolo) return; const m = incaricoDiRuolo(x.ruolo); if (m) mappa[m.incarico] = (mappa[m.incarico] || 0) + 1; else altro[x.ruolo] = (altro[x.ruolo] || 0) + 1; });
+    Object.keys(prec.ultima.risposte).forEach(k => {
+      const rp = prec.ultima.risposte[k], s = state.socios.find(x => "socio_" + x.id === k);
+      if (rp && casoHaRuoli(rp) && s && !s.andatoAvanti) conta(prima, altroPrima, rp);
+    });
+    soci.forEach(s => { const r = Object.assign({}, risposte["socio_" + s.id], { ruoli: ruoliOra(s.id) }); delete r.ruolo; conta(ora, altroOra, r); });
+    const diff = (a1, p) => { const d = a1 - p; return `<td class="${d < 0 ? "male" : d > 0 ? "bene" : ""}">${d < 0 ? "mancano " + (-d) : d > 0 ? "+" + d : "ok"}</td>`; };
+    let righe = "";
+    casoReparti().forEach(rep => {
+      const qq = rep.incarichi.reduce((n, i) => n + (ora[i] || 0), 0), p = rep.incarichi.reduce((n, i) => n + (prima[i] || 0), 0);
+      if (!qq && !p) return;
+      righe += `<tr class="rep-r"><td>${esc(rep.nome)}</td><td>${qq}</td><td>${p}</td>${diff(qq, p)}</tr>`;
+      rep.incarichi.forEach(i => { if (ora[i] || prima[i]) righe += `<tr><td class="i">${esc(i)}</td><td>${ora[i] || 0}</td><td>${prima[i] || 0}</td>${diff(ora[i] || 0, prima[i] || 0)}</tr>`; });
+    });
+    const testi = [...new Set(Object.keys(altroOra).concat(Object.keys(altroPrima)))];
+    if (testi.length) {
+      righe += `<tr class="rep-r"><td>Altro (da associare)</td><td>${testi.reduce((n, t) => n + (altroOra[t] || 0), 0)}</td><td>${testi.reduce((n, t) => n + (altroPrima[t] || 0), 0)}</td><td></td></tr>`;
+      testi.forEach(t => { righe += `<tr><td class="i">${esc(t)}</td><td>${altroOra[t] || 0}</td><td>${altroPrima[t] || 0}</td><td></td></tr>`; });
+    }
+    box.innerHTML = `<table class="riep"><tr><th></th><th>Quest'anno</th><th>Nel ${esc(prec.ultima.anno)}</th><th></th></tr>${righe}</table>`;
+  };
+  const aggiornaLive = () => {
+    const completi = soci.filter(s => !mancano(s.id)).length;
+    document.getElementById("ar-conta").textContent = `${completi} su ${soci.length} con tutti gli incarichi`;
+    const daConf = soci.filter(s => propAttiva(s.id)).length;
+    const anni = [...new Set(soci.filter(s => iniz[s.id].prop).map(s => iniz[s.id].prop))].sort().join(" e dal ");
+    document.getElementById("ar-banner").style.display = daConf ? "flex" : "none";
+    document.getElementById("ar-banner-t").textContent = `⚠️ ${daConf} ${daConf === 1 ? "persona con incarichi proposti" : "persone con incarichi proposti"} dal ${anni}, da confermare`;
+    soci.forEach(s => {
+      const att = propAttiva(s.id), tag = document.querySelector(`[data-tag="${s.id}"]`);
+      tag.style.display = att ? "" : "none"; tag.textContent = att ? `dal ${iniz[s.id].prop} *` : "";
+      q(s.id).forEach(sel => sel.classList.toggle("prop", att));
+    });
+    if (prec.ultima) riepilogo();
+    return { completi, daConf };
+  };
+  const aggiorna = () => {
+    const cerca = document.getElementById("ar-cerca").value.trim().toLowerCase();
+    const { completi, daConf } = aggiornaLive();
+    document.querySelector('[data-f="tutti"]').textContent = `Tutti (${soci.length})`;
+    document.querySelector('[data-f="senza"]').textContent = `Senza incarico (${soci.length - completi})`;
+    const bc = document.querySelector('[data-f="conferma"]'); if (bc) bc.textContent = `Da confermare (${daConf})`;
+    document.querySelectorAll("#ar-lista .ar-riga").forEach(r => {
+      const id = r.dataset.id;
+      const ok = (!cerca || r.dataset.nome.includes(cerca)) && (filtro === "tutti" || (filtro === "senza" && mancano(id) > 0) || (filtro === "conferma" && propAttiva(id)));
+      r.style.display = ok ? "" : "none";
+    });
+    document.querySelectorAll(".ar-f").forEach(b => b.classList.toggle("att", b.dataset.f === filtro));
+  };
+  aggiorna();
+  document.getElementById("ar-cerca").addEventListener("input", aggiorna);
+  document.querySelectorAll(".ar-f").forEach(b => b.addEventListener("click", () => { filtro = b.dataset.f; aggiorna(); }));
+  document.getElementById("ar-lista").addEventListener("focusout", aggiorna);
+  document.getElementById("ar-lista").addEventListener("input", aggiornaLive);
+  document.getElementById("ar-lista").addEventListener("change", e => {
+    const t = e.target.closest("[data-tutti]");
+    if (t && t.value) { q(t.dataset.tutti).forEach(sel => { sel.value = t.value; }); t.value = ""; }   // «Tutti i giorni»: imposta lo stesso incarico in ogni giorno
+    aggiornaLive();
+  });
+  document.getElementById("ar-conferma").addEventListener("click", () => { soci.forEach(s => { if (propAttiva(s.id)) confermati.add(s.id); }); aggiorna(); });
+  document.getElementById("ar-chiudi").addEventListener("click", closeModal);
+  document.getElementById("ar-salva").addEventListener("click", async () => {
+    const modifiche = {}; let n = 0;
+    soci.forEach(s => {
+      const ruoli = ruoliOra(s.id), nota = document.querySelector(`#ar-lista [data-n="${s.id}"]`).value.trim().replace(/\s+/g, " "), resp = (document.querySelector(`#ar-lista [data-resp="${s.id}"]`) || { checked: iniz[s.id].resp }).checked, proposto = propAttiva(s.id) ? iniz[s.id].prop : "";
+      if (!uguali(ruoli, iniz[s.id].ruoli) || nota !== iniz[s.id].nota || resp !== iniz[s.id].resp || proposto !== iniz[s.id].prop) { modifiche[s.id] = { ruoli, nota, resp, proposto }; n++; }
+    });
+    if (!n) { closeModal(); return; }
+    const btn = document.getElementById("ar-salva"); btn.disabled = true;
+    const esito = await scriviRuoliGiorniCaso(edId, modifiche);
+    if (esito.errore) { document.getElementById("ar-errore").textContent = esito.errore; btn.disabled = false; return; }
+    scriviLog([{ ev: `${casoTipoDiEd(ed).icona} ${casoTitolo(ed)}: ruoli e note assegnati dal Direttivo (${n} ${n === 1 ? "riga" : "righe"})` }]);
+    closeModal();
+    toast("Ruoli salvati");
+    renderSection();
+  });
+}
+
 // ---- Reparti e incarichi (solo Admin) ----
 function repartiModificabili() {
   const t = casoTipo();
@@ -5947,7 +6211,7 @@ function repartiModificabili() {
 async function usoIncarichiCaso(incarichi) {
   const chiavi = new Set(incarichi.map(chiaveRuolo)); let n = 0;
   const docs = await Promise.all(casoLista().map(e => leggiDocCaso(e.id)));
-  docs.forEach(d => { if (d) Object.values(d.risposte || {}).forEach(r => { if (r && chiavi.has(chiaveRuolo(r.ruolo))) n++; }); });
+  docs.forEach(d => { if (d) Object.values(d.risposte || {}).forEach(r => { if (r && casoRuoliDi(r).some(x => chiavi.has(chiaveRuolo(x)))) n++; }); });
   return n;
 }
 // Rinomina un incarico in tutte le Casoncellate (anche scritto con maiuscole diverse). Restituisce quante risposte sono state aggiornate, o null se qualcosa non è andato.
@@ -5962,8 +6226,13 @@ async function rinominaIncaricoCaso(vecchio, nuovo) {
         const snap = await tx.get(ref);
         if (!snap.exists) return;
         const risposte = snap.data().risposte || {}, upd = {};
-        Object.keys(risposte).forEach(k => { const r = risposte[k]; if (r && r.ruolo && chiaveRuolo(r.ruolo) === chiave) upd[`risposte.${k}.ruolo`] = nuovo; });
-        parziale = Object.keys(upd).length;
+        Object.keys(risposte).forEach(k => {
+          const r = risposte[k]; if (!r) return;
+          let toccata = false;
+          if (r.ruolo && chiaveRuolo(r.ruolo) === chiave) { upd[`risposte.${k}.ruolo`] = nuovo; toccata = true; }
+          Object.keys(r.ruoli || {}).forEach(j => { if (chiaveRuolo(r.ruoli[j]) === chiave) { upd[`risposte.${k}.ruoli.${j}`] = nuovo; toccata = true; } });
+          if (toccata) parziale++;
+        });
         if (parziale) tx.update(ref, upd);
       }), 20000);
     } catch (err) { console.error(err); return null; }
@@ -5985,7 +6254,7 @@ function apriRepartiCaso() {
     </div>`).join("")}
     <div class="rc-nuovo" style="margin-top:8px;"><input type="text" maxlength="30" placeholder="Nuovo reparto…" id="rc-nuovo-rep"><button type="button" class="btn secondary" data-rc="aggiungi-rep">＋ Reparto</button></div>
     <div id="rc-errore" style="color:var(--red); font-size:0.82rem; min-height:1.1em; margin-top:6px;"></div>
-    <div class="modal-actions"><button type="button" class="btn" data-rc="chiudi">Chiudi</button></div>
+    <div class="modal-actions">${casoTipo().repartiBase ? '<button type="button" class="btn secondary" data-rc="predefinito">↺ Elenco predefinito</button>' : ""}<button type="button" class="btn" data-rc="chiudi">Chiudi</button></div>
   </div>`);
   const errore = t => { document.getElementById("rc-errore").textContent = t; };
   const fatto = ev => { saveState(); scriviLog([{ ev: `${casoTipo().icona} Reparti e incarichi ${casoTipo().della}: ${ev}` }]); apriRepartiCaso(); };
@@ -5994,6 +6263,12 @@ function apriRepartiCaso() {
     if (!b) return;
     const az = b.dataset.rc, repId = b.dataset.rep;
     if (az === "chiudi") { closeModal(); renderSection(); return; }
+    if (az === "predefinito") {
+      const tp = casoTipo();
+      if (!confirm(`Sostituisco l'elenco di reparti e incarichi ${tp.della} con quello predefinito (preso dal foglio 2026)? I ruoli già assegnati con nomi diversi restano scritti: li ritrovi con «Associa i vecchi ruoli».`)) return;
+      state[tp.repartiStato] = JSON.parse(JSON.stringify(casoRepartiPredefiniti(tp)));
+      fatto("elenco di reparti e incarichi riportato a quello predefinito"); return;
+    }
     if (az === "aggiungi-rep") {
       const n = pulisci(document.getElementById("rc-nuovo-rep").value);
       if (!n) { errore("Scrivi il nome del reparto."); return; }
@@ -6056,9 +6331,12 @@ async function apriAssociaRuoliCaso() {
     if (!d) return;
     const anno = String(edizioni[i].sabato).slice(0, 4);
     Object.values(d.risposte || {}).forEach(r => {
-      if (!r || !r.ruolo || incaricoDiRuolo(r.ruolo)) return;
-      const k = chiaveRuolo(r.ruolo), t = trovati[k] = trovati[k] || { etichette: {}, n: 0, anni: new Set() };
-      t.etichette[r.ruolo] = (t.etichette[r.ruolo] || 0) + 1; t.n++; t.anni.add(anno);
+      if (!r) return;
+      casoRuoliDi(r).forEach(x => {
+        if (incaricoDiRuolo(x)) return;
+        const k = chiaveRuolo(x), t = trovati[k] = trovati[k] || { etichette: {}, n: 0, anni: new Set() };
+        t.etichette[x] = (t.etichette[x] || 0) + 1; t.n++; t.anni.add(anno);
+      });
     });
   });
   const chiavi = Object.keys(trovati).sort();
@@ -6088,7 +6366,11 @@ async function apriAssociaRuoliCaso() {
           const snap = await tx.get(ref);
           if (!snap.exists) return;
           const risposte = snap.data().risposte || {}, upd = {};
-          Object.keys(risposte).forEach(k => { const r = risposte[k]; if (r && r.ruolo && mappa[chiaveRuolo(r.ruolo)] && !incaricoDiRuolo(r.ruolo)) { upd[`risposte.${k}.ruolo`] = mappa[chiaveRuolo(r.ruolo)]; aggiornate++; } });
+          Object.keys(risposte).forEach(k => {
+            const r = risposte[k]; if (!r) return;
+            if (r.ruolo && mappa[chiaveRuolo(r.ruolo)] && !incaricoDiRuolo(r.ruolo)) { upd[`risposte.${k}.ruolo`] = mappa[chiaveRuolo(r.ruolo)]; aggiornate++; }
+            Object.keys(r.ruoli || {}).forEach(j => { const x = r.ruoli[j]; if (mappa[chiaveRuolo(x)] && !incaricoDiRuolo(x)) { upd[`risposte.${k}.ruoli.${j}`] = mappa[chiaveRuolo(x)]; aggiornate++; } });
+          });
           if (Object.keys(upd).length) tx.update(ref, upd);
         }), 20000);
       } catch (err) { console.error(err); errori++; }
@@ -6113,32 +6395,33 @@ async function apriTabelloneCaso(edId) {
   const risposte = dati.risposte || {};
   const prec = await ruoliPrecedentiCaso(ed);
   const reparti = casoReparti();
-  const persone = Object.keys(risposte).map(k => {
-    const id = k.replace(/^socio_/, ""), r = risposte[k], s = state.socios.find(x => x.id === id);
-    return { id, r, s, nome: s ? `${s.cognome} ${s.nome}`.trim() : String(r.nome || id) };
+  const persone = Object.keys(risposte).flatMap(k => {
+    const id = k.replace(/^socio_/, ""), s = state.socios.find(x => x.id === id), nome = s ? `${s.cognome} ${s.nome}`.trim() : String(risposte[k].nome || id);
+    return casoEspandiRisposta(risposte[k]).map(r => ({ id, r, s, nome }));
   }).filter(p => !(p.s && p.s.andatoAvanti)).sort((x, y) => x.nome.localeCompare(y.nome, "it", { sensitivity: "base" }));
   if (!persone.some(p => CASO_VOCI.some(v => p.r[v.k]))) { alert("Nessuno ha ancora dato disponibilità."); return; }
   const info = p => incaricoDiRuolo(p.r.ruolo);
   // l'anno scorso: persone per reparto e per momento
   const prima = {};
   if (prec.ultima) Object.keys(prec.ultima.risposte).forEach(k => {
-    const rp = prec.ultima.risposte[k], s = state.socios.find(x => "socio_" + x.id === k);
-    if (!rp || !rp.ruolo || (s && s.andatoAvanti)) return;
-    const m = incaricoDiRuolo(rp.ruolo);
-    if (!m) return;
-    CASO_VOCI.forEach(v => { if (rp[v.k]) { prima[m.reparto.id] = prima[m.reparto.id] || {}; prima[m.reparto.id][v.k] = (prima[m.reparto.id][v.k] || 0) + 1; } });
+    const rp0 = prec.ultima.risposte[k], s = state.socios.find(x => "socio_" + x.id === k);
+    if (!rp0 || !casoHaRuoli(rp0) || (s && s.andatoAvanti)) return;
+    casoEspandiRisposta(rp0).forEach(rp => {
+      const m = rp.ruolo ? incaricoDiRuolo(rp.ruolo) : null;
+      if (!m) return;
+      CASO_VOCI.forEach(v => { if (rp[v.k]) { prima[m.reparto.id] = prima[m.reparto.id] || {}; prima[m.reparto.id][v.k] = (prima[m.reparto.id][v.k] || 0) + 1; } });
+    });
   });
   const daAssociare = new Set();
   persone.forEach(p => { if (p.r.ruolo && !info(p)) daAssociare.add(chiaveRuolo(p.r.ruolo)); });
-  if (prec.ultima) Object.values(prec.ultima.risposte).forEach(rp => { if (rp && rp.ruolo && !incaricoDiRuolo(rp.ruolo)) daAssociare.add(chiaveRuolo(rp.ruolo)); });
+  if (prec.ultima) Object.values(prec.ultima.risposte).forEach(rp => casoRuoliDi(rp).forEach(x => { if (!incaricoDiRuolo(x)) daAssociare.add(chiaveRuolo(x)); }));
   const proposti = persone.some(p => p.r.ruolo && p.r.ruoloProposto && CASO_VOCI.some(v => p.r[v.k]));
   // l'incarico si scrive sempre (anche quando ha lo stesso nome del reparto): così le persone si vedono raggruppate per incarico
   const etichetta = p => { const m = info(p); return m ? m.incarico : ""; };
   const tp = casoTipo();
   // giorni di preparativi: una riga con i nomi (lo "Scarico" della Casoncellata, i "Preparativi" delle altre sezioni)
-  const prepGiorni = casoGruppiGiorni(CASO_VOCI.filter(v => v.prep)).map(g => ({ delta: g.delta, nome: casoInfoGiorno(ed, g.delta).nome, lista: persone.filter(p => g.voci.some(v => p.r[v.k])) }));
+  const prepGiorni = casoGruppiGiorni(CASO_VOCI.filter(v => v.prep)).map(g => ({ delta: g.delta, nome: casoInfoGiorno(ed, g.delta).nome, et: tp.legacyGriglia ? tp.etichettaPrep : g.voci[0].parte, lista: persone.filter(p => g.voci.some(v => p.r[v.k])) }));
   const prepTitolo = d => `${d.nome.toUpperCase()} ${casoDataBreve(ed.sabato, d.delta)}`;
-  const prepEt = tp.etichettaPrep.toUpperCase();
   // giorni di servizio: un riquadro per reparto, con una colonna per momento
   const giorniTab = casoGruppiGiorni(CASO_VOCI.filter(v => !v.prep)).map(gr => ({ nome: casoInfoGiorno(ed, gr.delta).nome.toUpperCase(), delta: gr.delta, momenti: gr.voci.map(v => ({ k: v.k, nome: v.parte })) }));
   const giorni = giorniTab.map(g => ({
@@ -6146,7 +6429,7 @@ async function apriTabelloneCaso(edId) {
     blocchi: reparti.map((rep, i) => ({ rep, mom: g.momenti, colore: CASO_COLORI_REPARTO[i % CASO_COLORI_REPARTO.length],
       righe: persone.filter(p => { const m = info(p); return m && m.reparto.id === rep.id && g.momenti.some(mo => p.r[mo.k]); })
         .sort((x, y) => { const ix = p => rep.incarichi.findIndex(n => chiaveRuolo(n) === chiaveRuolo(p.r.ruolo));
-          return ix(x) - ix(y) || (y.r[g.momenti[0].k] ? 1 : 0) - (x.r[g.momenti[0].k] ? 1 : 0) || x.nome.localeCompare(y.nome, "it", { sensitivity: "base" }); }),
+          return ix(x) - ix(y) || (y.r.resp ? 1 : 0) - (x.r.resp ? 1 : 0) || (y.r[g.momenti[0].k] ? 1 : 0) - (x.r[g.momenti[0].k] ? 1 : 0) || x.nome.localeCompare(y.nome, "it", { sensitivity: "base" }); }),
       cols: g.momenti.map(mo => {
       const lista = persone.filter(p => { const m = info(p); return m && m.reparto.id === rep.id && p.r[mo.k]; });
       return { mo, lista, prima: (prima[rep.id] || {})[mo.k] || 0 };
@@ -6158,7 +6441,7 @@ async function apriTabelloneCaso(edId) {
   const totale = (n, p) => prec.ultima ? `${n} <small>(${p})</small>` : `${n}`;
   // --- schermo (un riquadro sotto l'altro) ---
   // --- schermo: in stile Excel, come il foglio (griglia con i bordi; i riquadri si affiancano se c'è spazio) ---
-  const nomeXl = p => `<span class="xl-n">${esc(p.nome)}${p.r.ruolo && p.r.ruoloProposto ? " *" : ""}</span>`;
+  const nomeXl = p => `<span class="xl-n${p.r.resp ? " xl-r" : ""}">${esc(casoNomeR(p))}${p.r.ruolo && p.r.ruoloProposto ? " *" : ""}</span>`;
   const incXl = p => `${etichetta(p) ? `<span class="xl-ic">${esc(etichetta(p))}</span>` : ""}${p.r.nota ? ` <span class="tb-n">${esc(p.r.nota)}</span>` : ""}`;
   const bloccoXl = b => {
     const w = Math.floor(66 / b.mom.length);
@@ -6166,13 +6449,13 @@ async function apriTabelloneCaso(edId) {
       : `<tr class="xl-p">${b.mom.map(() => '<td class="xl-v">—</td>').join("")}<td></td></tr>`;
     return `<div class="xl-b"><div class="xl-h">${esc(b.rep.nome.toUpperCase())}</div><table class="xl-t"><colgroup>${b.mom.map(() => `<col style="width:${w}%">`).join("")}<col style="width:${100 - w * b.mom.length}%"></colgroup><tr>${b.cols.map(c => `<th>${c.mo.nome}</th>`).join("")}<th>Incarico</th></tr>${righe}<tr class="tot">${b.cols.map(c => `<td>${totale(c.lista.length, c.prima)}</td>`).join("")}<td></td></tr></table></div>`;
   };
-  const schermo = `<div class="xl-tab">${prepGiorni.map(d => `<div class="xl-g">${esc(prepTitolo(d))}</div><div class="xl-sc"><b>${esc(prepEt)}</b> (${d.lista.length}): ${esc(d.lista.map(p => p.nome).join(", ")) || "nessuno"}</div>`).join("")}`
+  const schermo = `<div class="xl-tab">${prepGiorni.map(d => `<div class="xl-g">${esc(prepTitolo(d))}</div><div class="xl-sc"><b>${esc(d.et.toUpperCase())}</b> (${d.lista.length}): ${esc(d.lista.map(p => p.nome).join(", ")) || "nessuno"}</div>`).join("")}`
     + giorni.map(gi => `<div class="xl-g">${esc(gi.titolo)}</div><div class="xl-r">${gi.blocchi.map(bloccoXl).join("")}</div><div class="xl-sc"><b>Senza ruolo / a disposizione:</b> ${esc(gi.senza.map(senzaTesto).join(", ")) || "nessuno"}</div>`).join("") + `</div>`;
 
   // --- stampa (due riquadri affiancati, come il foglio) ---
   const bloccoStampa = b => {
     const cella = "border:1px solid #777; padding:2px 5px; height:15px;";
-    const nomeS = p => `${esc(p.nome)}${p.r.ruolo && p.r.ruoloProposto ? " *" : ""}`;
+    const nomeS = p => `${p.r.resp ? "<b>" : ""}${esc(casoNomeR(p))}${p.r.resp ? "</b>" : ""}${p.r.ruolo && p.r.ruoloProposto ? " *" : ""}`;
     const w = Math.floor(66 / b.mom.length);
     const righe = b.righe.map(p => `<tr>${b.mom.map(m => `<td style="${cella}">${p.r[m.k] ? nomeS(p) : ""}</td>`).join("")}<td style="${cella} color:#7a5a00; font-size:9px;"><b>${esc(etichetta(p))}</b>${p.r.nota ? ` <i style="font-weight:400; color:#555;">(${esc(p.r.nota)})</i>` : ""}</td></tr>`).join("");
     return `<div style="flex:1 1 0; min-width:0;"><div style="text-align:center; font-weight:800; font-size:12px;">${esc(b.rep.nome.toUpperCase())}</div>
@@ -6182,15 +6465,15 @@ async function apriTabelloneCaso(edId) {
 
   const stampa = `<div style="font-family:Arial,sans-serif;">
     ${prepGiorni.map(d => `<div style="text-align:center; font-weight:800; font-size:15px; color:#b3261e; margin:6px 0;">${esc(prepTitolo(d))}</div>
-    <div style="font-size:11px; margin-bottom:8px;"><b>${esc(prepEt)}</b> &nbsp; ${esc(d.lista.map(p => p.nome).join(", ")) || "nessuno"}</div>`).join("\n    ")}
+    <div style="font-size:11px; margin-bottom:8px;"><b>${esc(d.et.toUpperCase())}</b> &nbsp; ${esc(d.lista.map(p => p.nome).join(", ")) || "nessuno"}</div>`).join("\n    ")}
     ${giorni.map(gi => { const righe = []; for (let i = 0; i < gi.blocchi.length; i += 2) righe.push(gi.blocchi.slice(i, i + 2));
       return `<div style="page-break-inside:avoid;"><div style="text-align:center; font-weight:800; font-size:15px; color:#b3261e; margin:12px 0 6px;">${esc(gi.titolo)}</div>
         ${righe.map(r => `<div style="display:flex; gap:22px; margin-bottom:10px;">${r.map(bloccoStampa).join("")}${r.length === 1 ? '<div style="flex:1 1 0;"></div>' : ""}</div>`).join("")}
         <div style="font-size:11px; margin:2px 0 6px;">Senza ruolo / a disposizione: ${esc(gi.senza.map(senzaTesto).join(", ")) || "nessuno"}</div></div>`; }).join("")}</div>`;
   // --- testo per WhatsApp e email, e file per Excel ---
-  const testo = prepGiorni.map(d => `${prepTitolo(d)} · ${prepEt} (${d.lista.length}): ${d.lista.map(p => p.nome).join(", ") || "nessuno"}`);
+  const testo = prepGiorni.map(d => `${prepTitolo(d)} · ${d.et.toUpperCase()} (${d.lista.length}): ${d.lista.map(p => p.nome).join(", ") || "nessuno"}`);
   const csv = [["Giorno", "Momento", "Reparto", "Incarico", "Cognome e nome", "Note"]];
-  prepGiorni.forEach(d => d.lista.forEach(p => csv.push([`${d.nome} ${casoDataBreve(ed.sabato, d.delta)}`, tp.etichettaPrep, "", "", p.nome, p.r.nota || ""])));
+  prepGiorni.forEach(d => d.lista.forEach(p => csv.push([`${d.nome} ${casoDataBreve(ed.sabato, d.delta)}`, d.et, "", "", p.nome, p.r.nota || ""])));
   giorni.forEach(gi => {
     testo.push("", gi.titolo);
     gi.blocchi.forEach(b => { testo.push(b.rep.nome.toUpperCase()); b.cols.forEach(c => testo.push(`  ${c.mo.nome} (${c.lista.length}${prec.ultima ? ", nel " + prec.ultima.anno + ": " + c.prima : ""}): ${c.lista.map(p => p.nome + (p.r.ruolo && p.r.ruoloProposto ? "*" : "") + (etichetta(p) ? " - " + etichetta(p) : "")).join(", ") || "—"}`));
@@ -6205,16 +6488,16 @@ async function apriTabelloneCaso(edId) {
     daAssociare.size ? `Ci sono ${daAssociare.size} ${daAssociare.size === 1 ? "ruolo scritto a mano" : "ruoli scritti a mano"} da associare agli incarichi (tasto «Associa i vecchi ruoli»): finché non lo fai quelle persone compaiono in «Senza ruolo» e i confronti sono parziali.` : ""].filter(Boolean).join("<br>");
   apriAnteprimaReportGenerico(`Tabellone ${casoTitolo(ed)}`, [], [["x"]], testo,
     { corpoHtml: schermo, stampaHtml: stampa, sottotitolo: `${tp.sottoTab}${prec.ultima ? ". In fondo i totali, tra parentesi il " + esc(prec.ultima.anno) : ""}.`, senzaPdf: true, senzaConteggio: true, nota: note,
-      csv: { nome: `${tp.fileBase}_${String(ed.sabato).slice(0, 4)}_tabellone.csv`, testo: csv.map(r => r.map(virgolette).join(";")).join("\r\n") } });
+      csv: { nome: `${casoFileBase(ed)}_${String(ed.sabato).slice(0, 4)}_tabellone.csv`, testo: csv.map(r => r.map(virgolette).join(";")).join("\r\n") } });
 }
 
 // ---- Report per reparto: la tabella "Alpini e simpatizzanti disponibili" di un reparto, in stile Excel ----
 
 // Chi ha almeno una spunta nel weekend ed è in quel reparto (repId "senza" = chi non ha un incarico dell'elenco), in ordine alfabetico.
 function casoPersoneRepartoCaso(risposte, repId) {
-  return Object.keys(risposte).map(k => {
-    const id = k.replace(/^socio_/, ""), r = risposte[k], s = state.socios.find(x => x.id === id);
-    return { id, r, s, nome: s ? `${s.cognome} ${s.nome}`.trim() : String(r.nome || id) };
+  return Object.keys(risposte).flatMap(k => {
+    const id = k.replace(/^socio_/, ""), s = state.socios.find(x => x.id === id), nome = s ? `${s.cognome} ${s.nome}`.trim() : String(risposte[k].nome || id);
+    return casoEspandiRisposta(risposte[k]).map(r => ({ id, r, s, nome }));
   }).filter(p => {
     if ((p.s && p.s.andatoAvanti) || !CASO_WEEKEND.some(mo => p.r[mo])) return false;
     const m = incaricoDiRuolo(p.r.ruolo);
@@ -6260,16 +6543,18 @@ async function apriReportRepartoCaso(edId, repId) {
   // l'anno scorso: chi era disponibile nello stesso momento, nello stesso reparto
   const prima = CASO_WEEKEND.map(() => 0);
   if (prec.ultima) Object.keys(prec.ultima.risposte).forEach(k => {
-    const rp = prec.ultima.risposte[k], s = state.socios.find(x => "socio_" + x.id === k);
-    if (!rp || !rp.ruolo || (s && s.andatoAvanti)) return;
-    const m = incaricoDiRuolo(rp.ruolo);
-    if (!m || m.reparto.id !== repId) return;
-    CASO_WEEKEND.forEach((mo, i) => { if (rp[mo]) prima[i]++; });
+    const rp0 = prec.ultima.risposte[k], s = state.socios.find(x => "socio_" + x.id === k);
+    if (!rp0 || !casoHaRuoli(rp0) || (s && s.andatoAvanti)) return;
+    casoEspandiRisposta(rp0).forEach(rp => {
+      const m = rp.ruolo ? incaricoDiRuolo(rp.ruolo) : null;
+      if (!m || m.reparto.id !== repId) return;
+      CASO_WEEKEND.forEach((mo, i) => { if (rp[mo]) prima[i]++; });
+    });
   });
   const incarico = p => { const m = incaricoDiRuolo(p.r.ruolo); return (m ? m.incarico : String(p.r.ruolo || "")) + (p.r.ruolo && p.r.ruoloProposto ? " *" : ""); };
   const proposti = persone.some(p => p.r.ruolo && p.r.ruoloProposto);
   const X = '<b style="display:block; text-align:center;">X</b>';
-  const righe = persone.map((p, i) => [String(i + 1), esc(p.nome)].concat(CASO_WEEKEND.map(mo => p.r[mo] ? X : ""), [esc(incarico(p))]));
+  const righe = persone.map((p, i) => [String(i + 1), p.r.resp ? `<b>${esc(casoNomeR(p))}</b>` : esc(p.nome)].concat(CASO_WEEKEND.map(mo => p.r[mo] ? X : ""), [esc(incarico(p))]));
   righe.push(["", "<b>Totale</b>"].concat(tot.map(t => `<b style="display:block; text-align:center;">${t}</b>`), [""]));
   if (prec.ultima) righe.push(["", '<span style="color:#777;">Anno scorso</span>'].concat(prima.map(t => `<span style="display:block; text-align:center; color:#777;">${t}</span>`), [""]));
   const testata = stile => {
@@ -6287,18 +6572,18 @@ async function apriReportRepartoCaso(edId, repId) {
     <table style="width:100%; border-collapse:collapse; font-size:12px;"><thead>
       <tr>${th2("", 'rowspan="2"')}${th2("Cognome e nome", 'rowspan="2"')}${gruppiServ.map(g => th2(casoTitoloGiorno(ed, g.delta), `colspan="${g.voci.length}"`)).join("")}${th2("Ruolo", 'rowspan="2"')}</tr>
       <tr>${serv.map(v => th2(v.parte)).join("")}</tr></thead><tbody>
-      ${persone.map((p, i) => `<tr>${num(i + 1)}${td(esc(p.nome))}${CASO_WEEKEND.map(mo => td(p.r[mo] ? "X" : "", "text-align:center; font-weight:700;")).join("")}${td(esc(incarico(p)))}</tr>`).join("")}
+      ${persone.map((p, i) => `<tr>${num(i + 1)}${td(p.r.resp ? `<b>${esc(casoNomeR(p))}</b>` : esc(p.nome))}${CASO_WEEKEND.map(mo => td(p.r[mo] ? "X" : "", "text-align:center; font-weight:700;")).join("")}${td(esc(incarico(p)))}</tr>`).join("")}
       ${[1, 2, 3, 4].map(k => `<tr>${num(persone.length + k)}${Array(CASO_WEEKEND.length + 2).fill(0).map(() => td("")).join("")}</tr>`).join("")}
       <tr>${td("")}${td("Totale", "font-weight:700; background:#f1ede0;")}${tot.map(t => td(t, "text-align:center; font-weight:700; background:#f1ede0;")).join("")}${td("", "background:#f1ede0;")}</tr>
       ${prec.ultima ? `<tr>${td("")}${td("Anno scorso", "color:#777; font-size:11px;")}${prima.map(t => td(t, "text-align:center; color:#777; font-size:11px;")).join("")}${td("")}</tr>` : ""}
     </tbody></table></div>`;
   // --- file per Excel e testo per WhatsApp/email ---
   const csv = [["N.", "Cognome e nome"].concat(...gruppiServ.map(g => [casoTitoloGiorno(ed, g.delta)].concat(Array(g.voci.length - 1).fill(""))), ["Ruolo"]), ["", ""].concat(serv.map(v => v.parte), [""])];
-  persone.forEach((p, i) => csv.push([String(i + 1), p.nome].concat(CASO_WEEKEND.map(mo => p.r[mo] ? "X" : ""), [incarico(p)])));
+  persone.forEach((p, i) => csv.push([String(i + 1), casoNomeR(p)].concat(CASO_WEEKEND.map(mo => p.r[mo] ? "X" : ""), [incarico(p)])));
   csv.push(["", "Totale"].concat(tot.map(String), [""]));
   if (prec.ultima) csv.push(["", "Anno scorso"].concat(prima.map(String), [""]));
   if (proposti) csv.push(["* Ruolo ancora da confermare."]);
-  const testo = persone.map((p, i) => `${i + 1}. ${p.nome}${p.r.ruolo ? " - " + incarico(p) : ""}: ${CASO_WEEKEND.map((mo, k) => p.r[mo] ? CASO_WEEKEND_NOMI[k] : "").filter(Boolean).join(", ")}`);
+  const testo = persone.map((p, i) => `${i + 1}. ${casoNomeR(p)}${p.r.ruolo ? " - " + incarico(p) : ""}: ${CASO_WEEKEND.map((mo, k) => p.r[mo] ? CASO_WEEKEND_NOMI[k] : "").filter(Boolean).join(", ")}`);
   testo.push("", "Totale: " + CASO_WEEKEND_NOMI.map((n, k) => `${n} ${tot[k]}`).join(", "));
   if (prec.ultima) testo.push(`Nel ${prec.ultima.anno}: ` + CASO_WEEKEND_NOMI.map((n, k) => `${n} ${prima[k]}`).join(", "));
   if (proposti) testo.push("", "* Ruolo ancora da confermare.");
@@ -6307,7 +6592,7 @@ async function apriReportRepartoCaso(edId, repId) {
     { sottotitolo: `${esc(rep.nome)} · ${esc(casoTitolo(ed))} · ${persone.length} ${persone.length === 1 ? "persona" : "persone"}`, senzaConteggio: true, compatto: true, griglia: true, fisse: 2, sopraTabella: '<div class="xl-tit">Alpini e simpatizzanti disponibili</div>', testata, stampaHtml: stampa,
       suggerimento: "↔ Scorri la tabella verso destra per vedere tutte le colonne." + (prec.ultima ? ` «Anno scorso»: persone disponibili nello stesso momento nel ${esc(prec.ultima.anno)}.` : ""),
       nota: proposti ? "* Ruolo ancora da confermare." : "",
-      csv: { nome: `${tp.fileBase}_${String(ed.sabato).slice(0, 4)}_${chiaveRuolo(rep.nome).replace(/[^a-z0-9]+/g, "_")}.csv`, testo: csv.map(r => r.map(virgolette).join(";")).join("\r\n") } });
+      csv: { nome: `${casoFileBase(ed)}_${String(ed.sabato).slice(0, 4)}_${chiaveRuolo(rep.nome).replace(/[^a-z0-9]+/g, "_")}.csv`, testo: csv.map(r => r.map(virgolette).join(";")).join("\r\n") } });
 }
 
 // Intestazione a due livelli, come il foglio cartaceo: Venerdì | Sabato (data) | Domenica (data) | Note/Ruolo, e sotto i momenti.
@@ -6343,11 +6628,12 @@ async function apriReportCaso(edId) {
     const r = risposte["socio_" + s.id];
     CASO_VOCI.forEach(v => { if (r[v.k]) tot[v.k]++; });
     const cell = s.cellulare || s.telefono || "";
-    const prop = r.ruolo && r.ruoloProposto;   // ruolo copiato dall'edizione precedente, ancora da confermare
+    const ruoloT = casoRuoloTesto(r), nomeR = nome(s) + (r.resp ? " (R)" : "");
+    const prop = ruoloT && r.ruoloProposto;   // ruolo copiato dall'edizione precedente, ancora da confermare
     if (prop) anniProposti.add(String(r.ruoloProposto));
-    righe.push([`${esc(nome(s))}${cell ? `<div style="color:#666; font-size:0.9em;">${esc(cell)}</div>` : ""}`].concat(CASO_VOCI.map(v => r[v.k] ? X : ""), [esc(r.ruolo || "") + (prop ? " *" : ""), esc(r.nota || "")]));
-    csv.push([nome(s), cell].concat(CASO_VOCI.map(v => r[v.k] ? "X" : ""), [(r.ruolo || "") + (prop ? " *" : ""), r.nota || ""]));
-    testo.push(`${nome(s)}${r.ruolo ? " - " + r.ruolo + (prop ? "*" : "") : ""}: ${casoRiassunto(r)}${r.nota ? " (" + r.nota + ")" : ""}`);
+    righe.push([`${esc(nomeR)}${cell ? `<div style="color:#666; font-size:0.9em;">${esc(cell)}</div>` : ""}`].concat(CASO_VOCI.map(v => r[v.k] ? X : ""), [esc(ruoloT) + (prop ? " *" : ""), esc(r.nota || "")]));
+    csv.push([nomeR, cell].concat(CASO_VOCI.map(v => r[v.k] ? "X" : ""), [ruoloT + (prop ? " *" : ""), r.nota || ""]));
+    testo.push(`${nomeR}${ruoloT ? " - " + ruoloT + (prop ? "*" : "") : ""}: ${casoRiassunto(r)}${r.nota ? " (" + r.nota + ")" : ""}`);
   });
   righe.push(["<b>Totale</b>"].concat(CASO_VOCI.map(v => `<b style="display:block; text-align:center;">${tot[v.k]}</b>`), ["", ""]));
   csv.push(["Totale", ""].concat(CASO_VOCI.map(v => String(tot[v.k])), ["", ""]));
@@ -6359,7 +6645,7 @@ async function apriReportCaso(edId) {
   const virgolette = c => /[;"\n]/.test(c) ? `"${String(c).replace(/"/g, '""')}"` : String(c);
   apriAnteprimaReportGenerico(`Disponibilità ${casoTitolo(ed)}`, intestazioni, righe, testo,
     { nota, suggerimento: casoTipo().suggerimentoReport, compatto: true, griglia: true, primaFissa: true, testata: stile => testataCaso(ed, stile),
-      csv: { nome: `${casoTipo().fileBase}_${String(ed.sabato).slice(0, 4)}_disponibilita.csv`, testo: csv.map(r => r.map(virgolette).join(";")).join("\r\n") } });
+      csv: { nome: `${casoFileBase(ed)}_${String(ed.sabato).slice(0, 4)}_disponibilita.csv`, testo: csv.map(r => r.map(virgolette).join(";")).join("\r\n") } });
 }
 
 // ---------- Sezione Log ----------
