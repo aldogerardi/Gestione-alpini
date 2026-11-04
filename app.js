@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "9.83";
+const APP_VERSION = "9.84";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -5354,15 +5354,14 @@ const CASO_TIPI = {
   },
   merenda: {
     id: "merenda", sezione: "conv-merenda-alpina", nome: "Merenda Alpina", icona: "🥪", articolo: "la", della: "della Merenda Alpina", plurale: "Merende Alpine",
-    stato: "merendaAlpina", repartiStato: "merendaReparti", docPrefix: "merendaalpina_", fileBase: "merendaalpina", ancora: { nome: "domenica", wd: 0 }, etichettaPrep: "Preparativi", perGiorno: true, responsabile: true, perTesto: "per ogni giorno", etichettaTutti: "Tutti i giorni",
-    intro: "Richiesta di disponibilità ai soci: preparativi del sabato e merenda della domenica pomeriggio.",
-    nuovaLabel: "Domenica della Merenda Alpina", nuovaSub: "I preparativi di sabato si ricavano dalla domenica.", msgData: "Scegli la data della domenica della Merenda Alpina.",
+    stato: "merendaAlpina", repartiStato: "merendaReparti", docPrefix: "merendaalpina_", fileBase: "merendaalpina", ancora: { nome: "sabato o domenica", wd: 6, wds: [6, 0] }, msgGiorno: "La data scelta non è né un sabato né una domenica. Continuare lo stesso?", etichettaPrep: "Preparativi", perGiorno: true, responsabile: true, perTesto: "per ogni giorno", etichettaTutti: "Tutti i giorni",
+    intro: "Richiesta di disponibilità ai soci per la merenda (un solo giorno, di sabato o di domenica).",
+    nuovaLabel: "Data della Merenda Alpina", nuovaSub: "Il giorno della merenda: sabato o domenica.", msgData: "Scegli la data della Merenda Alpina.",
     stagioni: [{ id: "primavera", nome: "di Primavera", da: "03-01", a: "05-30" }, { id: "autunno", nome: "d'Autunno", da: "09-01", a: "10-31" }],
     sottoTab: "Chi c'è in ogni reparto alla merenda", suggerimentoReport: "↔ Scorri la tabella verso destra (o ruota il telefono) per vedere Ruolo e Note.",
-    periodo: ed => `domenica ${casoData(ed.sabato, 0).getDate()} ${CASO_MESI[casoData(ed.sabato, 0).getMonth()]} ${casoData(ed.sabato, 0).getFullYear()} (preparativi: sabato ${casoData(ed.sabato, -1).getDate()} ${CASO_MESI[casoData(ed.sabato, -1).getMonth()]})`,
+    periodo: ed => `${CASO_GIORNI[casoData(ed.sabato, 0).getDay()]} ${casoData(ed.sabato, 0).getDate()} ${CASO_MESI[casoData(ed.sabato, 0).getMonth()]} ${casoData(ed.sabato, 0).getFullYear()}`,
     voci: [
-      { k: "prep", giorno: -1, lungo: "Preparativi sabato", corto: "Prep. sab", breve: "Prep. sab", parte: "Preparativi", sigla: "Prep.", prep: true },
-      { k: "mer", giorno: 0, lungo: "Merenda domenica", corto: "Merenda dom", breve: "Merenda", parte: "Merenda", sigla: "Mer." },
+      { k: "mer", giorno: 0, lungo: "Merenda", corto: "Merenda", breve: "Merenda", parte: "Merenda", sigla: "Mer." },
     ],
   },
 };
@@ -5733,7 +5732,7 @@ async function creaRichiestaCaso() {
   const tp = casoTipo();
   const sabato = document.getElementById("caso-sabato").value;
   if (!sabato) { alert(tp.msgData); return; }
-  if (casoData(sabato, 0).getDay() !== tp.ancora.wd && !confirm(`La data scelta non è ${tp.ancora.wd === 0 ? "una" : "un"} ${tp.ancora.nome}. Continuare lo stesso?`)) return;
+  if (!(tp.ancora.wds || [tp.ancora.wd]).includes(casoData(sabato, 0).getDay()) && !confirm(tp.msgGiorno || `La data scelta non è un ${tp.ancora.nome}. Continuare lo stesso?`)) return;
   if (casoLista().some(e => e.sabato === sabato)) { alert("Esiste già una richiesta per questa data."); return; }
   if (casoData(sabato, casoUltimoGiorno(tp)).getTime() + 12 * 3600 * 1000 < Date.now() && !confirm(`Questa ${tp.nome} è già passata: per i soci la richiesta resterà chiusa, ma tu potrai inserire le disponibilità a mano (per esempio dal foglio cartaceo). Continuare?`)) return;
   const id = uid();
@@ -6471,7 +6470,7 @@ async function apriTabelloneCaso(edId) {
         ${righe.map(r => `<div style="display:flex; gap:22px; margin-bottom:10px;">${r.map(bloccoStampa).join("")}${r.length === 1 ? '<div style="flex:1 1 0;"></div>' : ""}</div>`).join("")}
         <div style="font-size:11px; margin:2px 0 6px;">Senza ruolo / a disposizione: ${esc(gi.senza.map(senzaTesto).join(", ")) || "nessuno"}</div></div>`; }).join("")}</div>`;
   // --- testo per WhatsApp e email, e file per Excel ---
-  const testo = prepGiorni.map(d => `${prepTitolo(d)} · ${d.et.toUpperCase()} (${d.lista.length}): ${d.lista.map(p => p.nome).join(", ") || "nessuno"}`);
+  const testo = prepGiorni.map(d => `${prepTitolo(d)} · ${d.et.toUpperCase()} (${d.lista.length}): ${d.lista.map(p => p.nome).join(", ") || "nessuno"}`);   // (senza giorni di preparativi il messaggio parte direttamente dal primo giorno)
   const csv = [["Giorno", "Momento", "Reparto", "Incarico", "Cognome e nome", "Note"]];
   prepGiorni.forEach(d => d.lista.forEach(p => csv.push([`${d.nome} ${casoDataBreve(ed.sabato, d.delta)}`, d.et, "", "", p.nome, p.r.nota || ""])));
   giorni.forEach(gi => {
@@ -6486,6 +6485,7 @@ async function apriTabelloneCaso(edId) {
   const virgolette = c => /[;"\n]/.test(c) ? `"${String(c).replace(/"/g, '""')}"` : String(c);
   const note = [prec.ultima ? `Totali: tra parentesi il ${prec.ultima.anno}.` : "", proposti ? "* Ruolo ancora da confermare." : "",
     daAssociare.size ? `Ci sono ${daAssociare.size} ${daAssociare.size === 1 ? "ruolo scritto a mano" : "ruoli scritti a mano"} da associare agli incarichi (tasto «Associa i vecchi ruoli»): finché non lo fai quelle persone compaiono in «Senza ruolo» e i confronti sono parziali.` : ""].filter(Boolean).join("<br>");
+  while (testo.length && testo[0] === "") testo.shift();
   apriAnteprimaReportGenerico(`Tabellone ${casoTitolo(ed)}`, [], [["x"]], testo,
     { corpoHtml: schermo, stampaHtml: stampa, sottotitolo: `${tp.sottoTab}${prec.ultima ? ". In fondo i totali, tra parentesi il " + esc(prec.ultima.anno) : ""}.`, senzaPdf: true, senzaConteggio: true, nota: note,
       csv: { nome: `${casoFileBase(ed)}_${String(ed.sabato).slice(0, 4)}_tabellone.csv`, testo: csv.map(r => r.map(virgolette).join(";")).join("\r\n") } });
