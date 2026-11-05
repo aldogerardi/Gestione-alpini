@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "9.84";
+const APP_VERSION = "9.87";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -58,7 +58,10 @@ function passwordInizialeSocio(s) {
   return String(gi).padStart(2, "0") + String(mi).padStart(2, "0") + a;
 }
 
-function socioIdoneoApp(s) { return !!(s && !s.andatoAvanti && s.carica !== "Amici"); }
+// La categoria "Collaboratori" (prima "Amici"): non usano l'app. I dati salvati con il vecchio nome si riconoscono lo stesso e si aggiornano al caricamento.
+function isCollaboratoreVal(v) { return v === "Collaboratori" || v === "Amici"; }
+function isCollaboratore(s) { return !!s && isCollaboratoreVal(s.carica); }
+function socioIdoneoApp(s) { return !!(s && !s.andatoAvanti && !isCollaboratore(s)); }
 function socioPuoAccedere(s) { return !!(s && s.accessoApp && socioIdoneoApp(s) && passwordInizialeSocio(s)); }
 function ruoloPersonale(s) { return s && (s.accessoLivello === "admin" || s.accessoLivello === "direttivo") ? s.accessoLivello : "socio"; }
 function trovaSociPerNome(testo) {
@@ -285,6 +288,7 @@ function uploadDocumento(file, path) {
 
 function applyStateFields(source) {
   state.socios = source.socios || [];
+  state.socios.forEach(s => { if (s && s.carica === "Amici") s.carica = "Collaboratori"; });
   state.gruppoInfo = Object.assign(state.gruppoInfo, source.gruppoInfo || {});
   state.settings = Object.assign(state.settings, source.settings || {});
   state.consiglio = Object.assign(state.consiglio, source.consiglio || {});
@@ -353,7 +357,7 @@ function initFirebaseSync() {
   }, err => console.error("Errore sincronizzazione Firestore", err));
 }
 
-const CARICHE = ["Capogruppo","Capogruppo Onorario","Vice Capogruppo","Tesoriere","Vice Tesoriere","Segretario","Vice Segretario","Consigliere","Socio Alpino","Simpatizzante","Amici"];
+const CARICHE = ["Capogruppo","Capogruppo Onorario","Vice Capogruppo","Tesoriere","Vice Tesoriere","Segretario","Vice Segretario","Consigliere","Socio Alpino","Simpatizzante","Collaboratori"];
 const INCARICHI_FESTE = ["","Cucina","Lavapiatti","Bar","Patatine","Tagliata","Griglia","Formaggio fuso","Pulizie tavoli","Distribuzione"];
 
 const LETTERHEAD_HTML = `
@@ -1004,7 +1008,7 @@ function renderAnagraficaBase() {
         if (s.sms) badges.push(`<span class="badge badge-icon" title="SMS">📩</span>`);
         if (s.whatsapp) badges.push(`<span class="badge whatsapp badge-icon" title="WhatsApp">${WA_ICON}</span>`);
         if (s.chiaviSede) badges.push(`<span class="badge badge-icon" title="Ha le chiavi della sede">🔑</span>`);
-        if (!s.privacy) badges.push(`<span class="badge badge-icon badge-warning" title="Privacy non firmata">🔒❗</span>`);
+        if (!s.privacy && !isCollaboratore(s)) badges.push(`<span class="badge badge-icon badge-warning" title="Privacy non firmata">🔒❗</span>`);   // per i Collaboratori privacy e bollino non si segnalano
         if (s.haccp) {
           if (s.haccpFoto) {
             badges.push(`<span class="badge badge-icon" data-view-haccp="${esc(s.haccpFoto)}" title="Certificazione HACCP - attestato caricato, tocca per vederlo" style="background:#d7f0dd; border-color:#7ec98f; cursor:pointer;">📎✅</span>`);
@@ -1016,7 +1020,7 @@ function renderAnagraficaBase() {
         if (s.email && s.email.trim()) badges.push(`<span class="badge badge-icon" title="Email presente">@</span>`);
         const annoCorrente = new Date().getFullYear();
         const bollinoOk = state.pagamentiBollino.find(r => r.socioId === s.id && r.anno === annoCorrente && r.pagato);
-        if (!bollinoOk) badges.push(`<span class="badge badge-icon badge-warning" title="Bollino ${annoCorrente} non pagato">🎫❗</span>`);
+        if (!bollinoOk && !isCollaboratore(s)) badges.push(`<span class="badge badge-icon badge-warning" title="Bollino ${annoCorrente} non pagato">🎫❗</span>`);
       }
       return `
         <div class="card color-green">
@@ -1086,7 +1090,7 @@ function deleteSocio(id) {
 function updateVisibilitaSimpatizzante() {
   const carica = document.getElementById("f-carica");
   if (!carica) return;
-  const isSimp = carica.value === "Simpatizzante" || carica.value === "Amici";
+  const isSimp = carica.value === "Simpatizzante" || isCollaboratoreVal(carica.value);
   document.querySelectorAll(".hide-if-simp").forEach(el => { el.style.display = isSimp ? "none" : ""; });
 }
 
@@ -1185,7 +1189,7 @@ function openSocioForm(id) {
           <input type="text" id="f-andato-avanti-data" placeholder="Data gg-mm-aaaa" value="${esc(s.andatoAvantiData)}" style="width:100%;">
         </div>
       </div>
-      <div class="form-group" id="f-accesso-box" style="border:1px dashed #999; padding:10px; border-radius:8px;${s.carica === "Amici" ? " display:none;" : ""}">
+      <div class="form-group" id="f-accesso-box" style="border:1px dashed #999; padding:10px; border-radius:8px;${isCollaboratoreVal(s.carica) ? " display:none;" : ""}">
         <label style="font-weight:800;">📲 Accesso all'app</label>
         <label style="display:flex; align-items:center; gap:6px; margin-top:4px;"><input type="checkbox" id="f-accesso-app" ${s.accessoApp ? "checked" : ""}> Abilitato (cognome e nome + password)</label>
         <div class="card-sub" style="margin-top:4px;">${passwordInizialeSocio(s) ? "La prima volta la password è la data di nascita (ggmmaaaa)." : "⚠️ Per poter accedere serve una data di nascita valida con anno a 4 cifre (gg-mm-aaaa)."}</div>
@@ -1222,7 +1226,7 @@ function openSocioForm(id) {
   document.getElementById("f-carica").addEventListener("change", updateVisibilitaSimpatizzante);
   document.getElementById("f-carica").addEventListener("change", e => {
     const box = document.getElementById("f-accesso-box");
-    if (box) box.style.display = e.target.value === "Amici" ? "none" : "";
+    if (box) box.style.display = isCollaboratoreVal(e.target.value) ? "none" : "";
   });
   document.getElementById("f-andato-avanti").addEventListener("change", e => {
     document.getElementById("f-andato-avanti-data-wrap").style.display = e.target.checked ? "" : "none";
@@ -1368,7 +1372,7 @@ async function saveSocioInterno() {
   if (accessoEl) data.accessoApp = accessoEl.checked;
   const livelloEl = document.getElementById("f-accesso-livello");
   if (livelloEl) data.accessoLivello = livelloEl.value;
-  if (data.carica === "Amici") data.accessoApp = false;   // gli Amici non possono usare l'app
+  if (isCollaboratoreVal(data.carica)) data.accessoApp = false;   // i Collaboratori non possono usare l'app
 
   const socioId = editingId || uid();
   const existing = editingId ? state.socios.find(x => x.id === editingId) : null;
@@ -2330,7 +2334,7 @@ function renderBollino() {
   for (let y = 2020; y <= 2030; y++) anni.push(y);
   const anniOpts = anni.map(y => `<option value="${y}" ${y===bollinoAnno?"selected":""}>${y}</option>`).join("");
 
-  const sociosSorted = state.socios.filter(s => s.carica !== "Simpatizzante" && s.carica !== "Amici" && !s.andatoAvanti).slice().sort((a,b) => (a.cognome+a.nome).localeCompare(b.cognome+b.nome));
+  const sociosSorted = state.socios.filter(s => s.carica !== "Simpatizzante" && !isCollaboratore(s) && !s.andatoAvanti).slice().sort((a,b) => (a.cognome+a.nome).localeCompare(b.cognome+b.nome));
   const socioOpts = sociosSorted.map(s => `<option value="${s.id}" ${editingBollinoRecord && editingBollinoRecord.socioId===s.id?"selected":""}>${esc(s.cognome)} ${esc(s.nome)}</option>`).join("");
 
   const rec = editingBollinoRecord;
@@ -2827,7 +2831,7 @@ function openSettings() {
 
     <div class="settings-block">
       <h3>📲 Accesso soci con nome e password</h3>
-      <div class="card-sub" style="margin-bottom:8px;">Soci attivi (esclusi gli Amici): <strong>${sociAttivi.length}</strong> · abilitati all'accesso: <strong>${nAbilitati}</strong> · con data di nascita valida: <strong>${nIdonei}</strong> · senza data valida: <strong>${nSenzaData}</strong></div>
+      <div class="card-sub" style="margin-bottom:8px;">Soci attivi (esclusi i Collaboratori): <strong>${sociAttivi.length}</strong> · abilitati all'accesso: <strong>${nAbilitati}</strong> · con data di nascita valida: <strong>${nIdonei}</strong> · senza data valida: <strong>${nSenzaData}</strong></div>
       <div style="font-size:0.78rem; color:#666; margin-bottom:8px;">La prima volta la password è la data di nascita (ggmmaaaa); poi il socio la cambia da Menù → Cambia password. Chi ha dimenticato la password si reimposta dalla sua scheda in Anagrafica.</div>
       <button type="button" class="btn block" id="accesso-abilita-tutti-btn" style="margin-bottom:6px;">✅ Abilita tutti i soci con data di nascita valida</button>
       <button type="button" class="btn secondary block" id="accesso-senza-data-btn" style="margin-bottom:6px;">📋 Elenca i soci senza data di nascita valida</button>
@@ -5316,7 +5320,7 @@ const CASO_MESI = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno",
 const CASO_TIPI = {
   casoncellata: {
     id: "casoncellata", sezione: "conv-casoncellata", nome: "Casoncellata", icona: "🥟", articolo: "la", della: "della Casoncellata", plurale: "Casoncellate",
-    stato: "casoncellata", repartiStato: "casoReparti", docPrefix: "casoncellata_", fileBase: "casoncellata", ancora: { nome: "sabato", wd: 6 }, legacyGriglia: true, etichettaPrep: "Scarico", perGiorno: true, perTesto: "per ogni momento (sabato e domenica, pranzo e cena)", etichettaTutti: "Tutti i momenti",
+    stato: "casoncellata", repartiStato: "casoReparti", docPrefix: "casoncellata_", fileBase: "casoncellata", ancora: { nome: "sabato", wd: 6 }, legacyGriglia: true, etichettaPrep: "Scarico", poster: true, perGiorno: true, perTesto: "per ogni momento (sabato e domenica, pranzo e cena)", etichettaTutti: "Tutti i momenti",
     intro: "Richiesta di disponibilità ai soci: preparativi del venerdì, pranzo e cena del sabato e della domenica.",
     nuovaLabel: "Sabato della Casoncellata", nuovaSub: "Venerdì e domenica si ricavano dal sabato.", msgData: "Scegli la data del sabato della Casoncellata.",
     sottoTab: "Chi c'è in ogni reparto, pranzo e cena", suggerimentoReport: "↔ Scorri la tabella verso destra (o ruota il telefono) per vedere Domenica, Ruolo e Note.",
@@ -6452,14 +6456,15 @@ async function apriTabelloneCaso(edId) {
     + giorni.map(gi => `<div class="xl-g">${esc(gi.titolo)}</div><div class="xl-r">${gi.blocchi.map(bloccoXl).join("")}</div><div class="xl-sc"><b>Senza ruolo / a disposizione:</b> ${esc(gi.senza.map(senzaTesto).join(", ")) || "nessuno"}</div>`).join("") + `</div>`;
 
   // --- stampa (due riquadri affiancati, come il foglio) ---
-  const bloccoStampa = b => {
-    const cella = "border:1px solid #777; padding:2px 5px; height:15px;";
+  const bloccoStampa = (b, f = 1) => {
+    const px = n => `${Math.round(n * f * 10) / 10}px`;   // f = fattore di ingrandimento (1 = stampa normale)
+    const cella = `border:1px solid #777; padding:${px(2)} ${px(5)}; height:${px(15)};`;
     const nomeS = p => `${p.r.resp ? "<b>" : ""}${esc(casoNomeR(p))}${p.r.resp ? "</b>" : ""}${p.r.ruolo && p.r.ruoloProposto ? " *" : ""}`;
     const w = Math.floor(66 / b.mom.length);
-    const righe = b.righe.map(p => `<tr>${b.mom.map(m => `<td style="${cella}">${p.r[m.k] ? nomeS(p) : ""}</td>`).join("")}<td style="${cella} color:#7a5a00; font-size:9px;"><b>${esc(etichetta(p))}</b>${p.r.nota ? ` <i style="font-weight:400; color:#555;">(${esc(p.r.nota)})</i>` : ""}</td></tr>`).join("");
-    return `<div style="flex:1 1 0; min-width:0;"><div style="text-align:center; font-weight:800; font-size:12px;">${esc(b.rep.nome.toUpperCase())}</div>
-      <table style="width:100%; border-collapse:collapse; font-size:10px; table-layout:fixed;"><colgroup>${b.mom.map(() => `<col style="width:${w}%">`).join("")}<col style="width:${100 - w * b.mom.length}%"></colgroup><tr>${b.cols.map(c => `<th style="border:1px solid #777; background:#f1ede0; padding:2px;">${c.mo.nome}</th>`).join("")}<th style="border:1px solid #777; background:#f1ede0; padding:2px;">Incarico</th></tr>${righe}
-      <tr>${b.cols.map(c => `<td style="border:1px solid #777; padding:2px 5px; font-weight:700; background:#f7f5ee;">Totale ${totale(c.lista.length, c.prima).replace(/<small>/, '<span style="color:#777; font-weight:400;">').replace(/<\/small>/, "</span>")}</td>`).join("")}<td style="border:1px solid #777; background:#f7f5ee;"></td></tr></table></div>`;
+    const righe = b.righe.map(p => `<tr>${b.mom.map(m => `<td style="${cella}">${p.r[m.k] ? nomeS(p) : ""}</td>`).join("")}<td style="${cella} color:#7a5a00; font-size:${px(9)};"><b>${esc(etichetta(p))}</b>${p.r.nota ? ` <i style="font-weight:400; color:#555;">(${esc(p.r.nota)})</i>` : ""}</td></tr>`).join("");
+    return `<div style="flex:1 1 0; min-width:0;"><div style="text-align:center; font-weight:800; font-size:${px(12)};">${esc(b.rep.nome.toUpperCase())}</div>
+      <table style="width:100%; border-collapse:collapse; font-size:${px(10)}; table-layout:fixed;"><colgroup>${b.mom.map(() => `<col style="width:${w}%">`).join("")}<col style="width:${100 - w * b.mom.length}%"></colgroup><tr>${b.cols.map(c => `<th style="border:1px solid #777; background:#f1ede0; padding:${px(2)};">${c.mo.nome}</th>`).join("")}<th style="border:1px solid #777; background:#f1ede0; padding:${px(2)};">Incarico</th></tr>${righe}
+      <tr>${b.cols.map(c => `<td style="border:1px solid #777; padding:${px(2)} ${px(5)}; font-weight:700; background:#f7f5ee;">Totale ${totale(c.lista.length, c.prima).replace(/<small>/, '<span style="color:#777; font-weight:400;">').replace(/<\/small>/, "</span>")}</td>`).join("")}<td style="border:1px solid #777; background:#f7f5ee;"></td></tr></table></div>`;
   };
 
   const stampa = `<div style="font-family:Arial,sans-serif;">
@@ -6467,8 +6472,23 @@ async function apriTabelloneCaso(edId) {
     <div style="font-size:11px; margin-bottom:8px;"><b>${esc(d.et.toUpperCase())}</b> &nbsp; ${esc(d.lista.map(p => p.nome).join(", ")) || "nessuno"}</div>`).join("\n    ")}
     ${giorni.map(gi => { const righe = []; for (let i = 0; i < gi.blocchi.length; i += 2) righe.push(gi.blocchi.slice(i, i + 2));
       return `<div style="page-break-inside:avoid;"><div style="text-align:center; font-weight:800; font-size:15px; color:#b3261e; margin:12px 0 6px;">${esc(gi.titolo)}</div>
-        ${righe.map(r => `<div style="display:flex; gap:22px; margin-bottom:10px;">${r.map(bloccoStampa).join("")}${r.length === 1 ? '<div style="flex:1 1 0;"></div>' : ""}</div>`).join("")}
+        ${righe.map(r => `<div style="display:flex; gap:22px; margin-bottom:10px;">${r.map(b => bloccoStampa(b)).join("")}${r.length === 1 ? '<div style="flex:1 1 0;"></div>' : ""}</div>`).join("")}
         <div style="font-size:11px; margin:2px 0 6px;">Senza ruolo / a disposizione: ${esc(gi.senza.map(senzaTesto).join(", ")) || "nessuno"}</div></div>`; }).join("")}</div>`;
+  // --- poster (da affiggere, in A3 o A2): carta intestata, titolo grande, il venerdì in alto, sabato e domenica affiancati ---
+  const posterHtml = () => {
+    const f = 1.5;   // i caratteri dei riquadri rispetto alla stampa normale
+    const giornoPoster = gi => { const righe = []; for (let i = 0; i < gi.blocchi.length; i += 2) righe.push(gi.blocchi.slice(i, i + 2));
+      return `<div style="flex:1 1 0; min-width:0;"><div style="text-align:center; font-weight:800; font-size:26px; color:#b3261e; margin:0 0 10px;">${esc(gi.titolo)}</div>
+        ${righe.map(r => `<div style="display:flex; gap:18px; margin-bottom:14px;">${r.map(b => bloccoStampa(b, f)).join("")}${r.length === 1 ? '<div style="flex:1 1 0;"></div>' : ""}</div>`).join("")}
+        <div style="font-size:15px; margin:2px 0 6px;">Senza ruolo / a disposizione: ${esc(gi.senza.map(senzaTesto).join(", ")) || "nessuno"}</div></div>`; };
+    const notaPoster = [prec.ultima ? `Totali: tra parentesi il ${prec.ultima.anno}.` : "", proposti ? "* Ruolo ancora da confermare." : ""].filter(Boolean);
+    return `<div style="font-family:Arial,sans-serif; color:#000;">
+      <div style="width:720px; margin:0 auto; zoom:1.25;">${LETTERHEAD_HTML}</div>
+      <div style="text-align:center; font-size:92px; line-height:1.1; margin:14px 0 18px;">${esc(casoTitolo(ed))}</div>
+      ${prepGiorni.map(d => `<div style="width:560px; margin:0 auto 22px; padding:2px 18px; border-left:1px solid #bbb; border-right:1px solid #bbb;"><div style="text-align:center; font-weight:800; font-size:26px; color:#b3261e; margin:4px 0 6px;">${esc(prepTitolo(d))}</div><div style="font-size:19px; line-height:1.4;"><b>${esc(d.et.toUpperCase())}</b> (${d.lista.length}): ${esc(d.lista.map(p => p.nome).join(", ")) || "nessuno"}</div></div>`).join("")}
+      <div style="display:flex; gap:56px; align-items:flex-start;">${giorni.map(giornoPoster).join("")}</div>
+      ${notaPoster.length ? `<div style="font-size:17px; margin-top:10px;">${notaPoster.join("<br>")}</div>` : ""}</div>`;
+  };
   // --- testo per WhatsApp e email, e file per Excel ---
   const testo = prepGiorni.map(d => `${prepTitolo(d)} · ${d.et.toUpperCase()} (${d.lista.length}): ${d.lista.map(p => p.nome).join(", ") || "nessuno"}`);   // (senza giorni di preparativi il messaggio parte direttamente dal primo giorno)
   const csv = [["Giorno", "Momento", "Reparto", "Incarico", "Cognome e nome", "Note"]];
@@ -6488,6 +6508,7 @@ async function apriTabelloneCaso(edId) {
   while (testo.length && testo[0] === "") testo.shift();
   apriAnteprimaReportGenerico(`Tabellone ${casoTitolo(ed)}`, [], [["x"]], testo,
     { corpoHtml: schermo, stampaHtml: stampa, sottotitolo: `${tp.sottoTab}${prec.ultima ? ". In fondo i totali, tra parentesi il " + esc(prec.ultima.anno) : ""}.`, senzaPdf: true, senzaConteggio: true, nota: note,
+      extra: tp.poster ? [{ id: "tab-poster-btn", testo: "🖼️ Poster (A3 / A2)", stile: "background:#b3261e; color:#fff;", azione: () => apriPosterCaso(posterHtml(), casoTitolo(ed)) }] : null,
       csv: { nome: `${casoFileBase(ed)}_${String(ed.sabato).slice(0, 4)}_tabellone.csv`, testo: csv.map(r => r.map(virgolette).join(";")).join("\r\n") } });
 }
 
@@ -7076,7 +7097,7 @@ function resetBollino() {
 }
 
 function setPrivacyPerTutti() {
-  const daFirmare = state.socios.filter(s => !s.privacy);
+  const daFirmare = state.socios.filter(s => !s.privacy && !isCollaboratore(s));   // i Collaboratori non rientrano
   if (daFirmare.length === 0) {
     alert("Tutti i soci hanno già la Privacy firmata.");
     return;
@@ -7397,6 +7418,42 @@ function handleBollinoImport(e) {
 }
 
 // ---------- Report generico: anteprima + stampa + email + WhatsApp ----------
+// ---- Poster del tabellone: si stampa in A3 o A2, in orizzontale, tutto su un solo foglio ----
+const POSTER_LARG_PX = Math.round(400 / 25.4 * 96);   // larghezza utile di un A3 in orizzontale (420 mm meno 10 mm di margine per lato)
+function stampaPoster(html, formato) {
+  const dim = { A3: [420, 297], A2: [594, 420] }[formato];   // in millimetri: il nome «A2» non è riconosciuto dai browser nell'impostazione della pagina
+  if (!dim) return;
+  const s = dim[0] / 420;
+  const area = document.getElementById("print-area");
+  // si misura il poster alla larghezza dell'A3; se è troppo alto per un foglio, lo si rimpicciolisce quanto basta
+  area.style.cssText = `display:block; position:absolute; left:-99999px; top:0; width:${POSTER_LARG_PX}px;`;
+  area.innerHTML = `<div id="poster-misura" style="width:${POSTER_LARG_PX}px;">${html}</div>`;
+  const h = document.getElementById("poster-misura").scrollHeight;
+  area.style.cssText = "";
+  const kfit = Math.min(1, 0.96 * ((297 - 20) / 25.4 * 96) / Math.max(h, 1));   // un piccolo margine di sicurezza, perché finisca in un solo foglio
+  area.innerHTML = `<div style="display:flex; justify-content:center;"><div style="width:${POSTER_LARG_PX}px; zoom:${(s * kfit).toFixed(4)};">${html}</div></div>`;
+  const vecchio = document.getElementById("poster-pagina"); if (vecchio) vecchio.remove();
+  const st = document.createElement("style"); st.id = "poster-pagina";
+  st.textContent = `@page { size: ${dim[0]}mm ${dim[1]}mm; margin: ${(10 * s).toFixed(2)}mm; } @media print { html, body { background: #fff !important; } #print-area { padding: 0 !important; } }`;
+  document.head.appendChild(st);
+  const pulisci = () => { const x = document.getElementById("poster-pagina"); if (x) x.remove(); window.removeEventListener("afterprint", pulisci); };
+  window.addEventListener("afterprint", pulisci);
+  stampaConLoghi(area);
+}
+function apriPosterCaso(html, titolo) {
+  showModal(`<div id="pst-root">
+    <div class="modal-title">🖼️ Poster del tabellone</div>
+    <div class="card-sub" style="margin-bottom:8px;">${esc(titolo)}, in orizzontale e su un solo foglio. Scegli il formato: poi nella finestra di stampa scegli la stampante oppure «Salva come PDF» (la pagina è già impostata).</div>
+    <div id="pst-anteprima" style="border:1px solid #bbb; background:#fff; overflow:hidden; border-radius:6px;"><div id="pst-contenuto" style="width:${POSTER_LARG_PX}px;">${html}</div></div>
+    <div class="modal-actions" style="margin-top:12px;"><button type="button" class="btn" data-pst="A3">🖨️ Stampa in A3</button><button type="button" class="btn" data-pst="A2">🖨️ Stampa in A2</button></div>
+    <button type="button" class="btn secondary block" id="pst-chiudi" style="margin-top:10px;">Chiudi</button>
+  </div>`);
+  const box = document.getElementById("pst-anteprima"), c = document.getElementById("pst-contenuto");
+  c.style.zoom = Math.min(1, box.clientWidth / POSTER_LARG_PX);
+  box.style.height = Math.round(c.getBoundingClientRect().height) + "px";
+  document.querySelectorAll("[data-pst]").forEach(b => b.addEventListener("click", () => stampaPoster(html, b.dataset.pst)));
+  document.getElementById("pst-chiudi").addEventListener("click", closeModal);
+}
 function stampaConLoghi(area) {
   const titoloOriginale = document.title;
   const eseguiStampa = () => {
@@ -7543,7 +7600,7 @@ function apriAnteprimaReportGenerico(titolo, headers, rows, testoRighe, opzioni)
     </div>`}
     ${opzioni && opzioni.suggerimento ? `<div class="card-sub" style="margin:-8px 0 8px;">${opzioni.suggerimento}</div>` : ""}
     ${opzioni && opzioni.nota ? `<div class="card-sub" style="margin:-6px 0 14px;">${opzioni.nota}</div>` : ""}
-    <button type="button" class="btn block" id="anteprima-stampa-btn" style="margin-bottom:10px;">🖨️ Stampa</button>
+    <button type="button" class="btn block" id="anteprima-stampa-btn" style="margin-bottom:10px;">🖨️ Stampa</button>${opzioni && opzioni.extra ? opzioni.extra.map(x => `<button type="button" class="btn block" id="${x.id}" style="margin-bottom:10px; ${x.stile || ""}">${x.testo}</button>`).join("") : ""}
     ${opzioni && opzioni.csv ? `<button type="button" class="btn block" id="anteprima-csv-btn" style="margin-bottom:10px; background:#1d6f42; color:#fff;">📥 Scarica per Excel</button>` : ""}
     ${opzioni && opzioni.senzaPdf ? "" : `<button type="button" class="btn block" id="anteprima-pdf-btn" style="margin-bottom:10px; background:var(--gold);">📄 Condividi come PDF</button>`}
     <div class="modal-actions">
@@ -7570,6 +7627,7 @@ function apriAnteprimaReportGenerico(titolo, headers, rows, testoRighe, opzioni)
     stampaConLoghi(area);
   });
 
+  if (opzioni && opzioni.extra) opzioni.extra.forEach(x => document.getElementById(x.id).addEventListener("click", x.azione));
   const pdfBtn = document.getElementById("anteprima-pdf-btn");
   if (pdfBtn) pdfBtn.addEventListener("click", () => {
     condividiReportComePdf(titolo, headers, rows, opzioni);
