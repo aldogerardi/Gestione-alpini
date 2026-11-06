@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "9.87";
+const APP_VERSION = "9.88";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -6796,11 +6796,31 @@ function renderElencoPrenotazioni(soloLettura) {
   }).join("");
 }
 
+// Le prenotazioni della sede passate si cancellano da sole, come gli eventi della Bacheca: si tolgono 2 giorni dopo la data.
+function pulisciPrenotazioniSedePassate() {
+  const tutte = state.prenotazioni || [];
+  const oggi = new Date(); oggi.setHours(0, 0, 0, 0);
+  const filtrata = tutte.filter(p => {
+    if (!p.data) return true;   // senza data, non scade da sola
+    const d = parseDataISO(p.data);
+    if (!d) return true;
+    return Math.floor((oggi - d) / 86400000) < 2;
+  });
+  if (filtrata.length === tutte.length) return;
+  // come per la Bacheca: se il telefono non ha ancora ricevuto i dati aggiornati, aspetta (riproverà al prossimo disegno)
+  if (window.db && !SYNC_STATO.ricevuto) return;
+  state.prenotazioni = filtrata;
+  logComeSistema = true;
+  try { saveState(); } finally { logComeSistema = false; }
+}
+
 function renderPrenotazioni() {
+  pulisciPrenotazioniSedePassate();
   if (currentRole === "socio") return renderPrenotazioniSocio();
 
   return `
     <div class="section-title">🗓️ Prenotaz. Sede</div>
+    <div class="card-sub" style="margin-bottom:12px;">Le prenotazioni passate si cancellano da sole 2 giorni dopo la data.</div>
 
     <div class="card">
       <div style="font-weight:800; margin-bottom:10px;">Conferma prenotazione</div>
