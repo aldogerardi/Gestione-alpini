@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "9.90";
+const APP_VERSION = "9.91";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -449,6 +449,7 @@ let currentIniziativaId = null;
 let selectedOreIniziativaId = null;
 let inizAnniStato = {};   // Attività: quali anni sono aperti (l'anno in corso lo è, gli altri no, finché non si toccano)
 let oreAnno = null;       // Ore Alpine: l'anno che si sta guardando (di partenza, quello in corso)
+let ultimoTabelloneDati = null;   // i dati dell'ultimo tabellone aperto (per i PDF)
 let currentSection = "home";
 let editingId = null;
 let pendingPrivacyFoto = undefined;
@@ -6522,6 +6523,17 @@ async function apriTabelloneCaso(edId) {
       <div style="display:flex; gap:56px; align-items:flex-start;">${giorni.map(giornoPoster).join("")}</div>
       ${notaPoster.length ? `<div style="font-size:17px; margin-top:10px;">${notaPoster.join("<br>")}</div>` : ""}</div>`;
   };
+  // --- dati per i PDF (A4 e poster): solo testo e numeri, senza HTML ---
+  const datiPdf = () => {
+    const nomeP = p => `${casoNomeR(p)}${p.r.ruolo && p.r.ruoloProposto ? " *" : ""}`;
+    return { titolo: casoTitolo(ed),
+      prep: prepGiorni.map(d => ({ titolo: prepTitolo(d), et: d.et.toUpperCase(), n: d.lista.length, nomi: d.lista.map(p => p.nome).join(", ") || "nessuno" })),
+      giorni: giorni.map(gi => ({ titolo: gi.titolo, senza: gi.senza.map(senzaTesto).join(", ") || "nessuno",
+        blocchi: gi.blocchi.map(b => ({ nome: b.rep.nome.toUpperCase(), mom: b.cols.map(c => c.mo.nome),
+          righe: b.righe.map(p => ({ celle: b.mom.map(m => p.r[m.k] ? nomeP(p) : ""), inc: etichetta(p), nota: p.r.nota || "", resp: !!p.r.resp })),
+          tot: b.cols.map(c => ({ n: c.lista.length, prima: prec.ultima ? c.prima : null })) })) })),
+      note: [prec.ultima ? `Totali: tra parentesi il ${prec.ultima.anno}.` : "", proposti ? "* Ruolo ancora da confermare." : ""].filter(Boolean) };
+  };
   // --- testo per WhatsApp e email, e file per Excel ---
   const testo = prepGiorni.map(d => `${prepTitolo(d)} · ${d.et.toUpperCase()} (${d.lista.length}): ${d.lista.map(p => p.nome).join(", ") || "nessuno"}`);   // (senza giorni di preparativi il messaggio parte direttamente dal primo giorno)
   const csv = [["Giorno", "Momento", "Reparto", "Incarico", "Cognome e nome", "Note"]];
@@ -6539,9 +6551,12 @@ async function apriTabelloneCaso(edId) {
   const note = [prec.ultima ? `Totali: tra parentesi il ${prec.ultima.anno}.` : "", proposti ? "* Ruolo ancora da confermare." : "",
     daAssociare.size ? `Ci sono ${daAssociare.size} ${daAssociare.size === 1 ? "ruolo scritto a mano" : "ruoli scritti a mano"} da associare agli incarichi (tasto «Associa i vecchi ruoli»): finché non lo fai quelle persone compaiono in «Senza ruolo» e i confronti sono parziali.` : ""].filter(Boolean).join("<br>");
   while (testo.length && testo[0] === "") testo.shift();
+  ultimoTabelloneDati = tp.poster ? datiPdf() : null;
   apriAnteprimaReportGenerico(`Tabellone ${casoTitolo(ed)}`, [], [["x"]], testo,
     { corpoHtml: schermo, stampaHtml: stampa, sottotitolo: `${tp.sottoTab}${prec.ultima ? ". In fondo i totali, tra parentesi il " + esc(prec.ultima.anno) : ""}.`, senzaPdf: true, senzaConteggio: true, nota: note,
-      extra: tp.poster ? [{ id: "tab-poster-btn", testo: "🖼️ Poster (A3 / A2)", stile: "background:#b3261e; color:#fff;", azione: () => apriPosterCaso(posterHtml(), casoTitolo(ed)) }] : null,
+      extra: tp.poster ? [
+        { id: "tab-pdf-a4-btn", testo: "📄 PDF A4 (orizzontale)", stile: "background:#1d4e89; color:#fff;", azione: () => pdfScarica(datiPdf(), "A4") },
+        { id: "tab-poster-btn", testo: "🖼️ Poster (A3 / A2)", stile: "background:#b3261e; color:#fff;", azione: () => apriPosterCaso(posterHtml(), casoTitolo(ed), datiPdf()) }] : null,
       csv: { nome: `${casoFileBase(ed)}_${String(ed.sabato).slice(0, 4)}_tabellone.csv`, testo: csv.map(r => r.map(virgolette).join(";")).join("\r\n") } });
 }
 
@@ -7451,6 +7466,218 @@ function handleBollinoImport(e) {
 }
 
 // ---------- Report generico: anteprima + stampa + email + WhatsApp ----------
+// ---- PDF veri del tabellone (A4 orizzontale, poster A3 e A2): testo, tabelle e linee disegnati direttamente, senza librerie esterne ----
+// Larghezze dei caratteri di Helvetica e Helvetica-Bold (da 32 a 126), in millesimi di corpo.
+const PDF_LARG_N = [278,278,355,556,556,889,667,191,333,333,389,584,278,333,278,278, 556,556,556,556,556,556,556,556,556,556, 278,278,584,584,584,556,1015,
+  667,667,722,722,667,611,778,722,278,500,667,556,833,722,778,667,778,722,667,611,722,667,944,667,667,611, 278,278,278,469,556,333,
+  556,556,500,556,556,278,556,556,222,222,500,222,833,556,556,556,556,333,500,278,556,500,722,500,500,500, 334,260,334,584];
+const PDF_LARG_B = [278,333,474,556,556,889,722,238,333,333,389,584,278,333,278,278, 556,556,556,556,556,556,556,556,556,556, 333,333,584,584,584,611,975,
+  722,722,722,722,667,611,778,722,278,556,722,611,833,722,778,667,778,722,667,611,722,667,944,667,667,611, 333,278,333,584,556,333,
+  556,611,556,611,556,333,611,611,278,278,556,278,889,611,611,611,611,389,556,333,611,556,778,556,556,500, 389,280,389,584];
+const PDF_CP1252 = { "€": 0x80, "…": 0x85, "‘": 0x91, "’": 0x92, "“": 0x93, "”": 0x94, "•": 0x95, "–": 0x96, "—": 0x97 };
+function pdfByte(ch) { const c = ch.charCodeAt(0); return c < 256 ? c : (PDF_CP1252[ch] !== undefined ? PDF_CP1252[ch] : 63); }
+function pdfLargCar(ch, bold) {
+  const c = ch.charCodeAt(0), t = bold ? PDF_LARG_B : PDF_LARG_N;
+  if (c >= 32 && c <= 126) return t[c - 32];
+  const base = ch.normalize("NFD").charAt(0), cb = base.charCodeAt(0);
+  if (base !== ch && cb >= 32 && cb <= 126) return t[cb - 32];   // lettere accentate: come la lettera senza accento
+  return { "°": 400, "·": 278, "–": 556, "—": 1000, "’": bold ? 278 : 222, "‘": bold ? 278 : 222, "“": bold ? 500 : 333, "”": bold ? 500 : 333, "…": 1000, "€": 556, "×": 584, "«": 556, "»": 556, "\u00a0": 278 }[ch] || 556;
+}
+function pdfLarg(str, size, bold) { let w = 0; for (const ch of String(str)) w += pdfLargCar(ch, bold); return w * size / 1000; }
+// Spezza un testo in righe che stanno nella larghezza data (la prima riga può essere più corta: primaW).
+function pdfSpezza(str, size, bold, maxW, primaW) {
+  const righe = []; let riga = "", cap = primaW === undefined ? maxW : primaW;
+  const chiudi = () => { righe.push(riga); riga = ""; cap = maxW; };
+  String(str).split(/\s+/).filter(Boolean).forEach(parola => {
+    const prova = riga ? riga + " " + parola : parola;
+    if (!riga || pdfLarg(prova, size, bold) <= cap) riga = prova; else { chiudi(); riga = parola; }
+    while (pdfLarg(riga, size, bold) > cap && riga.length > 1) {   // parola più larga della riga: si spezza
+      let k = riga.length - 1; while (k > 1 && pdfLarg(riga.slice(0, k), size, bold) > cap) k--;
+      righe.push(riga.slice(0, k)); riga = riga.slice(k); cap = maxW;
+    }
+  });
+  if (riga || !righe.length) righe.push(riga);
+  return righe;
+}
+function pdfStringa(str) {
+  let s = "(";
+  for (const ch of String(str)) { let b = pdfByte(ch); if (b < 32) b = 32; const c = String.fromCharCode(b); s += (c === "(" || c === ")" || c === "\\") ? "\\" + c : c; }
+  return s + ")";
+}
+const pdfN = v => String(Math.round(v * 100) / 100);
+const pdfCol = c => c.map(v => pdfN(v / 255)).join(" ");
+function pdfPagina(w, h) { return { w, h, c: [] }; }
+function pdfTesto(p, x, y, str, size, o) {   // y = linea di base, misurata dall'alto della pagina
+  o = o || {}; if (!str) return;
+  const f = o.bold ? (o.italic ? "F4" : "F2") : (o.italic ? "F3" : "F1"), w = pdfLarg(str, size, !!o.bold);
+  const xx = o.align === "center" ? x - w / 2 : o.align === "right" ? x - w : x;
+  p.c.push(`BT /${f} ${pdfN(size)} Tf ${pdfCol(o.col || [0, 0, 0])} rg ${pdfN(xx)} ${pdfN(p.h - y)} Td ${pdfStringa(str)} Tj ET`);
+}
+function pdfRett(p, x, y, w, h, o) {
+  o = o || {}; const parti = [];
+  if (o.fill) parti.push(`${pdfCol(o.fill)} rg`);
+  if (o.stroke) parti.push(`${pdfCol(o.stroke)} RG ${pdfN(o.lw || 0.5)} w`);
+  parti.push(`${pdfN(x)} ${pdfN(p.h - y - h)} ${pdfN(w)} ${pdfN(h)} re ${o.fill && o.stroke ? "B" : o.fill ? "f" : "S"}`);
+  p.c.push(parti.join(" "));
+}
+function pdfLinea(p, x1, y1, x2, y2, o) { o = o || {}; p.c.push(`${pdfCol(o.col || [0, 0, 0])} RG ${pdfN(o.lw || 0.5)} w ${pdfN(x1)} ${pdfN(p.h - y1)} m ${pdfN(x2)} ${pdfN(p.h - y2)} l S`); }
+function pdfImmagine(p, nome, x, y, w, h) { p.c.push(`q ${pdfN(w)} 0 0 ${pdfN(h)} ${pdfN(x)} ${pdfN(p.h - y - h)} cm /${nome} Do Q`); }
+// Mette insieme le pagine in un file PDF. immagini = { Im1: { w, h, bytes (JPEG) } }
+function pdfAssembla(pagine, immagini) {
+  const enc = s => { const u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i) & 255; return u; };
+  const parti = [], offs = []; let off = 0;
+  const aggiungi = u => { parti.push(u); off += u.length; };
+  const obj = (n, corpo) => { offs[n] = off; aggiungi(enc(`${n} 0 obj\n${corpo}\nendobj\n`)); };
+  aggiungi(enc("%PDF-1.4\n%\xE2\xE3\xCF\xD3\n"));
+  const nomiImm = Object.keys(immagini); let n = 7; const idImm = {}, idPag = [], idCont = [];
+  nomiImm.forEach(k => { idImm[k] = n++; });
+  pagine.forEach(() => { idPag.push(n++); idCont.push(n++); });
+  obj(1, "<< /Type /Catalog /Pages 2 0 R >>");
+  obj(2, `<< /Type /Pages /Kids [${idPag.map(i => i + " 0 R").join(" ")}] /Count ${pagine.length} >>`);
+  ["Helvetica", "Helvetica-Bold", "Helvetica-Oblique", "Helvetica-BoldOblique"].forEach((f, i) => obj(3 + i, `<< /Type /Font /Subtype /Type1 /BaseFont /${f} /Encoding /WinAnsiEncoding >>`));
+  nomiImm.forEach(k => {
+    const im = immagini[k]; offs[idImm[k]] = off;
+    aggiungi(enc(`${idImm[k]} 0 obj\n<< /Type /XObject /Subtype /Image /Width ${im.w} /Height ${im.h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${im.bytes.length} >>\nstream\n`));
+    aggiungi(im.bytes); aggiungi(enc("\nendstream\nendobj\n"));
+  });
+  pagine.forEach((p, i) => {
+    const contenuto = p.c.join("\n");
+    obj(idPag[i], `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pdfN(p.w)} ${pdfN(p.h)}] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R /F4 6 0 R >> /XObject << ${nomiImm.map(k => `/${k} ${idImm[k]} 0 R`).join(" ")} >> >> /Contents ${idCont[i]} 0 R >>`);
+    offs[idCont[i]] = off; aggiungi(enc(`${idCont[i]} 0 obj\n<< /Length ${contenuto.length} >>\nstream\n${contenuto}\nendstream\nendobj\n`));
+  });
+  const xrefOff = off; let x = `xref\n0 ${n}\n0000000000 65535 f \n`;
+  for (let i = 1; i < n; i++) x += String(offs[i]).padStart(10, "0") + " 00000 n \n";
+  aggiungi(enc(x + `trailer\n<< /Size ${n} /Root 1 0 R >>\nstartxref\n${xrefOff}\n%%EOF\n`));
+  const out = new Uint8Array(off); let pos = 0; parti.forEach(u => { out.set(u, pos); pos += u.length; });
+  return out;
+}
+// Un logo (PNG o JPEG) diventa un JPEG su fondo bianco, che il PDF sa incorporare.
+async function pdfJpegDa(src) {
+  const img = new Image(); img.src = src;
+  await (img.decode ? img.decode() : new Promise((ok, ko) => { img.onload = ok; img.onerror = ko; }));
+  const w = img.naturalWidth, h = img.naturalHeight, cv = document.createElement("canvas"); cv.width = w; cv.height = h;
+  const cx = cv.getContext("2d"); cx.fillStyle = "#fff"; cx.fillRect(0, 0, w, h); cx.drawImage(img, 0, 0);
+  const bin = atob(cv.toDataURL("image/jpeg", 0.95).split(",")[1]), bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return { w, h, bytes };
+}
+const PDF_COL = { rosso: [179, 38, 30], verde: [26, 107, 60], bruno: [122, 90, 0], grigio: [119, 119, 119], testa: [241, 237, 224], tot: [247, 245, 238], nero: [0, 0, 0], linea: [187, 187, 187] };
+// Il disegno del tabellone, in unità di progetto (larghezza 1512). o: { f: ingrandimento dei riquadri, titolo: corpo del titolo, hat, aus: misure dei due loghi }
+function pdfTabelloneLista(d, o) {
+  const W = 1512, f = o.f, prim = []; let y = 0;
+  const T = (x, yy, str, size, opt) => prim.push({ k: "t", x, y: yy, str, size, o: opt || {} });
+  const R = (x, yy, w, h, opt) => prim.push({ k: "r", x, y: yy, w, h, o: opt || {} });
+  const L = (x1, y1, x2, y2, opt) => prim.push({ k: "l", x1, y1, x2, y2, o: opt || {} });
+  const base = (top, size, lh) => top + (lh - size) / 2 + size * 0.78;   // linea di base di un rigo alto lh
+  // carta intestata (come quella dei report, ingrandita 1,25 volte)
+  const cw = 900, x0 = (W - cw) / 2, hh = 87.5, aw = o.aus.w / o.aus.h * 75, hw = o.hat.w / o.hat.h * hh;
+  const t1 = 30, lh1 = t1 * 1.15, bloccoH = lh1 * 2 + 2.5 + 16.4 * 1.2 + 14 * 1.2;
+  const H = Math.max(bloccoH, hh);
+  prim.push({ k: "i", n: "ImHat", x: x0, y: (H - hh) / 2, w: hw, h: hh });
+  prim.push({ k: "i", n: "ImAus", x: x0 + cw - aw, y: (H - 75) / 2, w: aw, h: 75 });
+  const cx = ((x0 + hw + 12.5) + (x0 + cw - aw - 12.5)) / 2, top = (H - bloccoH) / 2;
+  T(cx, base(top, t1, lh1), "GRUPPO ALPINI", t1, { bold: true, italic: true, align: "center", col: PDF_COL.verde });
+  T(cx, base(top + lh1, t1, lh1), "BOTTONAGA", t1, { bold: true, italic: true, align: "center", col: PDF_COL.verde });
+  T(cx, base(top + lh1 * 2 + 2.5, 16.4, 16.4 * 1.2), "Via Corsica, 327 – 25125 Brescia", 16.4, { italic: true, align: "center", col: PDF_COL.verde });
+  T(cx, base(top + lh1 * 2 + 2.5 + 16.4 * 1.2, 14, 14 * 1.2), "SEZ. BRESCIA", 14, { bold: true, italic: true, align: "center", col: PDF_COL.verde });
+  y = H + 10; R(x0, y, cw, 2.5, { fill: PDF_COL.verde }); y += 2.5 + 17.5;
+  // titolo
+  y += 14; T(W / 2, y + o.titolo * 0.85, d.titolo, o.titolo, { align: "center" }); y += o.titolo * 1.1 + 18;
+  // giorni di preparativi (lo Scarico): un riquadro centrale per giorno
+  d.prep.forEach(g => {
+    const bw = 560, bx = (W - bw) / 2, ps = 17.3 * f, ts = 12.7 * f, inner = bw - 36, top0 = y;
+    y += 4; T(W / 2, y + ps * 0.85, g.titolo, ps, { bold: true, align: "center", col: PDF_COL.rosso }); y += ps * 1.2 + 6;
+    const lab = `${g.et} (${g.n}): `, labW = pdfLarg(lab, ts, true), righe = pdfSpezza(g.nomi, ts, false, inner, inner - labW);
+    righe.forEach((r, i) => { const b = base(y, ts, ts * 1.4); if (i === 0) { T(bx + 18, b, lab, ts, { bold: true }); T(bx + 18 + labW, b, r, ts); } else T(bx + 18, b, r, ts); y += ts * 1.4; });
+    y += 2; L(bx, top0, bx, y, { col: PDF_COL.linea, lw: 1 }); L(bx + bw, top0, bx + bw, y, { col: PDF_COL.linea, lw: 1 }); y += 22;
+  });
+  // sabato e domenica affiancati, con i reparti in due colonne
+  const gap = 56, n = d.giorni.length, colW = (W - gap * (n - 1)) / n, bGap = 18, bW = (colW - bGap) / 2, px = v => v * f;
+  const sizeN = px(10), sizeI = px(9), padX = px(5), padY = px(2), lhN = sizeN * 1.2, minH = px(15);
+  let yMax = y;
+  d.giorni.forEach((g, gi) => {
+    const cx0 = gi * (colW + gap); let yy = y;
+    const dts = 17.3 * f; T(cx0 + colW / 2, yy + dts * 0.85, g.titolo, dts, { bold: true, align: "center", col: PDF_COL.rosso }); yy += dts * 1.2 + 10;
+    const blocco = (b, bx, by) => {   // disegna un reparto e ritorna la sua altezza
+      let yb = by; const hs = px(12);
+      T(bx + bW / 2, yb + hs * 0.9, b.nome, hs, { bold: true, align: "center" }); yb += hs * 1.35;
+      const nm = b.mom.length, wm = Math.floor(66 / nm) / 100 * bW, wi = bW - wm * nm, colX = []; let cxx = bx;
+      for (let i = 0; i < nm; i++) { colX.push(cxx); cxx += wm; } colX.push(cxx);
+      const cella = (x, yc, w, h, opt) => R(x, yc, w, h, Object.assign({ stroke: [119, 119, 119], lw: 1 }, opt));
+      const hth = Math.max(minH, sizeN * 1.2 + padY * 2);   // intestazione
+      b.mom.forEach((m, i) => { cella(colX[i], yb, wm, hth, { fill: PDF_COL.testa }); T(colX[i] + wm / 2, base(yb, sizeN, hth), m, sizeN, { bold: true, align: "center" }); });
+      cella(cxx, yb, wi, hth, { fill: PDF_COL.testa }); T(cxx + wi / 2, base(yb, sizeN, hth), "Incarico", sizeN, { bold: true, align: "center" }); yb += hth;
+      b.righe.forEach(r => {
+        const nomi = r.celle.map(c => c ? pdfSpezza(c, sizeN, !!r.resp, wm - padX * 2) : []);
+        const incRighe = r.inc ? pdfSpezza(r.inc, sizeI, true, wi - padX * 2) : [], notaRighe = r.nota ? pdfSpezza("(" + r.nota + ")", sizeI, false, wi - padX * 2) : [];
+        const nRighe = Math.max(1, ...nomi.map(x => x.length), incRighe.length + notaRighe.length), hr = Math.max(minH, nRighe * lhN + padY * 2);
+        r.celle.forEach((c, i) => { cella(colX[i], yb, wm, hr); nomi[i].forEach((rr, k) => T(colX[i] + padX, base(yb + padY + k * lhN, sizeN, lhN), rr, sizeN, { bold: !!r.resp })); });
+        cella(cxx, yb, wi, hr);
+        incRighe.forEach((rr, k) => T(cxx + wi / 2, base(yb + padY + k * lhN, sizeI, lhN), rr, sizeI, { bold: true, align: "center", col: PDF_COL.bruno }));
+        notaRighe.forEach((rr, k) => T(cxx + wi / 2, base(yb + padY + (incRighe.length + k) * lhN, sizeI, lhN), rr, sizeI, { italic: true, align: "center", col: [85, 85, 85] }));
+        yb += hr;
+      });
+      const htot = Math.max(minH, sizeN * 1.2 + padY * 2);
+      b.tot.forEach((t, i) => {
+        cella(colX[i], yb, wm, htot, { fill: PDF_COL.tot });
+        const etichetta = `Totale ${t.n}`, bx2 = colX[i] + padX;
+        T(bx2, base(yb, sizeN, htot), etichetta, sizeN, { bold: true });
+        if (t.prima !== null && t.prima !== undefined) T(bx2 + pdfLarg(etichetta + " ", sizeN, true), base(yb, sizeN, htot), `(${t.prima})`, sizeN, { col: PDF_COL.grigio });
+      });
+      cella(cxx, yb, wi, htot, { fill: PDF_COL.tot }); yb += htot;
+      return yb - by;
+    };
+    for (let i = 0; i < g.blocchi.length; i += 2) {
+      const h1 = blocco(g.blocchi[i], cx0, yy), h2 = g.blocchi[i + 1] ? blocco(g.blocchi[i + 1], cx0 + bW + bGap, yy) : 0;
+      yy += Math.max(h1, h2) + px(9);
+    }
+    const ss = px(10), sr = pdfSpezza(`Senza ruolo / a disposizione: ${g.senza}`, ss, false, colW);
+    sr.forEach(r => { T(cx0, base(yy, ss, ss * 1.3), r, ss); yy += ss * 1.3; });
+    yMax = Math.max(yMax, yy + 6);
+  });
+  y = yMax + 8;
+  d.note.forEach(nt => { const ns = 11 * f; T(0, base(y, ns, ns * 1.3), nt, ns); y += ns * 1.3; });
+  return { w: W, h: y, prim };
+}
+const PDF_FORMATI = { A4: { w: 841.89, h: 595.28, margineMm: 10, titolo: 64 }, A3: { w: 1190.55, h: 841.89, margineMm: 10, titolo: 92 }, A2: { w: 1683.78, h: 1190.55, margineMm: 14.14, titolo: 92 } };
+async function pdfTabelloneGenera(d, formato) {
+  const fm = PDF_FORMATI[formato]; if (!fm) throw new Error("formato non previsto: " + formato);
+  const srcs = (LETTERHEAD_HTML.match(/<img src="([^"]+)"/g) || []).map(s => s.slice(10, -1));
+  if (srcs.length < 2) throw new Error("loghi non trovati");
+  const [hat, aus] = await Promise.all([pdfJpegDa(srcs[0]), pdfJpegDa(srcs[1])]);
+  const lista = pdfTabelloneLista(d, { f: 1.5, titolo: fm.titolo, hat, aus });
+  const m = fm.margineMm / 25.4 * 72, s = Math.min((fm.w - 2 * m) / lista.w, (fm.h - 2 * m) / lista.h), ox = (fm.w - lista.w * s) / 2, oy = m;
+  const p = pdfPagina(fm.w, fm.h);
+  lista.prim.forEach(q => {
+    if (q.k === "t") pdfTesto(p, ox + q.x * s, oy + q.y * s, q.str, q.size * s, q.o);
+    else if (q.k === "r") pdfRett(p, ox + q.x * s, oy + q.y * s, q.w * s, q.h * s, Object.assign({}, q.o, { lw: (q.o.lw || 1) * s }));
+    else if (q.k === "l") pdfLinea(p, ox + q.x1 * s, oy + q.y1 * s, ox + q.x2 * s, oy + q.y2 * s, Object.assign({}, q.o, { lw: (q.o.lw || 1) * s }));
+    else if (q.k === "i") pdfImmagine(p, q.n, ox + q.x * s, oy + q.y * s, q.w * s, q.h * s);
+  });
+  return pdfAssembla([p], { ImHat: hat, ImAus: aus });
+}
+// Consegna il PDF: sul telefono si apre il foglio di condivisione (Salva su File, AirDrop, email, WhatsApp...), sul computer si scarica.
+async function consegnaPdf(bytes, nomeFile) {
+  const file = new File([bytes], nomeFile, { type: "application/pdf" });
+  const touch = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  if (touch && navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: nomeFile }); return "condiviso"; }
+    catch (e) { if (e && e.name === "AbortError") return "annullato"; }   // se la condivisione non va, si scarica
+  }
+  const url = URL.createObjectURL(file), a = document.createElement("a");
+  a.href = url; a.download = nomeFile; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  return "scaricato";
+}
+async function pdfScarica(dati, formato) {
+  try {
+    toast("Preparo il PDF…");
+    const bytes = await pdfTabelloneGenera(dati, formato);
+    const esito = await consegnaPdf(bytes, `Tabellone ${dati.titolo} - ${formato}.pdf`.replace(/[\\/:*?"<>|]/g, ""));
+    if (esito === "scaricato") toast("PDF salvato tra i download");
+  } catch (err) { console.error(err); alert("Non sono riuscito a preparare il PDF: " + (err && err.message ? err.message : err)); }
+}
+
 // ---- Poster del tabellone: si stampa in A3 o A2, in orizzontale, tutto su un solo foglio ----
 const POSTER_LARG_PX = Math.round(400 / 25.4 * 96);   // larghezza utile di un A3 in orizzontale (420 mm meno 10 mm di margine per lato)
 function stampaPoster(html, formato) {
@@ -7473,18 +7700,20 @@ function stampaPoster(html, formato) {
   window.addEventListener("afterprint", pulisci);
   stampaConLoghi(area);
 }
-function apriPosterCaso(html, titolo) {
+function apriPosterCaso(html, titolo, dati) {
   showModal(`<div id="pst-root">
     <div class="modal-title">🖼️ Poster del tabellone</div>
-    <div class="card-sub" style="margin-bottom:8px;">${esc(titolo)}, in orizzontale e su un solo foglio. Scegli il formato: poi nella finestra di stampa scegli la stampante oppure «Salva come PDF» (la pagina è già impostata).</div>
+    <div class="card-sub" style="margin-bottom:8px;">${esc(titolo)}, in orizzontale e su un solo foglio. «Stampa» apre la finestra di stampa del computer (la pagina è già impostata). «PDF» crea il file, da condividere o da portare al plotter.</div>
     <div id="pst-anteprima" style="border:1px solid #bbb; background:#fff; overflow:hidden; border-radius:6px;"><div id="pst-contenuto" style="width:${POSTER_LARG_PX}px;">${html}</div></div>
     <div class="modal-actions" style="margin-top:12px;"><button type="button" class="btn" data-pst="A3">🖨️ Stampa in A3</button><button type="button" class="btn" data-pst="A2">🖨️ Stampa in A2</button></div>
+    ${dati ? '<div class="modal-actions" style="margin-top:8px;"><button type="button" class="btn" data-pdf="A3" style="background:#1d4e89; color:#fff;">📄 PDF A3</button><button type="button" class="btn" data-pdf="A2" style="background:#1d4e89; color:#fff;">📄 PDF A2</button></div>' : ""}
     <button type="button" class="btn secondary block" id="pst-chiudi" style="margin-top:10px;">Chiudi</button>
   </div>`);
   const box = document.getElementById("pst-anteprima"), c = document.getElementById("pst-contenuto");
   c.style.zoom = Math.min(1, box.clientWidth / POSTER_LARG_PX);
   box.style.height = Math.round(c.getBoundingClientRect().height) + "px";
   document.querySelectorAll("[data-pst]").forEach(b => b.addEventListener("click", () => stampaPoster(html, b.dataset.pst)));
+  document.querySelectorAll("[data-pdf]").forEach(b => b.addEventListener("click", () => pdfScarica(dati, b.dataset.pdf)));
   document.getElementById("pst-chiudi").addEventListener("click", closeModal);
 }
 function stampaConLoghi(area) {
