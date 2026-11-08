@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "9.88";
+const APP_VERSION = "9.90";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -447,6 +447,8 @@ let bollinoAmiciAnno = new Date().getFullYear();
 let editingBollinoAmiciRecord = null;
 let currentIniziativaId = null;
 let selectedOreIniziativaId = null;
+let inizAnniStato = {};   // Attività: quali anni sono aperti (l'anno in corso lo è, gli altri no, finché non si toccano)
+let oreAnno = null;       // Ore Alpine: l'anno che si sta guardando (di partenza, quello in corso)
 let currentSection = "home";
 let editingId = null;
 let pendingPrivacyFoto = undefined;
@@ -1872,6 +1874,11 @@ function buildIniziativaTesto() {
   return testo;
 }
 
+// Le Attività e le Ore Alpine si guardano per anno: l'anno è quello della data dell'attività (o, se manca, di quando è stata creata).
+function annoAttivita(r) { return String((r && (r.data || r.creato)) || "").slice(0, 4) || "—"; }
+function inizAnnoAperto(y, corrente) { return y in inizAnniStato ? !!inizAnniStato[y] : y === corrente; }
+function oreAnniDisponibili() { const s = new Set([String(new Date().getFullYear())]); (state.iniziativeStorico || []).forEach(r => s.add(annoAttivita(r))); return [...s].sort((x, y) => y.localeCompare(x)); }
+
 function renderIniziative() {
   const soloLettura = currentRole === "socio";
   const storico = (state.iniziativeStorico || []).slice().sort((a,b) => (b.data || "").localeCompare(a.data || ""));
@@ -1880,7 +1887,7 @@ function renderIniziative() {
   if (storico.length === 0) {
     storicoHtml = `<div class="card-sub">Nessuna iniziativa salvata.</div>`;
   } else {
-    storicoHtml = storico.map(r => {
+    const cardIniz = r => {
       const canali = r.canali || [];
       const badgesCanali = canali.map(ch => {
         const label = ch === "whatsapp" ? `${WA_ICON} WhatsApp` : ch === "email" ? "✉️ Email" : ch === "condivisione" ? "📤 Condiviso" : "📩 SMS";
@@ -1902,7 +1909,7 @@ function renderIniziative() {
             <div class="card-name">${esc(r.nome || "Attività")}</div>
             <div class="card-sub">📅 ${r.data ? fmtDate(r.data) : "Data non indicata"}${r.ora ? " · 🕐 " + esc(r.ora) : ""}</div>
             ${r.luogo ? `<div class="card-sub">📍 ${esc(r.luogo)}</div>` : ""}
-            <div class="badge-row" style="margin-top:6px;">${r.istituzionali ? `<span class="badge">🏛️ Istituzionali</span>` : ""}${r.feste ? `<span class="badge">🎉 Feste</span>` : ""}${r.volontariato ? `<span class="badge">🤝 Volontariato</span>` : ""}${badgeFile}${badgesCanali}</div>
+            <div class="badge-row" style="margin-top:6px;">${r.istituzionali ? `<span class="badge">🏛️ Istituzionali</span>` : ""}${r.feste ? `<span class="badge">🎉 Feste</span>` : ""}${r.volontariato ? `<span class="badge">🤝 Volontariato</span>` : ""}${r.altro ? `<span class="badge">📌 Altro</span>` : ""}${badgeFile}${badgesCanali}</div>
           </div>
           ${soloLettura ? "" : `
           <div class="card-actions">
@@ -1912,9 +1919,16 @@ function renderIniziative() {
         </div>
         ${thumb ? `<img src="${esc(thumb)}" style="max-width:100%; border-radius:8px; margin-top:8px; border:1px solid #ccc;">` : ""}
       </div>`;
-    }).join("");
+    };
+    // raggruppate per anno: l'anno in corso è aperto, gli anni precedenti sono chiusi; ogni anno si apre e si chiude con il suo tasto
+    const annoCorrente = String(new Date().getFullYear()), perAnno = {};
+    storico.forEach(r => { const y = annoAttivita(r); (perAnno[y] = perAnno[y] || []).push(r); });
+    const gruppoAnno = y => { const lista = perAnno[y] || [], aperto = inizAnnoAperto(y, annoCorrente);
+      return `<button type="button" class="btn secondary block" data-iniz-anno="${y}" style="margin-bottom:10px; text-align:left;">📅 Attività ${y} (${lista.length}) ${aperto ? "▴" : "▾"}</button>
+      <div id="iniz-anno-${y}" style="${aperto ? "" : "display:none;"}">${lista.length ? lista.map(cardIniz).join("") : '<div class="card-sub" style="margin-bottom:10px;">Nessuna attività in questo anno.</div>'}</div>`; };
+    const anniPrima = Object.keys(perAnno).filter(y => y !== annoCorrente).sort((x, y) => y.localeCompare(x));
+    storicoHtml = gruppoAnno(annoCorrente) + (anniPrima.length ? `<div class="section-title" style="font-size:1.05rem; margin-top:22px;">🗄️ Anni precedenti</div>${anniPrima.map(gruppoAnno).join("")}` : "");
   }
-
   const formNuovaIniziativa = soloLettura ? "" : `
     <div class="card color-purple">
       <div style="font-weight:800; margin-bottom:10px;">Nuova Attività</div>
@@ -1932,10 +1946,11 @@ function renderIniziative() {
       <div class="form-group"><label>Luogo</label><input type="text" id="iniz-luogo"></div>
       <div class="form-group">
         <label>Categoria</label>
-        <div class="checkbox-row" style="gap:10px; flex-wrap:nowrap;">
+        <div class="checkbox-row" style="gap:10px; flex-wrap:wrap;">
           <label style="font-size:0.78rem; white-space:nowrap;"><input type="checkbox" id="iniz-istituzionali" style="width:15px; height:15px;"> Istituz.</label>
           <label style="font-size:0.78rem; white-space:nowrap;"><input type="checkbox" id="iniz-feste" style="width:15px; height:15px;"> Feste</label>
           <label style="font-size:0.78rem; white-space:nowrap;"><input type="checkbox" id="iniz-volontariato" style="width:15px; height:15px;"> Volont.</label>
+          <label style="font-size:0.78rem; white-space:nowrap;"><input type="checkbox" id="iniz-altro" style="width:15px; height:15px;"> Altro</label>
         </div>
       </div>
       <div class="form-group"><label>Descrizione evento</label><textarea id="iniz-descrizione" placeholder="Dettagli dell'iniziativa..."></textarea></div>
@@ -1972,18 +1987,19 @@ async function registraStoricoIniziativa(canale) {
   const istituzionali = document.getElementById("iniz-istituzionali").checked;
   const feste = document.getElementById("iniz-feste").checked;
   const volontariato = document.getElementById("iniz-volontariato").checked;
+  const altro = document.getElementById("iniz-altro").checked;
   const fileInput = document.getElementById("iniz-file");
   const file = fileInput.files[0];
 
   state.iniziativeStorico = state.iniziativeStorico || [];
   let record = currentIniziativaId ? state.iniziativeStorico.find(r => r.id === currentIniziativaId) : null;
   if (!record) {
-    record = { id: uid(), nome, data, ora, luogo, descrizione, istituzionali, feste, volontariato, allegatoUrl: "", allegatoNome: "", allegatoThumbUrl: "", canali: [], creato: new Date().toISOString() };
+    record = { id: uid(), nome, data, ora, luogo, descrizione, istituzionali, feste, volontariato, altro, allegatoUrl: "", allegatoNome: "", allegatoThumbUrl: "", canali: [], creato: new Date().toISOString() };
     state.iniziativeStorico.push(record);
     currentIniziativaId = record.id;
   } else {
     record.nome = nome; record.data = data; record.ora = ora; record.luogo = luogo; record.descrizione = descrizione;
-    record.istituzionali = istituzionali; record.feste = feste; record.volontariato = volontariato;
+    record.istituzionali = istituzionali; record.feste = feste; record.volontariato = volontariato; record.altro = altro;
   }
 
   if (file) {
@@ -2062,12 +2078,20 @@ function caricaIniziativaNelForm(r) {
   document.getElementById("iniz-istituzionali").checked = !!r.istituzionali;
   document.getElementById("iniz-feste").checked = !!r.feste;
   document.getElementById("iniz-volontariato").checked = !!r.volontariato;
+  document.getElementById("iniz-altro").checked = !!r.altro;
   document.getElementById("iniz-descrizione").value = r.descrizione || "";
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 function attachIniziativeEvents() {
   currentIniziativaId = null;
+  document.querySelectorAll("[data-iniz-anno]").forEach(b => b.addEventListener("click", () => {
+    const y = b.dataset.inizAnno, box = document.getElementById("iniz-anno-" + y);
+    if (!box) return;
+    const apri = box.style.display === "none";
+    box.style.display = apri ? "" : "none"; inizAnniStato[y] = apri;
+    b.textContent = b.textContent.replace(/[▴▾]\s*$/, apri ? "▴" : "▾");
+  }));
   const saveBtn = document.getElementById("iniz-save-btn");
   if (saveBtn) saveBtn.addEventListener("click", async () => {
     if (!document.getElementById("iniz-nome").value.trim()) { alert("Inserisci almeno il nome dell'evento"); return; }
@@ -2158,23 +2182,29 @@ function attachIniziativeEvents() {
 
 // ---------- Ore Alpine ----------
 function renderOreAlpine() {
-  const iniziative = (state.iniziativeStorico || []).slice().sort((a,b) => (b.data || "").localeCompare(a.data || ""));
+  const anniOre = oreAnniDisponibili();
+  if (!oreAnno || !anniOre.includes(oreAnno)) oreAnno = String(new Date().getFullYear());
+  const tutteIniz = (state.iniziativeStorico || []).slice().sort((a,b) => (b.data || "").localeCompare(a.data || ""));
+  const iniziative = tutteIniz.filter(i => annoAttivita(i) === oreAnno);   // le attività e i totali sono quelli dell'anno scelto
+  if (selectedOreIniziativaId && !iniziative.some(i => i.id === selectedOreIniziativaId)) selectedOreIniziativaId = null;
 
-  const totaleGeneraleRaw = Object.values(state.oreAlpine || {}).reduce((sum, map) =>
-    sum + Object.values(map).reduce((s, v) => s + (parseFloat(v) || 0), 0), 0);
+  const totaleGeneraleRaw = iniziative.reduce((sum, i) =>
+    sum + Object.values((state.oreAlpine && state.oreAlpine[i.id]) || {}).reduce((s, v) => s + (parseFloat(v) || 0), 0), 0);
   const totaleGenerale = Math.round(totaleGeneraleRaw * 10) / 10;
 
   const oreIniziativa = id => Object.values((state.oreAlpine && state.oreAlpine[id]) || {}).reduce((s, v) => s + (parseFloat(v) || 0), 0);
-  const sottoTotali = { istituzionali: 0, feste: 0, volontariato: 0 };
+  const sottoTotali = { istituzionali: 0, feste: 0, volontariato: 0, altro: 0 };
   iniziative.forEach(i => {
     const ore = oreIniziativa(i.id);
     if (i.istituzionali) sottoTotali.istituzionali += ore;
     if (i.feste) sottoTotali.feste += ore;
     if (i.volontariato) sottoTotali.volontariato += ore;
+    if (i.altro) sottoTotali.altro += ore;
   });
   const r1 = Math.round(sottoTotali.istituzionali * 10) / 10;
   const r2 = Math.round(sottoTotali.feste * 10) / 10;
   const r3 = Math.round(sottoTotali.volontariato * 10) / 10;
+  const r4 = Math.round(sottoTotali.altro * 10) / 10;
 
   const iniziativaOpts = iniziative.map(i => `<option value="${i.id}" ${selectedOreIniziativaId===i.id?"selected":""}>${esc(i.nome || "Attività")}${i.data ? " - " + fmtDate(i.data) : ""}</option>`).join("");
 
@@ -2206,7 +2236,7 @@ function renderOreAlpine() {
 
   let eventiHtml;
   if (iniziative.length === 0) {
-    eventiHtml = `<div class="empty-state"><div class="icon">⏱️</div>Nessuna attività salvata.<br><span style="font-size:0.8rem;">Vai nella sezione Attività per crearne una.</span></div>`;
+    eventiHtml = `<div class="empty-state"><div class="icon">⏱️</div>${tutteIniz.length ? "Nessuna attività nel " + oreAnno + "." : "Nessuna attività salvata."}<br><span style="font-size:0.8rem;">Vai nella sezione Attività per crearne una.</span></div>`;
   } else {
     eventiHtml = iniziative.map(i => {
       const map = (state.oreAlpine && state.oreAlpine[i.id]) || {};
@@ -2233,13 +2263,14 @@ function renderOreAlpine() {
 
     <div class="card color-blue" style="display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap;">
       <div>
-        <div style="font-weight:700; font-size:0.78rem; color:#555;">Totale ore volontariato</div>
+        <div style="font-weight:700; font-size:0.78rem; color:#555;">Totale ore volontariato · <select id="ore-anno-select" style="padding:2px 6px; font-size:0.8rem; font-weight:800; border:2px solid var(--ink); border-radius:8px; background:#fff;">${anniOre.map(y => `<option value="${y}"${y === oreAnno ? " selected" : ""}>${y}</option>`).join("")}</select></div>
         <div style="font-weight:900; font-size:2rem; line-height:1.15; white-space:nowrap;">${totaleGenerale}</div>
       </div>
       <div style="display:flex; gap:14px; flex-wrap:wrap;">
         <div style="text-align:center;"><div style="font-size:0.68rem; color:#777;">🏛️ Istituz.</div><div style="font-weight:800; font-size:0.95rem;">${r1}</div></div>
         <div style="text-align:center;"><div style="font-size:0.68rem; color:#777;">🎉 Feste</div><div style="font-weight:800; font-size:0.95rem;">${r2}</div></div>
         <div style="text-align:center;"><div style="font-size:0.68rem; color:#777;">🤝 Volont.</div><div style="font-weight:800; font-size:0.95rem;">${r3}</div></div>
+        <div style="text-align:center;"><div style="font-size:0.68rem; color:#777;">📌 Altro</div><div style="font-weight:800; font-size:0.95rem;">${r4}</div></div>
       </div>
     </div>
 
@@ -2264,6 +2295,8 @@ function renderOreAlpine() {
 }
 
 function attachOreAlpineEvents() {
+  const annoSel = document.getElementById("ore-anno-select");
+  if (annoSel) annoSel.addEventListener("change", e => { oreAnno = e.target.value; selectedOreIniziativaId = null; renderSection(); });
   document.getElementById("ore-iniziativa-select").addEventListener("change", e => {
     selectedOreIniziativaId = e.target.value || null;
     renderSection();
@@ -6796,31 +6829,11 @@ function renderElencoPrenotazioni(soloLettura) {
   }).join("");
 }
 
-// Le prenotazioni della sede passate si cancellano da sole, come gli eventi della Bacheca: si tolgono 2 giorni dopo la data.
-function pulisciPrenotazioniSedePassate() {
-  const tutte = state.prenotazioni || [];
-  const oggi = new Date(); oggi.setHours(0, 0, 0, 0);
-  const filtrata = tutte.filter(p => {
-    if (!p.data) return true;   // senza data, non scade da sola
-    const d = parseDataISO(p.data);
-    if (!d) return true;
-    return Math.floor((oggi - d) / 86400000) < 2;
-  });
-  if (filtrata.length === tutte.length) return;
-  // come per la Bacheca: se il telefono non ha ancora ricevuto i dati aggiornati, aspetta (riproverà al prossimo disegno)
-  if (window.db && !SYNC_STATO.ricevuto) return;
-  state.prenotazioni = filtrata;
-  logComeSistema = true;
-  try { saveState(); } finally { logComeSistema = false; }
-}
-
 function renderPrenotazioni() {
-  pulisciPrenotazioniSedePassate();
   if (currentRole === "socio") return renderPrenotazioniSocio();
 
   return `
     <div class="section-title">🗓️ Prenotaz. Sede</div>
-    <div class="card-sub" style="margin-bottom:12px;">Le prenotazioni passate si cancellano da sole 2 giorni dopo la data.</div>
 
     <div class="card">
       <div style="font-weight:800; margin-bottom:10px;">Conferma prenotazione</div>
