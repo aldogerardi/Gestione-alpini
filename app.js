@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "10.02";
+const APP_VERSION = "10.04";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -4090,10 +4090,10 @@ function renderPresenzaAdunata() {
     <div class="section-title">🎖️ Presenza Adunata</div>
     <div class="card-sub" style="margin-bottom:12px;">Elenco delle adunate, con locandina.</div>
 
-    ${formNuovaAdunata}
+    ${soloLettura ? "" : '<div class="due-pannelli"><div class="pannello-sx">'}${formNuovaAdunata}${soloLettura ? "" : '</div><div class="pannello-dx">'}
 
     <div class="section-title" style="font-size:1.05rem; margin-top:22px;">🗂️ Adunate</div>
-    <div id="adunata-lista">${listaHtml}</div>
+    <div id="adunata-lista">${listaHtml}</div>${soloLettura ? "" : "</div></div>"}
   `;
 }
 
@@ -4469,8 +4469,10 @@ function renderBenElencoGestore() {
   return `
     <div class="section-title">🎁 Panettoni &amp; C</div>
     <div class="card-sub" style="margin-bottom:12px;">Prodotti dei produttori il cui ricavato va in beneficenza: prenotazioni dei soci, consegne, incassi e rendiconto finale.</div>
+    <div class="due-pannelli"><div class="pannello-sx">
     <button type="button" class="btn block" data-ben="nuova-campagna" style="margin-bottom:14px;">➕ Nuova campagna</button>
-    ${cards}`;
+    </div><div class="pannello-dx">
+    ${cards}</div></div>`;
 }
 
 function benHtmlPrenotazioni(c) {
@@ -4546,8 +4548,10 @@ function renderBenDettaglio(c) {
         <button type="button" class="btn secondary" data-ben="ordini" data-id="${c.id}" title="Elenco degli ordini, senza prezzi">📦 Ordini</button>
       </div>
     </div>
+    <div class="ben-azioni">
     <button type="button" class="btn block" data-ben="nuova-pren" data-id="${c.id}" style="margin-bottom:10px;">➕ Nuova prenotazione</button>
     <input type="text" id="ben-filtro" placeholder="Cerca per nome..." value="${esc(benFiltro)}" style="width:100%; margin-bottom:10px; box-sizing:border-box;">
+    </div>
     <div id="ben-pren-lista">${benHtmlPrenotazioni(c)}</div>`;
 }
 
@@ -6889,8 +6893,8 @@ function renderPrenotazioni() {
       <button type="button" class="btn block" id="pren-crea-btn" style="margin-top:6px;">✅ Conferma</button>
     </div>
 
-    <button type="button" class="btn secondary block" id="pren-toggle-calendario-btn" style="margin-bottom:12px;">${calSedeVisibile ? "📋 Nascondi calendario" : "📅 Vedi calendario"}</button>
-    ${calSedeVisibile ? renderCalendarioSede() : ""}
+    <button type="button" class="btn secondary block" id="pren-toggle-calendario-btn" style="margin-bottom:12px;">${calSedeInline() ? "📋 Nascondi calendario" : "📅 Vedi calendario"}</button>
+    ${calSedeInline() ? renderCalendarioSede() : ""}
 
     </div><div class="pannello-dx">
     <div class="section-title" style="font-size:1.05rem; margin-top:22px;">🗂️ Prenotazioni</div>
@@ -6912,9 +6916,9 @@ function renderPrenotazioniSocio() {
       <div class="card-sub">La conferma della prenotazione è a cura del Consiglio Direttivo. Alcune date sono riservate alle attività istituzionali del Gruppo.</div>
     </div>
 
-    <button type="button" class="btn secondary block" id="pren-toggle-calendario-btn">${calSedeVisibile ? "📋 Nascondi calendario" : "📅 Calendario"}</button>
+    <button type="button" class="btn secondary block" id="pren-toggle-calendario-btn">${calSedeInline() ? "📋 Nascondi calendario" : "📅 Calendario"}</button>
 
-    ${calSedeVisibile ? renderCalendarioSede() : ""}
+    ${calSedeInline() ? renderCalendarioSede() : ""}
 
     <div class="section-title" style="font-size:1.05rem; margin-top:22px;">🗂️ Richieste</div>
     ${renderElencoPrenotazioni(true)}
@@ -6975,6 +6979,20 @@ function renderCalendarioSede() {
   `;
 }
 
+// Sul telefono il calendario della sede si apre dentro la pagina; sul PC si apre in una finestra sopra la pagina.
+function calSedeInline() { return calSedeVisibile && !menuFisso(); }
+function apriCalendarioSedePopup() {
+  const mostra = () => {
+    showModal(`<div id="cal-popup"><div class="modal-title">📅 Calendario della sede</div>${renderCalendarioSede()}<button type="button" class="btn secondary block" id="cal-chiudi-btn" style="margin-top:12px;">Chiudi</button></div>`);
+    const poi = fn => { fn(); mostra(); };   // si sfoglia il mese o si sceglie un giorno ridisegnando solo la finestra, non la pagina sotto
+    document.getElementById("cal-prev-btn").addEventListener("click", () => poi(() => { calSedeMese--; if (calSedeMese < 0) { calSedeMese = 11; calSedeAnno--; } calSedeGiornoSelezionato = null; }));
+    document.getElementById("cal-next-btn").addEventListener("click", () => poi(() => { calSedeMese++; if (calSedeMese > 11) { calSedeMese = 0; calSedeAnno++; } calSedeGiornoSelezionato = null; }));
+    document.querySelectorAll("#cal-popup [data-cal-giorno]").forEach(cella => cella.addEventListener("click", () => poi(() => { const g = cella.dataset.calGiorno; calSedeGiornoSelezionato = calSedeGiornoSelezionato === g ? null : g; })));
+    document.getElementById("cal-chiudi-btn").addEventListener("click", () => { calSedeGiornoSelezionato = null; closeModal(); });
+  };
+  mostra();
+}
+
 function attachPrenotazioniEvents() {
   const creaBtn = document.getElementById("pren-crea-btn");
   if (creaBtn) creaBtn.addEventListener("click", creaPrenotazione);
@@ -6987,6 +7005,7 @@ function attachPrenotazioniEvents() {
 
   const toggleCalBtn = document.getElementById("pren-toggle-calendario-btn");
   if (toggleCalBtn) toggleCalBtn.addEventListener("click", () => {
+    if (menuFisso()) { apriCalendarioSedePopup(); return; }
     calSedeVisibile = !calSedeVisibile;
     if (!calSedeVisibile) calSedeGiornoSelezionato = null;
     renderSection();
