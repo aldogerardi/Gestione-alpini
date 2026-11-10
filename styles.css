@@ -551,3 +551,40 @@ body.menu-aperto { overflow: hidden; }
 .cm-cornice { display: none; position: absolute; box-sizing: border-box; border: 2px solid #d62828; border-radius: 8px; pointer-events: none; z-index: 2; }
 #cm-root[style*="--cmw:24px"] .cm-c { font-size: .62rem; }
 #cm-root[style*="--cmw:24px"] .cm-c input { width: 20px; height: 20px; }
+
+
+/* ===== Grafica adattiva: tablet e PC (il telefono resta com'è) ===== */
+@media screen and (min-width: 700px) {
+  #topbar, #navbar { max-width: 780px; }
+  /* le schede si dispongono su più colonne; titoli, frasi e pulsanti occupano tutta la riga */
+  #app-content { max-width: 780px; display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px 18px; align-content: start; align-items: start; }
+  #app-content > * { min-width: 0; }
+  #app-content > :not(.card) { grid-column: 1 / -1; }
+  #app-content > .card { margin-bottom: 0; }
+  /* gli elenchi dentro un contenitore (anagrafica, attività di un anno, avvisi…) si dispongono allo stesso modo */
+  #app-content > div:has(> .card + .card) { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px 18px; align-items: start; }
+  #app-content > div:has(> .card + .card) > * { min-width: 0; }
+  #app-content > div:has(> .card + .card) > :not(.card) { grid-column: 1 / -1; }
+  #app-content > div:has(> .card + .card) > .card { margin-bottom: 0; }
+  /* le finestre sono riquadri al centro, più larghi */
+  #modal-overlay { align-items: center; }
+  #modal-box { max-width: 720px; max-height: 90vh; border: 3px solid var(--ink); border-radius: 20px; }
+  .fab { right: calc(50% - 390px + 16px); }   /* il «+» resta vicino alla colonna, non al bordo dello schermo */
+}
+@media screen and (min-width: 1100px) {
+  body { box-sizing: border-box; padding-right: 300px; }
+  #topbar { max-width: none; }
+  #app-content { max-width: 1240px; padding-bottom: 40px; }
+  /* il menu è una colonna fissa a destra, sempre visibile */
+  #navbar, #menu-btn { display: none !important; }
+  #menu-overlay { pointer-events: auto; inset: 0 0 0 auto; width: 300px; }
+  #menu-scrim { display: none; }
+  #menu-drawer { transform: none !important; transition: none; width: 300px; }
+  .menu-close { display: none; }
+  body.menu-aperto { overflow: auto; }
+  .fab { right: 324px; bottom: 28px; }
+  .toast { left: calc(50% - 150px); bottom: 40px; }
+  #update-banner { right: 300px !important; }
+  #modal-overlay { padding-right: 300px; }
+  #modal-box { max-width: 900px; }
+}

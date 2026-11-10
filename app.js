@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "9.91";
+const APP_VERSION = "10.00";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -8542,6 +8542,7 @@ function segnaSezioneVista() {
 
 // Disegna i pallini sulla barra in basso (fuori dai tasti, così non sbiadiscono) e sul tasto Menù.
 function aggiornaPallini() {
+  if (currentUser && menuFisso()) renderMenuDrawer();   // sul PC il menu è sempre visibile: si tiene aggiornato (voce attiva e pallini)
   const barra = document.getElementById("navbar");
   if (!barra) return;
   barra.querySelectorAll(".pall").forEach(e => e.remove());
@@ -8598,6 +8599,9 @@ function controllaPallinoCena() {
   }, 500);
 }
 
+// Sul PC (schermo largo) il menu laterale resta sempre aperto, a destra.
+function menuFisso() { return !!(window.matchMedia && window.matchMedia("(min-width: 1100px)").matches); }
+
 function renderMenuDrawer() {
   const drawer = document.getElementById("menu-drawer");
   if (!drawer) return;
@@ -8646,6 +8650,7 @@ function chiudiMenu() {
 }
 
 function setupMenuLaterale() {
+  if (window.matchMedia) window.matchMedia("(min-width: 1100px)").addEventListener("change", () => { chiudiMenu(); if (currentUser) renderMenuDrawer(); });   // cambiando la larghezza della finestra
   document.getElementById("menu-btn").addEventListener("click", apriMenu);
   document.getElementById("menu-scrim").addEventListener("click", chiudiMenu);
   document.getElementById("menu-drawer").addEventListener("click", e => {
