@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "10.04";
+const APP_VERSION = "10.05";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -6841,12 +6841,17 @@ let calSedeMese = null;
 let calSedeVisibile = false;
 let calSedeGiornoSelezionato = null;
 
-function renderElencoPrenotazioni(soloLettura) {
+// Le prenotazioni sono raggruppate per anno (l'anno in corso aperto, gli altri chiusi, ognuno col suo tasto) e ordinate dalla più recente alla più vecchia.
+let prenAnniStato = {};
+function annoPrenotazione(p) { return String((p && (p.data || p.creato)) || "").slice(0, 4) || "—"; }
+function prenAnnoAperto(y, corrente) { return y in prenAnniStato ? !!prenAnniStato[y] : y === corrente; }
+// parte: senza = tasto e schede di ogni anno, uno dopo l'altro; "bottoni" = solo i tasti degli anni; "schede" = solo le schede (sul PC i tasti stanno a sinistra, le schede a destra)
+function renderElencoPrenotazioni(soloLettura, parte) {
   const elenco = [...state.prenotazioni].sort((a, b) =>
-    (a.data || "").localeCompare(b.data || "") || FASCIA_ORDER.indexOf(a.fascia) - FASCIA_ORDER.indexOf(b.fascia)
+    (b.data || "").localeCompare(a.data || "") || FASCIA_ORDER.indexOf(b.fascia) - FASCIA_ORDER.indexOf(a.fascia)   // la più vecchia in fondo (nello stesso giorno, la cena sopra il pranzo)
   );
-  if (!elenco.length) return `<div class="card-sub">Nessuna prenotazione.</div>`;
-  return elenco.map(p => {
+  if (!elenco.length) return parte === "bottoni" ? "" : `<div class="card-sub">Nessuna prenotazione.</div>`;
+  const scheda = p => {
     const statoBadge = p.stato === "in attesa"
       ? `<span class="badge badge-icon badge-warning">⏳ In attesa di approvazione</span>`
       : `<span class="badge" style="background:#d7f0dd; border-color:#7ec98f;">✅ Confermata</span>`;
@@ -6866,7 +6871,18 @@ function renderElencoPrenotazioni(soloLettura) {
         </div>`}
       </div>
     </div>`;
-  }).join("");
+  };
+  const corrente = String(new Date().getFullYear()), perAnno = {};
+  elenco.forEach(p => { const y = annoPrenotazione(p); (perAnno[y] = perAnno[y] || []).push(p); });
+  const altri = Object.keys(perAnno).filter(y => y !== corrente).sort((x, y) => y.localeCompare(x));
+  const bottone = y => { const n = (perAnno[y] || []).length, aperto = prenAnnoAperto(y, corrente);
+    return `<button type="button" class="btn secondary block" data-pren-anno="${y}" style="margin-bottom:10px; text-align:left;">📅 Prenotazioni ${y} (${n}) ${aperto ? "▴" : "▾"}</button>`; };
+  const scatola = (y, etichetta) => { const lista = perAnno[y] || [], aperto = prenAnnoAperto(y, corrente);
+    return `<div id="pren-anno-${y}" style="${aperto ? "" : "display:none;"}">${etichetta ? `<div class="section-title" style="font-size:1.05rem;">📅 ${y}</div>` : ""}${lista.length ? lista.map(scheda).join("") : '<div class="card-sub" style="margin-bottom:10px;">Nessuna prenotazione in questo anno.</div>'}</div>`; };
+  const titoloAltri = `<div class="section-title" style="font-size:1.05rem; margin-top:22px;">🗄️ Altri anni</div>`;
+  if (parte === "bottoni") return bottone(corrente) + (altri.length ? titoloAltri + altri.map(bottone).join("") : "");
+  if (parte === "schede") return [corrente, ...altri].map(y => scatola(y, true)).join("");
+  return bottone(corrente) + "\n" + scatola(corrente, false) + (altri.length ? titoloAltri + altri.map(y => bottone(y) + "\n" + scatola(y, false)).join("") : "");
 }
 
 function renderPrenotazioni() {
@@ -6895,10 +6911,11 @@ function renderPrenotazioni() {
 
     <button type="button" class="btn secondary block" id="pren-toggle-calendario-btn" style="margin-bottom:12px;">${calSedeInline() ? "📋 Nascondi calendario" : "📅 Vedi calendario"}</button>
     ${calSedeInline() ? renderCalendarioSede() : ""}
+    ${menuFisso() ? renderElencoPrenotazioni(false, "bottoni") : ""}
 
     </div><div class="pannello-dx">
     <div class="section-title" style="font-size:1.05rem; margin-top:22px;">🗂️ Prenotazioni</div>
-    ${renderElencoPrenotazioni(false)}
+    ${menuFisso() ? renderElencoPrenotazioni(false, "schede") : renderElencoPrenotazioni(false)}
     </div></div>
   `;
 }
@@ -7003,6 +7020,13 @@ function attachPrenotazioniEvents() {
     btn.addEventListener("click", () => eliminaPrenotazione(btn.dataset.eliminaPrenotazione));
   });
 
+  document.querySelectorAll("[data-pren-anno]").forEach(b => b.addEventListener("click", () => {
+    const y = b.dataset.prenAnno, box = document.getElementById("pren-anno-" + y);
+    if (!box) return;
+    const apri = box.style.display === "none";
+    box.style.display = apri ? "" : "none"; prenAnniStato[y] = apri;
+    b.textContent = b.textContent.replace(/[▴▾]\s*$/, apri ? "▴" : "▾");
+  }));
   const toggleCalBtn = document.getElementById("pren-toggle-calendario-btn");
   if (toggleCalBtn) toggleCalBtn.addEventListener("click", () => {
     if (menuFisso()) { apriCalendarioSedePopup(); return; }
@@ -8697,7 +8721,7 @@ function setupMenuLaterale() {
   const misuraTopbar = () => { const t = document.getElementById("topbar"); if (t) document.documentElement.style.setProperty("--topbar-h", t.offsetHeight + "px"); };
   misuraTopbar(); window.addEventListener("resize", misuraTopbar);
   if (window.ResizeObserver && document.getElementById("topbar")) new ResizeObserver(misuraTopbar).observe(document.getElementById("topbar"));
-  if (window.matchMedia) window.matchMedia("(min-width: 1100px)").addEventListener("change", () => { chiudiMenu(); if (currentUser) { renderMenuDrawer(); if (currentSection === "iniziative") renderSection(); } });   // cambiando la larghezza della finestra
+  if (window.matchMedia) window.matchMedia("(min-width: 1100px)").addEventListener("change", () => { chiudiMenu(); if (currentUser) { renderMenuDrawer(); if (currentSection === "iniziative" || currentSection === "prenotazioni") renderSection(); } });   // cambiando la larghezza della finestra
   document.getElementById("menu-btn").addEventListener("click", apriMenu);
   document.getElementById("menu-scrim").addEventListener("click", chiudiMenu);
   document.getElementById("menu-drawer").addEventListener("click", e => {

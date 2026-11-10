@@ -579,8 +579,12 @@ body.menu-aperto { overflow: hidden; }
   #ben-root > .ben-azioni { max-width: 390px; }
   #cal-popup { max-width: 540px; margin: 0 auto; }   /* il calendario a finestra non si allarga troppo */
   .due-pannelli .section-title:first-child { margin-top: 0 !important; }
-  .due-pannelli > .pannello-dx > [id^="iniz-anno-"] { display: contents; }
-  .due-pannelli > .pannello-dx > [id^="iniz-anno-"] > :not(.card) { grid-column: 1 / -1; }
+  .due-pannelli > .pannello-dx > :is([id^="iniz-anno-"], [id^="pren-anno-"]) { display: contents; }
+  .due-pannelli > .pannello-dx > :is([id^="iniz-anno-"], [id^="pren-anno-"]) > :not(.card) { grid-column: 1 / -1; }
+  /* Prenotaz. Sede: le schede di un anno su più colonne (dove il tasto e le schede stanno vicini) */
+  [id^="pren-anno-"] { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px 18px; align-items: start; }
+  [id^="pren-anno-"] > .card { margin-bottom: 0; }
+  [id^="pren-anno-"] > :not(.card) { grid-column: 1 / -1; }
   /* le finestre sono riquadri al centro, più larghi */
   #modal-overlay { align-items: center; }
   #modal-box { max-width: 720px; max-height: 90vh; border: 3px solid var(--ink); border-radius: 20px; }
