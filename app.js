@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "10.00";
+const APP_VERSION = "10.01";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -2262,6 +2262,7 @@ function renderOreAlpine() {
   return `
     <div class="section-title">⏱️ Ore Alpine</div>
 
+    <div class="due-pannelli"><div class="pannello-sx">
     <div class="card color-blue" style="display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap;">
       <div>
         <div style="font-weight:700; font-size:0.78rem; color:#555;">Totale ore volontariato · <select id="ore-anno-select" style="padding:2px 6px; font-size:0.8rem; font-weight:800; border:2px solid var(--ink); border-radius:8px; background:#fff;">${anniOre.map(y => `<option value="${y}"${y === oreAnno ? " selected" : ""}>${y}</option>`).join("")}</select></div>
@@ -2290,8 +2291,10 @@ function renderOreAlpine() {
       ` : `<div class="card-sub">Seleziona un'attività per inserire le ore lavorate.</div>`}
     </div>
 
+    </div><div class="pannello-dx">
     <div class="section-title" style="font-size:1.05rem; margin-top:22px;">Eventi</div>
     ${eventiHtml}
+    </div></div>
   `;
 }
 
@@ -3341,10 +3344,10 @@ PRESENTE</textarea>
     <div class="section-title">🍽️ Cena mensile</div>
     <div class="card-sub" style="margin-bottom:12px;">${soloLettura ? "Elenco delle cene in programma." : "Crea l'evento, scrivi il tuo messaggio, poi apri WhatsApp: il link per confermare la presenza (nome + quante persone, tipo \"presente +3\") viene aggiunto in automatico in fondo al testo. Le risposte arrivano qui in tempo reale."}</div>
 
-    ${formNuovaCena}
+    ${soloLettura ? "" : '<div class="due-pannelli"><div class="pannello-sx">'}${formNuovaCena}${soloLettura ? "" : '</div><div class="pannello-dx">'}
 
     <div class="section-title" style="font-size:1.05rem; margin-top:22px;">🗂️ Cene create</div>
-    <div id="cena-lista">${listaHtml}</div>
+    <div id="cena-lista">${listaHtml}</div>${soloLettura ? "" : "</div></div>"}
   `;
 }
 
@@ -5639,6 +5642,7 @@ function renderCasoncellata() {
   return `<div id="caso-root">
     <div class="section-title">${tp.icona} ${esc(tp.nome)}</div>
     <div class="card-sub" style="margin-bottom:12px;">${esc(tp.intro)}</div>
+    <div class="due-pannelli"><div class="pannello-sx">
     <div class="card">
       <div style="font-weight:800; margin-bottom:8px;">Nuova richiesta</div>
       <div class="form-group"><label>${esc(tp.nuovaLabel)}</label><input type="date" id="caso-sabato"></div>
@@ -5649,6 +5653,7 @@ function renderCasoncellata() {
       ${currentRole === "admin" ? `<button type="button" class="btn secondary" data-caso="reparti" title="Reparti e incarichi">⚙️ Reparti e incarichi</button>` : ""}
       <button type="button" class="btn secondary" data-caso="associa" title="Associa i ruoli scritti a mano agli incarichi">🔁 Associa i vecchi ruoli</button>
     </div>
+    </div><div class="pannello-dx">
     ${tutte.length ? tutte.map(ed => `
       <div class="card">
         <div style="display:flex; justify-content:space-between; gap:8px; align-items:flex-start;">
@@ -5671,7 +5676,7 @@ function renderCasoncellata() {
         <div class="ben-tasti" style="margin-top:8px;">
           <button type="button" class="btn danger" data-caso="elimina" data-id="${ed.id}" title="Elimina la richiesta e tutte le risposte">🗑️ Elimina</button>
         </div>
-      </div>`).join("") : `<div class="card-sub">Nessuna richiesta ancora creata.</div>`}
+      </div>`).join("") : `<div class="card-sub">Nessuna richiesta ancora creata.</div>`}</div></div>
   </div>`;
 }
 
@@ -8650,6 +8655,10 @@ function chiudiMenu() {
 }
 
 function setupMenuLaterale() {
+  // sul PC il menu fisso parte subito sotto la striscia verde: se ne misura l'altezza
+  const misuraTopbar = () => { const t = document.getElementById("topbar"); if (t) document.documentElement.style.setProperty("--topbar-h", t.offsetHeight + "px"); };
+  misuraTopbar(); window.addEventListener("resize", misuraTopbar);
+  if (window.ResizeObserver && document.getElementById("topbar")) new ResizeObserver(misuraTopbar).observe(document.getElementById("topbar"));
   if (window.matchMedia) window.matchMedia("(min-width: 1100px)").addEventListener("change", () => { chiudiMenu(); if (currentUser) renderMenuDrawer(); });   // cambiando la larghezza della finestra
   document.getElementById("menu-btn").addEventListener("click", apriMenu);
   document.getElementById("menu-scrim").addEventListener("click", chiudiMenu);

@@ -566,6 +566,13 @@ body.menu-aperto { overflow: hidden; }
   #app-content > div:has(> .card + .card) > * { min-width: 0; }
   #app-content > div:has(> .card + .card) > :not(.card) { grid-column: 1 / -1; }
   #app-content > div:has(> .card + .card) > .card { margin-bottom: 0; }
+  /* schermate a due pannelli (Cena, richieste di disponibilità, Ore Alpine): in una finestra media i pannelli si sciolgono nella griglia a colonne */
+  .due-pannelli { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px 18px; align-items: start; }
+  .due-pannelli > .pannello-sx, .due-pannelli > .pannello-dx { display: contents; }
+  .due-pannelli > :not(.card), .due-pannelli > :is(.pannello-sx, .pannello-dx) > :not(.card) { grid-column: 1 / -1; }
+  .due-pannelli .card { margin-bottom: 0; }
+  .due-pannelli > .pannello-dx > #cena-lista { display: contents; }
+  .due-pannelli .section-title { margin-top: 0 !important; }
   /* le finestre sono riquadri al centro, più larghi */
   #modal-overlay { align-items: center; }
   #modal-box { max-width: 720px; max-height: 90vh; border: 3px solid var(--ink); border-radius: 20px; }
@@ -573,11 +580,12 @@ body.menu-aperto { overflow: hidden; }
 }
 @media screen and (min-width: 1100px) {
   body { box-sizing: border-box; padding-right: 300px; }
-  #topbar { max-width: none; }
+  /* la striscia verde copre tutta la larghezza, anche sopra il menu; il suo contenuto resta a sinistra del menu */
+  #topbar { max-width: none; margin: 0 -300px 0 0; padding-right: 314px; }
   #app-content { max-width: 1240px; padding-bottom: 40px; }
-  /* il menu è una colonna fissa a destra, sempre visibile */
+  /* il menu è una colonna fissa a destra, sempre visibile, subito sotto la striscia verde */
   #navbar, #menu-btn { display: none !important; }
-  #menu-overlay { pointer-events: auto; inset: 0 0 0 auto; width: 300px; }
+  #menu-overlay { pointer-events: auto; inset: 0 0 0 auto; width: 300px; top: var(--topbar-h, 70px); }
   #menu-scrim { display: none; }
   #menu-drawer { transform: none !important; transition: none; width: 300px; }
   .menu-close { display: none; }
@@ -587,4 +595,11 @@ body.menu-aperto { overflow: hidden; }
   #update-banner { right: 300px !important; }
   #modal-overlay { padding-right: 300px; }
   #modal-box { max-width: 900px; }
+  /* due pannelli: a sinistra una colonna stretta (modulo, pulsanti, totali), a destra l'elenco su più colonne */
+  .due-pannelli { grid-template-columns: 390px minmax(0, 1fr); gap: 0 24px; }
+  .due-pannelli > .pannello-sx { display: block; min-width: 0; grid-column: 1; }
+  .due-pannelli > .pannello-dx { grid-column: 2; }
+  .due-pannelli > .pannello-dx:has(> #cena-lista) > .section-title { display: none; }   /* nella Cena le schede partono alla stessa altezza del modulo */
+  .due-pannelli > .pannello-sx > .card { margin-bottom: 14px; }
+  .due-pannelli > .pannello-dx { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 14px 18px; align-items: start; align-content: start; min-width: 0; }
 }
