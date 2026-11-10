@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "10.01";
+const APP_VERSION = "10.02";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -1882,6 +1882,8 @@ function oreAnniDisponibili() { const s = new Set([String(new Date().getFullYear
 
 function renderIniziative() {
   const soloLettura = currentRole === "socio";
+  const pcDue = !soloLettura && menuFisso();   // sul PC: tasti degli anni a sinistra, schede a destra
+  let storicoDx = "";
   const storico = (state.iniziativeStorico || []).slice().sort((a,b) => (b.data || "").localeCompare(a.data || ""));
 
   let storicoHtml;
@@ -1924,11 +1926,18 @@ function renderIniziative() {
     // raggruppate per anno: l'anno in corso è aperto, gli anni precedenti sono chiusi; ogni anno si apre e si chiude con il suo tasto
     const annoCorrente = String(new Date().getFullYear()), perAnno = {};
     storico.forEach(r => { const y = annoAttivita(r); (perAnno[y] = perAnno[y] || []).push(r); });
-    const gruppoAnno = y => { const lista = perAnno[y] || [], aperto = inizAnnoAperto(y, annoCorrente);
-      return `<button type="button" class="btn secondary block" data-iniz-anno="${y}" style="margin-bottom:10px; text-align:left;">📅 Attività ${y} (${lista.length}) ${aperto ? "▴" : "▾"}</button>
-      <div id="iniz-anno-${y}" style="${aperto ? "" : "display:none;"}">${lista.length ? lista.map(cardIniz).join("") : '<div class="card-sub" style="margin-bottom:10px;">Nessuna attività in questo anno.</div>'}</div>`; };
+    const bottoneAnno = y => { const lista = perAnno[y] || [], aperto = inizAnnoAperto(y, annoCorrente);
+      return `<button type="button" class="btn secondary block" data-iniz-anno="${y}" style="margin-bottom:10px; text-align:left;">📅 Attività ${y} (${lista.length}) ${aperto ? "▴" : "▾"}</button>`; };
+    const scatolaAnno = (y, conEtichetta) => { const lista = perAnno[y] || [], aperto = inizAnnoAperto(y, annoCorrente);
+      return `<div id="iniz-anno-${y}" style="${aperto ? "" : "display:none;"}">${conEtichetta ? `<div class="section-title" style="font-size:1.05rem;">📅 ${y}</div>` : ""}${lista.length ? lista.map(cardIniz).join("") : '<div class="card-sub" style="margin-bottom:10px;">Nessuna attività in questo anno.</div>'}</div>`; };
+    const gruppoAnno = y => bottoneAnno(y) + "\n      " + scatolaAnno(y, false);
     const anniPrima = Object.keys(perAnno).filter(y => y !== annoCorrente).sort((x, y) => y.localeCompare(x));
-    storicoHtml = gruppoAnno(annoCorrente) + (anniPrima.length ? `<div class="section-title" style="font-size:1.05rem; margin-top:22px;">🗄️ Anni precedenti</div>${anniPrima.map(gruppoAnno).join("")}` : "");
+    if (pcDue) {
+      storicoHtml = bottoneAnno(annoCorrente) + (anniPrima.length ? `<div class="section-title" style="font-size:1.05rem; margin-top:22px;">🗄️ Anni precedenti</div>${anniPrima.map(bottoneAnno).join("")}` : "");
+      storicoDx = [annoCorrente, ...anniPrima].map(y => scatolaAnno(y, true)).join("");
+    } else {
+      storicoHtml = gruppoAnno(annoCorrente) + (anniPrima.length ? `<div class="section-title" style="font-size:1.05rem; margin-top:22px;">🗄️ Anni precedenti</div>${anniPrima.map(gruppoAnno).join("")}` : "");
+    }
   }
   const formNuovaIniziativa = soloLettura ? "" : `
     <div class="card color-purple">
@@ -1969,6 +1978,13 @@ function renderIniziative() {
       <div class="card-sub" style="margin-top:10px;">"Condividi", "WhatsApp" ed "Email" salvano subito l'iniziativa e ci attaccano il badge del canale usato, anche se poi annulli l'invio: tienilo a mente se stai solo facendo una prova. "Condividi" apre la scelta app del telefono e include anche il file selezionato. Email va automaticamente a tutti gli indirizzi disponibili tra Anagrafica, Ringraziamenti e Sponsor. WhatsApp apre l'app: scegli tu i destinatari.</div>
     </div>`;
 
+  if (pcDue) return `
+    <div class="due-pannelli"><div class="pannello-sx">
+      <div class="section-title">🎉 Attività</div>
+      ${formNuovaIniziativa}
+      <div class="section-title" style="font-size:1.05rem; margin-top:22px;">🗂️ Elenco Attività</div>
+      ${storicoHtml}
+    </div><div class="pannello-dx">${storicoDx}</div></div>`;
   return `
     <div class="section-title">🎉 Attività</div>
 
@@ -3918,9 +3934,9 @@ function renderBacheca() {
     <div class="section-title">📌 Bacheca</div>
     <div class="card-sub" style="margin-bottom:12px;">Avvisi semplici o con un allegato (PDF/foto di una locandina) per informare il gruppo. Gli eventi con data vengono rimossi da soli 2 giorni dopo.</div>
 
-    ${prossimo ? `<div class="section-title" style="font-size:1.05rem;">⏭️ Il prossimo</div>${cardAvviso(prossimo, soloLettura)}` : ""}
+    ${soloLettura ? "" : '<div class="due-pannelli"><div class="pannello-dx">'}${prossimo ? `<div class="section-title" style="font-size:1.05rem;">⏭️ Il prossimo</div>${cardAvviso(prossimo, soloLettura)}` : ""}${soloLettura ? "" : '</div><div class="pannello-sx">'}
 
-    ${formNuovoAvviso}
+    ${formNuovoAvviso}${soloLettura ? "" : "</div></div>"}
 
     <div class="section-title" style="font-size:1.05rem; margin-top:22px;">🗂️ Altri avvisi</div>
     <div id="bacheca-lista">${altriHtml}</div>
@@ -6853,6 +6869,7 @@ function renderPrenotazioni() {
   if (currentRole === "socio") return renderPrenotazioniSocio();
 
   return `
+    <div class="due-pannelli"><div class="pannello-sx">
     <div class="section-title">🗓️ Prenotaz. Sede</div>
 
     <div class="card">
@@ -6875,8 +6892,10 @@ function renderPrenotazioni() {
     <button type="button" class="btn secondary block" id="pren-toggle-calendario-btn" style="margin-bottom:12px;">${calSedeVisibile ? "📋 Nascondi calendario" : "📅 Vedi calendario"}</button>
     ${calSedeVisibile ? renderCalendarioSede() : ""}
 
+    </div><div class="pannello-dx">
     <div class="section-title" style="font-size:1.05rem; margin-top:22px;">🗂️ Prenotazioni</div>
     ${renderElencoPrenotazioni(false)}
+    </div></div>
   `;
 }
 
@@ -8659,7 +8678,7 @@ function setupMenuLaterale() {
   const misuraTopbar = () => { const t = document.getElementById("topbar"); if (t) document.documentElement.style.setProperty("--topbar-h", t.offsetHeight + "px"); };
   misuraTopbar(); window.addEventListener("resize", misuraTopbar);
   if (window.ResizeObserver && document.getElementById("topbar")) new ResizeObserver(misuraTopbar).observe(document.getElementById("topbar"));
-  if (window.matchMedia) window.matchMedia("(min-width: 1100px)").addEventListener("change", () => { chiudiMenu(); if (currentUser) renderMenuDrawer(); });   // cambiando la larghezza della finestra
+  if (window.matchMedia) window.matchMedia("(min-width: 1100px)").addEventListener("change", () => { chiudiMenu(); if (currentUser) { renderMenuDrawer(); if (currentSection === "iniziative") renderSection(); } });   // cambiando la larghezza della finestra
   document.getElementById("menu-btn").addEventListener("click", apriMenu);
   document.getElementById("menu-scrim").addEventListener("click", chiudiMenu);
   document.getElementById("menu-drawer").addEventListener("click", e => {
