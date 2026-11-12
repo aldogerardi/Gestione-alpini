@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "10.06";
+const APP_VERSION = "10.07";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -6351,7 +6351,7 @@ function apriRepartiCaso() {
     <div class="card-sub" style="margin-bottom:6px;">Solo l'Admin. Gli incarichi si scelgono poi dal menu del Ruolo in «Assegna ruoli». Le modifiche valgono subito.</div>
     ${reparti.map(rep => `<div class="gr" data-rep="${esc(rep.id)}">
       <div class="t"><span>${esc(rep.nome)}</span><span><button type="button" class="rc-ico" data-rc="rinomina" data-rep="${esc(rep.id)}" title="Rinomina il reparto">✏️</button><button type="button" class="rc-ico" data-rc="elimina-rep" data-rep="${esc(rep.id)}" title="Elimina il reparto">🗑️</button></span></div>
-      <div>${rep.incarichi.map(inc => `<span class="c">${esc(inc)} <button type="button" class="rc-ico" data-rc="rinomina-inc" data-rep="${esc(rep.id)}" data-inc="${esc(inc)}" title="Rinomina l'incarico">✏️</button><button type="button" class="rc-x" data-rc="elimina-inc" data-rep="${esc(rep.id)}" data-inc="${esc(inc)}" title="Togli l'incarico">✕</button></span>`).join("") || '<span class="card-sub">Nessun incarico</span>'}</div>
+      <div>${rep.incarichi.map((inc, ix) => `<span class="c">${esc(inc)} <button type="button" class="rc-ico" data-rc="su-inc" data-rep="${esc(rep.id)}" data-inc="${esc(inc)}" title="Sposta su (prima nell'elenco)"${ix === 0 ? " disabled" : ""}>↑</button><button type="button" class="rc-ico" data-rc="giu-inc" data-rep="${esc(rep.id)}" data-inc="${esc(inc)}" title="Sposta giù (dopo nell'elenco)"${ix === rep.incarichi.length - 1 ? " disabled" : ""}>↓</button><button type="button" class="rc-ico" data-rc="rinomina-inc" data-rep="${esc(rep.id)}" data-inc="${esc(inc)}" title="Rinomina l'incarico">✏️</button><button type="button" class="rc-x" data-rc="elimina-inc" data-rep="${esc(rep.id)}" data-inc="${esc(inc)}" title="Togli l'incarico">✕</button></span>`).join("") || '<span class="card-sub">Nessun incarico</span>'}</div>
       <div class="rc-nuovo"><input type="text" maxlength="40" placeholder="Nuovo incarico…" data-nuovo-inc="${esc(rep.id)}"><button type="button" class="btn secondary" data-rc="aggiungi-inc" data-rep="${esc(rep.id)}">＋</button></div>
     </div>`).join("")}
     <div class="rc-nuovo" style="margin-top:8px;"><input type="text" maxlength="30" placeholder="Nuovo reparto…" id="rc-nuovo-rep"><button type="button" class="btn secondary" data-rc="aggiungi-rep">＋ Reparto</button></div>
@@ -6380,6 +6380,16 @@ function apriRepartiCaso() {
     }
     const rep = repartiModificabili().find(r => r.id === repId);
     if (!rep) return;
+    if (az === "su-inc" || az === "giu-inc") {
+      const inc = b.dataset.inc, i = rep.incarichi.indexOf(inc), j = i + (az === "su-inc" ? -1 : 1);
+      if (i < 0 || j < 0 || j >= rep.incarichi.length) return;
+      // l'ordine dell'elenco è l'ordine dei nomi nel tabellone, nel report per reparto e nel menu dei ruoli
+      [rep.incarichi[i], rep.incarichi[j]] = [rep.incarichi[j], rep.incarichi[i]];
+      const box = document.getElementById("modal-box"), y = box ? box.scrollTop : 0;
+      fatto(`l'incarico «${inc}» spostato ${az === "su-inc" ? "su" : "giù"} in ${rep.nome}`);
+      const box2 = document.getElementById("modal-box"); if (box2) box2.scrollTop = y;   // la finestra resta dov'era
+      return;
+    }
     if (az === "aggiungi-inc") {
       const n = pulisci(document.querySelector(`[data-nuovo-inc="${repId}"]`).value);
       if (!n) { errore("Scrivi il nome dell'incarico."); return; }

@@ -615,3 +615,6 @@ body.menu-aperto { overflow: hidden; }
   .due-pannelli > .pannello-sx > .card { margin-bottom: 14px; }
   .due-pannelli > .pannello-dx { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 14px 18px; align-items: start; align-content: start; min-width: 0; }
 }
+
+/* Reparti e incarichi: frecce per riordinare; spente per il primo (su) e l'ultimo (giù) */
+.rc-ico[disabled] { opacity: .28; cursor: default; }
