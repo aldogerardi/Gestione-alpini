@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "10.05";
+const APP_VERSION = "10.06";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -318,11 +318,31 @@ function applyStateFields(source) {
 
 const SYNC_STATO = { ok: null, quando: null, errore: "", ricevuto: null, daCache: false };
 
+// Si scrivono solo le parti dello stato che questo dispositivo ha davvero cambiato dall'ultimo aggiornamento ricevuto:
+// un telefono con dati vecchi non può più riscrivere (e cancellare) attività, ore, avvisi… che non ha toccato.
+let baselineSync = null;
+function segnaStatoSincronizzato(origine) {
+  baselineSync = {}; const o = origine || state;
+  Object.keys(o).forEach(k => { baselineSync[k] = JSON.stringify(o[k]); });
+}
+
 function syncToFirebase() {
   if (!window.db) return Promise.resolve(false);
   const clean = JSON.parse(JSON.stringify(state));
   const kb = Math.round(JSON.stringify(clean).length / 1024);
-  return db.collection(FIRESTORE_COLLECTION).doc(FIRESTORE_DOC).set(clean).then(() => {
+  const ref = db.collection(FIRESTORE_COLLECTION).doc(FIRESTORE_DOC);
+  let cambiati = null, scrittura;
+  if (baselineSync) {
+    cambiati = {};
+    Object.keys(clean).forEach(k => { if (baselineSync[k] !== JSON.stringify(clean[k])) cambiati[k] = clean[k]; });
+    scrittura = Object.keys(cambiati).length
+      ? ref.update(cambiati).catch(err => (err && err.code === "not-found") ? ref.set(clean) : Promise.reject(err))
+      : Promise.resolve();
+  } else {
+    scrittura = ref.set(clean);   // i dati del server non sono ancora arrivati: come prima
+  }
+  return scrittura.then(() => {
+    if (cambiati) Object.keys(cambiati).forEach(k => { baselineSync[k] = JSON.stringify(clean[k]); }); else segnaStatoSincronizzato(clean);
     SYNC_STATO.ok = true; SYNC_STATO.quando = new Date().toISOString(); SYNC_STATO.errore = "";
     return true;
   }).catch(err => {
@@ -346,6 +366,7 @@ function initFirebaseSync() {
       return;
     }
     applyStateFields(snap.data());
+    segnaStatoSincronizzato();
     SYNC_STATO.ricevuto = new Date().toISOString();
     SYNC_STATO.daCache = !!(snap.metadata && snap.metadata.fromCache);
     logAggiornaBaseline();
@@ -3866,23 +3887,41 @@ function renderLibretto() {
   `;
 }
 
+// Un evento con data resta in Bacheca il giorno stesso e quello dopo; dal secondo giorno in poi è scaduto.
+function bachecaScaduta(a, oggi) {
+  if (!a || !a.data) return false;   // senza data, non scade da solo
+  const d = parseDataISO(a.data);
+  return !!d && Math.floor((oggi - d) / 86400000) >= 2;
+}
+let bachecaPuliziaInCorso = false;
 function pulisciEventiScadutiBacheca() {
   const oggi = new Date(); oggi.setHours(0, 0, 0, 0);
-  const filtrata = state.bacheca.filter(a => {
-    if (!a.data) return true; // senza data, non scade da solo
-    const d = parseDataISO(a.data);
-    if (!d) return true;
-    const giorniPassati = Math.floor((oggi - d) / 86400000);
-    return giorniPassati < 2;
-  });
-  if (filtrata.length === state.bacheca.length) return;
-  // Questo è l'unico salvataggio che parte da solo: se il telefono non ha ancora ricevuto i dati
-  // aggiornati da Firebase potrebbe riscrivere dati vecchi e cancellare le modifiche fatte da altri.
-  // Quindi aspetta: riproverà al prossimo disegno della Bacheca, a dati allineati.
-  if (window.db && !SYNC_STATO.ricevuto) return;
-  state.bacheca = filtrata;
-  logComeSistema = true;
-  try { saveState(); } finally { logComeSistema = false; }
+  if (!(state.bacheca || []).some(a => bachecaScaduta(a, oggi))) return;
+  // Solo il Direttivo toglie gli avvisi scaduti (i soci non scrivono mai da soli), e lo fa sui dati veri del server,
+  // modificando soltanto gli avvisi: un telefono con dati vecchi non può più riscrivere attività, ore o altro.
+  if (currentRole !== "admin" && currentRole !== "direttivo") return;
+  if (!window.db) {
+    state.bacheca = state.bacheca.filter(a => !bachecaScaduta(a, oggi));
+    logComeSistema = true;
+    try { saveState(); } finally { logComeSistema = false; }
+    return;
+  }
+  if (bachecaPuliziaInCorso) return;
+  bachecaPuliziaInCorso = true;
+  const ref = db.collection(FIRESTORE_COLLECTION).doc(FIRESTORE_DOC);
+  conTimeout(db.runTransaction(async tx => {
+    const snap = await tx.get(ref);
+    const lista = (snap.exists && snap.data().bacheca) || [];
+    const rimasti = lista.filter(a => !bachecaScaduta(a, oggi));
+    if (rimasti.length === lista.length) return null;
+    tx.update(ref, { bacheca: rimasti });
+    return { rimasti, tolti: lista.filter(a => bachecaScaduta(a, oggi)) };
+  }), 10000).then(esito => {
+    if (!esito) return;
+    scriviLog(esito.tolti.map(a => ({ ev: "🗑️ Eliminato da Bacheca: " + (a.titolo || "(senza nome)") })), "__sistema__");
+    if (baselineSync) baselineSync.bacheca = JSON.stringify(esito.rimasti);
+    if (currentSection === "bacheca") renderSection();   // arriva anche dall'aggiornamento dei dati; così si vede subito
+  }).catch(err => console.warn("Pulizia della Bacheca non riuscita (riproverà)", err)).finally(() => { bachecaPuliziaInCorso = false; });
 }
 
 function parseDataISO(str) {
@@ -3909,7 +3948,8 @@ function cardAvviso(a, soloLettura) {
 function renderBacheca() {
   pulisciEventiScadutiBacheca();
   const soloLettura = currentRole === "socio";
-  const avvisi = [...state.bacheca].sort((a, b) => {
+  const oggiB = new Date(); oggiB.setHours(0, 0, 0, 0);
+  const avvisi = [...state.bacheca].filter(a => !bachecaScaduta(a, oggiB)).sort((a, b) => {
     if (a.data && b.data) return a.data.localeCompare(b.data);
     if (a.data) return -1;
     if (b.data) return 1;
