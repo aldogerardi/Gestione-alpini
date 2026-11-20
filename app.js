@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "10.07";
+const APP_VERSION = "10.08";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -3872,6 +3872,7 @@ function renderLibretto() {
   const canto = (state.settings.testoCanto || "").trim();
   return `
     <div class="section-title">📖 Preghiera e Canto</div>
+    <div class="libretto-due">
     <div class="card">
       <div style="font-weight:800; margin-bottom:8px;">🙏 Preghiera dell'Alpino</div>
       ${preghiera
@@ -3883,6 +3884,7 @@ function renderLibretto() {
       ${canto
         ? `<div style="white-space:pre-wrap; line-height:1.6;">${esc(canto)}</div>`
         : `<div class="card-sub">Testo non ancora inserito. Vai in Impostazioni per aggiungerlo.</div>`}
+    </div>
     </div>
   `;
 }
@@ -4185,9 +4187,9 @@ function renderVerbali() {
   return `
     <div class="section-title">📑 Verbali Consiglio</div>
     <div class="card-sub" style="margin-bottom:12px;">Verbali delle riunioni del Consiglio Direttivo, dal più recente.</div>
-    ${form}
+    ${soloLettura ? "" : '<div class="due-pannelli"><div class="pannello-sx">'}${form}${soloLettura ? "" : '</div><div class="pannello-dx">'}
     <div class="section-title" style="font-size:1.05rem; margin-top:22px;">🗂️ Verbali</div>
-    <div id="verbali-lista">${listaHtml}</div>
+    <div id="verbali-lista">${listaHtml}</div>${soloLettura ? "" : "</div></div>"}
   `;
 }
 

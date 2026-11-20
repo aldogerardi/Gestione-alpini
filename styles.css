@@ -571,7 +571,14 @@ body.menu-aperto { overflow: hidden; }
   .due-pannelli > .pannello-sx, .due-pannelli > .pannello-dx { display: contents; }
   .due-pannelli > :not(.card), .due-pannelli > :is(.pannello-sx, .pannello-dx) > :not(.card) { grid-column: 1 / -1; }
   .due-pannelli .card { margin-bottom: 0; }
-  .due-pannelli > .pannello-dx > :is(#cena-lista, #adunata-lista) { display: contents; }
+  .due-pannelli > .pannello-dx > :is(#cena-lista, #adunata-lista, #verbali-lista) { display: contents; }
+  /* Verbali: senza il modulo (soci) l'elenco va su più colonne */
+  #verbali-lista { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px 18px; align-items: start; }
+  #verbali-lista > .card { margin-bottom: 0; }
+  #verbali-lista > :not(.card) { grid-column: 1 / -1; }
+  /* Preghiera e Canto affiancati */
+  .libretto-due { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
+  .libretto-due > .card { margin: 0 !important; }
   /* Panettoni, dettaglio campagna: le prenotazioni su più colonne; il tasto «Nuova prenotazione» e la ricerca restano stretti */
   #ben-pren-lista { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px 18px; align-items: start; }
   #ben-pren-lista > .card { margin-bottom: 0; }
@@ -613,6 +620,7 @@ body.menu-aperto { overflow: hidden; }
   .due-pannelli > .pannello-dx { grid-column: 2; grid-row: 1; }
   .due-pannelli > .pannello-dx:has(> #cena-lista) > .section-title { display: none; }   /* nella Cena le schede partono alla stessa altezza del modulo */
   .due-pannelli > .pannello-sx > .card { margin-bottom: 14px; }
+  .due-pannelli > .pannello-dx:has(> #verbali-lista) { grid-template-columns: repeat(2, minmax(0, 1fr)); }   /* Verbali: due per riga */
   .due-pannelli > .pannello-dx { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 14px 18px; align-items: start; align-content: start; min-width: 0; }
 }
 
