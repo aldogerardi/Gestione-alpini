@@ -592,6 +592,11 @@ body.menu-aperto { overflow: hidden; }
   [id^="pren-anno-"] { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px 18px; align-items: start; }
   [id^="pren-anno-"] > .card { margin-bottom: 0; }
   [id^="pren-anno-"] > :not(.card) { grid-column: 1 / -1; }
+  /* Report 1: in alto Socio+Categoria e filtri affiancati; sotto, a tutta larghezza, le colonne su più file e il pulsante */
+  #app-content > .rep1-card { grid-column: 1 / -1; }
+  .rep1-card { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 28px; align-items: start; }
+  .rep1-card > .rep1-wide { grid-column: 1 / -1; }
+  .rep1-cols { display: grid !important; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
   /* le finestre sono riquadri al centro, più larghi */
   #modal-overlay { align-items: center; }
   #modal-box { max-width: 720px; max-height: 90vh; border: 3px solid var(--ink); border-radius: 20px; }

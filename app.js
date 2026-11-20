@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "10.08";
+const APP_VERSION = "10.09";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -8146,7 +8146,8 @@ function renderReport1() {
     </label>`).join("");
   return `
     <div class="section-title">📊 Report 1 – Soci</div>
-    <div class="card" style="margin-bottom:16px;">
+    <div class="card rep1-card" style="margin-bottom:16px;">
+      <div class="rep1-a">
       <div class="form-group">
         <label>Socio</label>
         <select id="rep1-socio"><option value="">Tutti i soci</option>${socioOpts}</select>
@@ -8159,6 +8160,8 @@ function renderReport1() {
         </div>
         <div style="display:flex; flex-wrap:wrap; gap:4px 16px; border:1px solid #ddd; border-radius:8px; padding:8px;">${caricaHtml}</div>
       </div>
+      </div>
+      <div class="rep1-b">
       <div class="two-col">
         <div class="form-group"><label>Provincia</label><select id="rep1-provincia"><option value="">Tutte</option>${provinciaOpts}</select></div>
         <div class="form-group"><label>Andato avanti</label><select id="rep1-andato-avanti"><option value="">Tutti</option><option value="no" selected>Escludi (solo attivi)</option><option value="si">Solo andati avanti</option></select></div>
@@ -8181,15 +8184,16 @@ function renderReport1() {
           <option value="desc">Decrescente (Z→A, più recente prima)</option>
         </select></div>
       </div>
-      <div class="form-group">
+      </div>
+      <div class="form-group rep1-wide">
         <label>Colonne da includere</label>
         <div style="margin-bottom:4px;">
           <a href="#" id="rep1-col-tutte" style="font-size:0.78rem;">Seleziona tutte</a> &nbsp;·&nbsp;
           <a href="#" id="rep1-col-nessuna" style="font-size:0.78rem;">Nessuna</a>
         </div>
-        <div style="display:flex; flex-wrap:wrap; gap:4px 16px; border:1px solid #ddd; border-radius:8px; padding:8px;">${colonneHtml}</div>
+        <div class="rep1-cols" style="display:flex; flex-wrap:wrap; gap:4px 16px; border:1px solid #ddd; border-radius:8px; padding:8px;">${colonneHtml}</div>
       </div>
-      <button type="button" class="btn block" id="rep1-genera-btn" style="margin-top:10px;">🔎 Genera report</button>
+      <button type="button" class="btn block rep1-wide" id="rep1-genera-btn" style="margin-top:10px;">🔎 Genera report</button>
     </div>
     <button type="button" class="btn block" id="rep1-andati-avanti-btn" style="background:#666; color:#fff;">💔 Report Andati avanti (stampa su carta intestata)</button>
   `;
