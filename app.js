@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "10.09";
+const APP_VERSION = "10.11";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -328,6 +328,13 @@ function segnaStatoSincronizzato(origine) {
 
 function syncToFirebase() {
   if (!window.db) return Promise.resolve(false);
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    // Senza rete Firebase metterebbe la modifica in coda e, alla riconnessione, sostituirebbe la lista con quella di questo telefono,
+    // cancellando quello che gli altri hanno aggiunto nel frattempo. Meglio non partire.
+    SYNC_STATO.ok = false; SYNC_STATO.quando = new Date().toISOString(); SYNC_STATO.errore = "senza connessione";
+    toast("⚠️ Sei senza connessione: modifica non salvata, riprova quando torna la rete");
+    return Promise.resolve(false);
+  }
   const clean = JSON.parse(JSON.stringify(state));
   const kb = Math.round(JSON.stringify(clean).length / 1024);
   const ref = db.collection(FIRESTORE_COLLECTION).doc(FIRESTORE_DOC);
@@ -339,7 +346,11 @@ function syncToFirebase() {
       ? ref.update(cambiati).catch(err => (err && err.code === "not-found") ? ref.set(clean) : Promise.reject(err))
       : Promise.resolve();
   } else {
-    scrittura = ref.set(clean);   // i dati del server non sono ancora arrivati: come prima
+    // I dati del server non sono ancora arrivati: non riscrivo mai tutto con la copia di questo telefono (potrebbe essere vecchia
+    // e cancellerebbe il lavoro degli altri). La modifica non parte; basta riprovare dopo qualche secondo.
+    SYNC_STATO.ok = false; SYNC_STATO.quando = new Date().toISOString(); SYNC_STATO.errore = "dati del server non ancora ricevuti";
+    toast("⚠️ Sto ancora ricevendo i dati dal server: modifica non salvata, riprova tra qualche secondo");
+    return Promise.resolve(false);
   }
   return scrittura.then(() => {
     if (cambiati) Object.keys(cambiati).forEach(k => { baselineSync[k] = JSON.stringify(clean[k]); }); else segnaStatoSincronizzato(clean);
@@ -361,6 +372,8 @@ function initFirebaseSync() {
   firestoreUnsubscribe = ref.onSnapshot(snap => {
     if (!snap.exists) {
       // Primo avvio in assoluto: nessun dato ancora su Firebase, carichiamo quello locale.
+      // Solo se è la risposta vera del server: una risposta dalla memoria del telefono (senza rete) non vuol dire che sul server sia vuoto.
+      if (snap.metadata && snap.metadata.fromCache) return;
       const clean = JSON.parse(JSON.stringify(state));
       ref.set(clean).catch(err => console.error("Errore inizializzazione Firebase", err));
       return;
