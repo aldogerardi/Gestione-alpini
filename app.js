@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "10.11";
+const APP_VERSION = "10.13";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -80,6 +80,83 @@ async function derivaHashPassword(password, saltBytes, iter) {
   const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]);
   const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt: saltBytes, iterations: iter }, key, 256);
   return bytesToB64(new Uint8Array(bits));
+}
+
+// ---------- Stato della connessione (pallino nella striscia verde) ----------
+// Verde = internet raggiungibile; giallo = rete lenta o dati del server non ancora arrivati; rosso = senza connessione.
+// Il controllo fa una richiesta minuscola al sito dell'app (senza passare dalla memoria del telefono) e guarda anche il segnale del telefono.
+const CONN = { stato: "verde", pingKo: false, ritardo: 0, ultimoControllo: null, avvio: Date.now(), timer: null, eraRosso: false, inCorso: false };
+function connCalcola() {
+  if (navigator.onLine === false || CONN.pingKo) return "rosso";
+  if (window.db && !baselineSync && Date.now() - CONN.avvio > 12000) return "giallo";
+  if (CONN.ritardo > 4000) return "giallo";
+  return "verde";
+}
+function connAggiorna() {
+  const nuovo = connCalcola();
+  const btn = document.getElementById("conn-btn");
+  if (btn) {
+    btn.className = "conn-" + nuovo;
+    const testi = { verde: ["Online", "Connesso"], giallo: ["Lenta", "Rete lenta"], rosso: ["Offline", "Senza connessione"] }[nuovo];
+    btn.querySelector(".cs").textContent = testi[0];
+    btn.querySelector(".cl").textContent = testi[1];
+  }
+  if (nuovo !== CONN.stato) {
+    if (nuovo === "rosso") { CONN.eraRosso = true; toast("⚠️ Senza connessione: le modifiche non vengono salvate"); }
+    else if (nuovo === "verde" && CONN.eraRosso) { CONN.eraRosso = false; toast("✅ Connessione ripristinata"); }
+    CONN.stato = nuovo;
+  }
+}
+async function connControlla() {
+  if (CONN.inCorso) return;
+  CONN.inCorso = true;
+  clearTimeout(CONN.timer);
+  try {
+    if (navigator.onLine === false) { CONN.pingKo = true; return; }
+    const ctrl = new AbortController();
+    const stop = setTimeout(() => ctrl.abort(), 7000);
+    const t0 = Date.now();
+    try {
+      // l'intestazione Range fa passare la richiesta direttamente dalla rete (il service worker la lascia stare)
+      await fetch(`version.json?conn=${t0}`, { cache: "no-store", headers: { Range: "bytes=0-0" }, signal: ctrl.signal });
+      CONN.pingKo = false; CONN.ritardo = Date.now() - t0;
+    } catch (e) { CONN.pingKo = true; CONN.ritardo = 0; }
+    clearTimeout(stop);
+  } finally {
+    CONN.ultimoControllo = new Date();
+    CONN.inCorso = false;
+    connAggiorna();
+    CONN.timer = setTimeout(connControlla, CONN.stato === "verde" ? 30000 : 8000);
+  }
+}
+function connDettagli() {
+  const ora = d => d ? d.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "-";
+  const spiega = {
+    verde: "✅ <b>Connesso.</b> L'app comunica correttamente: le modifiche vengono salvate.",
+    giallo: "🟡 <b>Rete lenta o dati non ancora arrivati.</b> Aspetta qualche secondo prima di salvare una modifica.",
+    rosso: "🔴 <b>Senza connessione.</b> Le modifiche <b>non vengono salvate</b> finché non torna la rete."
+  }[CONN.stato];
+  const aiuto = CONN.stato === "verde" ? "" : `<div class="card-sub" style="margin-top:10px;">Cosa fare: controlla che il Wi-Fi o i dati del telefono siano attivi, avvicinati al router o spostati dove c'è più segnale; poi tocca «Ricontrolla».</div>`;
+  showModal(`
+    <div class="modal-title">📶 Stato della connessione</div>
+    <div style="line-height:1.5;">${spiega}</div>
+    ${aiuto}
+    <div class="card-sub" style="margin-top:10px;">Ultimo controllo: ${ora(CONN.ultimoControllo)}${CONN.ritardo ? " · risposta in " + (CONN.ritardo / 1000).toFixed(1) + " s" : ""}<br>Ultimi dati ricevuti dal server: ${SYNC_STATO.ricevuto ? ora(new Date(SYNC_STATO.ricevuto)) : "-"}</div>
+    <div class="modal-actions" style="margin-top:14px;">
+      <button type="button" class="btn secondary block" id="conn-ricontrolla">🔄 Ricontrolla</button>
+      <button type="button" class="btn block" id="conn-chiudi" style="margin-top:8px;">Chiudi</button>
+    </div>`);
+  document.getElementById("conn-chiudi").addEventListener("click", closeModal);
+  document.getElementById("conn-ricontrolla").addEventListener("click", async () => { await connControlla(); connDettagli(); });
+}
+function avviaControlloConnessione() {
+  const btn = document.getElementById("conn-btn");
+  if (btn) btn.addEventListener("click", connDettagli);
+  window.addEventListener("online", () => { CONN.pingKo = false; connControlla(); });
+  window.addEventListener("offline", () => { connAggiorna(); });
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") connControlla(); });
+  connAggiorna();
+  connControlla();
 }
 
 function conTimeout(promise, ms) {
@@ -8926,6 +9003,7 @@ function startApp() {
   setupMenuLaterale();
   renderSection();
   initFirebaseSync();
+  avviaControlloConnessione();
   setTimeout(controllaPasswordIniziale, 1200);
   window.addEventListener("resize", aggiornaPallini);
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") controllaPallinoCena(); });
