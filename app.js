@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "10.35";
+const APP_VERSION = "10.36";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -87,6 +87,7 @@ async function derivaHashPassword(password, saltBytes, iter) {
 // Il controllo fa una richiesta minuscola al sito dell'app (senza passare dalla memoria del telefono) e guarda anche il segnale del telefono.
 const CONN = { stato: "verde", pingKo: false, ritardo: 0, ultimoControllo: null, avvio: Date.now(), timer: null, eraRosso: false, inCorso: false };
 function connCalcola() {
+  if (!window.db) return "rosso";   // il collegamento al database non è partito (libreria Firebase non caricata): l'app lavora solo su questo telefono
   if (navigator.onLine === false || CONN.pingKo) return "rosso";
   if (window.db && !baselineSync && Date.now() - CONN.avvio > 12000) return "giallo";
   if (CONN.ritardo > 4000) return "giallo";
@@ -134,7 +135,7 @@ function connDettagli() {
   const spiega = {
     verde: "✅ <b>Connesso.</b> L'app comunica correttamente: le modifiche vengono salvate.",
     giallo: "🟡 <b>Rete lenta o dati non ancora arrivati.</b> Aspetta qualche secondo prima di salvare una modifica.",
-    rosso: "🔴 <b>Senza connessione.</b> Le modifiche <b>non vengono salvate</b> finché non torna la rete."
+    rosso: window.db ? "🔴 <b>Senza connessione.</b> Le modifiche <b>non vengono salvate</b> finché non torna la rete." : "🔴 <b>L'app non è collegata al database.</b> Quello che modifichi resta solo su questo telefono. Chiudi e riapri l'app; se resta così, avvisa chi gestisce l'app."
   }[CONN.stato];
   const aiuto = CONN.stato === "verde" ? "" : `<div class="card-sub" style="margin-top:10px;">Cosa fare: controlla che il Wi-Fi o i dati del telefono siano attivi, avvicinati al router o spostati dove c'è più segnale; poi tocca «Ricontrolla».</div>`;
   showModal(`
