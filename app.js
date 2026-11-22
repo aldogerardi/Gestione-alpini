@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "10.14";
+const APP_VERSION = "10.34";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -994,6 +994,31 @@ function tastiSocial(g, conTesto) {
   return `<div class="social-riga">${tasti.join("")}</div>` + testo("📷", "Instagram", g.instagram) + testo("📘", "Facebook", g.facebook);
 }
 
+// ---------- Home a riquadri ----------
+// Un riquadro per ogni sezione che il profilo può usare (stesse regole e stessi gruppi del Menù); il pallino rosso/azzurro è lo stesso del Menù.
+function renderHomeRiquadri() {
+  const socio = currentRole === "socio";
+  let gruppi = MENU_GRUPPI.filter(g => g.titolo).map(g => ({
+    titolo: g.titolo,
+    voci: g.voci.filter(([sez]) => sezionePermessa(sez))
+  })).filter(g => g.voci.length);
+  if (socio) gruppi.sort((x, y) => (x.titolo === "Comunicazione" ? 0 : 1) - (y.titolo === "Comunicazione" ? 0 : 1));   // ai soci prima le comunicazioni
+  const tile = ([sez, ico, lab]) => `<button type="button" class="home-tile" data-home-sez="${sez}"><span class="ht-e">${ico}</span><span class="ht-t">${lab}</span>${pallinoVoce(sez)}</button>`;
+  let scheda = "";
+  const s = currentUser && currentUser.startsWith("socio:") ? socioCorrente() : null;
+  if (s) {
+    const agg = s.aggiornatoDaSocio ? `${s.aggiornatoDaSocio.slice(8, 10)}/${s.aggiornatoDaSocio.slice(5, 7)}/${s.aggiornatoDaSocio.slice(0, 4)}` : "";
+    scheda = `<button type="button" class="home-scheda${agg ? " ok" : ""}" data-home-scheda="1">
+      <span class="ht-e">👤</span>
+      <span class="hs-testo"><span class="hs-titolo">La mia scheda</span><span class="hs-sub">Controlla i tuoi dati e aggiornali se serve</span><span class="hs-chip">${agg ? "Aggiornata il " + agg : "Non ancora aggiornata"}</span></span>
+      <span class="hs-freccia" aria-hidden="true">›</span>
+    </button>`;
+  }
+  return `${scheda}
+    ${gruppi.map(g => `<div class="home-gt">${g.titolo}</div><div class="home-grid">${g.voci.map(tile).join("")}</div>`).join("")}
+    <div class="home-grid" style="margin-top:6px"><button type="button" class="home-tile home-largo" data-home-gruppo="1"><span class="ht-e">🏔️</span><span class="ht-t">Il Gruppo: dati e social</span></button></div>`;
+}
+
 function renderHome() {
   const g = state.gruppoInfo || {};
   const capogruppo = state.socios.find(s => s.carica === "Capogruppo");
@@ -1004,7 +1029,8 @@ function renderHome() {
     return `
       <div class="section-title">🏠 Home</div>
       ${renderNotizieDelGiorno()}
-      <div class="card color-green">
+      ${renderHomeRiquadri()}
+      <div class="card color-green" id="home-gruppo-card" style="display:none">
         <div style="font-weight:800; margin-bottom:10px;">Dati del Gruppo</div>
         <div class="form-group"><label>Denominazione</label><div class="card-sub">${esc(g.denominazione) || "-"}</div></div>
         <div class="form-group"><label>Via</label><div class="card-sub">${esc(g.via) || "-"}</div></div>
@@ -1021,7 +1047,8 @@ function renderHome() {
   return `
     <div class="section-title">🏠 Home</div>
     ${renderNotizieDelGiorno()}
-    <div class="card color-green">
+    ${renderHomeRiquadri()}
+    <div class="card color-green" id="home-gruppo-card" style="display:none">
       <div style="font-weight:800; margin-bottom:10px;">Dati del Gruppo</div>
       <div class="form-group"><label>Denominazione</label><input type="text" id="home-denominazione" value="${esc(g.denominazione)}" placeholder="Es. Gruppo Alpini Bottonaga"></div>
       <div class="form-group"><label>Matricola</label><input type="text" id="home-matricola" value="${esc(g.matricola)}"></div>
@@ -1047,6 +1074,15 @@ function renderHome() {
 }
 
 function attachHomeEvents() {
+  document.querySelectorAll("[data-home-sez]").forEach(b => b.addEventListener("click", () => vaiASezione(b.dataset.homeSez)));
+  document.querySelectorAll("[data-home-scheda]").forEach(b => b.addEventListener("click", () => apriMiaScheda()));
+  document.querySelectorAll("[data-home-gruppo]").forEach(b => b.addEventListener("click", () => {
+    const c = document.getElementById("home-gruppo-card");
+    if (!c) return;
+    const apri = c.style.display === "none";
+    c.style.display = apri ? "" : "none";
+    if (apri) c.scrollIntoView({ behavior: "smooth", block: "start" });
+  }));
   document.querySelectorAll("[data-wa-auguri]").forEach(btn => {
     btn.addEventListener("click", () => inviaAuguriWhatsapp(btn.dataset.waAuguri));
   });

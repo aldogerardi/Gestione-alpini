@@ -37,6 +37,26 @@ body {
   max-width: 480px;
   margin: 0 auto;
 }
+/* Home a riquadri */
+.home-gt { font-weight: 800; font-size: 0.8rem; letter-spacing: .06em; text-transform: uppercase; color: var(--green-dark); margin: 14px 4px 8px; }
+.home-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+.home-tile { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; height: 108px; position: relative; background: #fff; border: 3px solid var(--ink); border-left: 10px solid var(--gold); border-radius: 18px; box-shadow: var(--shadow-off); color: var(--green-dark); font: inherit; padding: 0 6px; cursor: pointer; }
+.home-tile:active, .home-scheda:active { transform: translate(3px, 3px); box-shadow: none; }
+.home-tile .ht-e { font-size: 36px; line-height: 1; }
+.home-tile .ht-t { font-size: 0.95rem; font-weight: 800; text-align: center; line-height: 1.15; }
+.home-tile .pall-v { position: absolute; top: 8px; right: 10px; margin: 0; width: 16px; height: 16px; border: 2px solid #fff; box-shadow: 0 0 0 1px var(--ink); }
+.home-largo { flex-direction: row; gap: 12px; height: 76px; grid-column: 1 / -1; }
+.home-scheda { display: flex; align-items: center; gap: 14px; width: 100%; box-sizing: border-box; margin: 4px 0 6px; background: #fff; border: 3px solid var(--ink); border-left: 10px solid var(--red); border-radius: 18px; box-shadow: var(--shadow-off); padding: 14px 16px; text-align: left; font: inherit; color: var(--green-dark); cursor: pointer; }
+.home-scheda.ok { border-left-color: #2e9e4f; }
+.home-scheda .ht-e { font-size: 40px; line-height: 1; }
+.hs-testo { flex: 1; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.hs-titolo { font-weight: 900; font-size: 1.05rem; }
+.hs-sub { font-size: 0.8rem; color: #3a3a3a; }
+.hs-chip { align-self: flex-start; margin-top: 4px; background: var(--red); color: #fff; font-weight: 800; font-size: 0.74rem; padding: 3px 10px; border-radius: 999px; }
+.home-scheda.ok .hs-chip { background: #2e7d46; }
+.hs-freccia { font-size: 1.6rem; font-weight: 900; }
+@media screen and (min-width: 700px) { .home-scheda { max-width: 560px; } }
+
 /* Pallino di stato della connessione, nella striscia verde */
 #conn-btn { display: flex; align-items: center; gap: 6px; height: 36px; padding: 0 11px 0 8px; border-radius: 999px; border: 2px solid var(--ink); background: var(--cream); color: var(--ink); font-weight: 800; font-size: 0.78rem; box-shadow: 2px 2px 0 var(--ink); cursor: pointer; flex: none; }
 #conn-btn:active { transform: translate(2px, 2px); box-shadow: none; }
