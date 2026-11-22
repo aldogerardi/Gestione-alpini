@@ -45,8 +45,17 @@ body {
 .conn-giallo .conn-dot { background: #f2b400; }
 .conn-rosso { background: var(--red) !important; color: #fff !important; }
 .conn-rosso .conn-dot { background: #fff; }
-@keyframes conn-pulsa { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.35); } }
-@media (prefers-reduced-motion: no-preference) { .conn-giallo .conn-dot, .conn-rosso .conn-dot { animation: conn-pulsa 1.2s ease-in-out infinite; } }
+/* movimento per colore: verde = alone lento, giallo = anello che gira, rosso = lampeggia */
+.conn-dot { position: relative; }
+#conn-btn.conn-giallo { padding-left: 14px; gap: 10px; }
+@keyframes conn-respira { 0%, 100% { box-shadow: 0 0 0 0 rgba(46, 158, 79, 0); } 50% { box-shadow: 0 0 0 5px rgba(46, 158, 79, .4); } }
+@keyframes conn-gira { to { transform: rotate(360deg); } }
+@keyframes conn-lampeggia { 0%, 100% { opacity: 1; } 50% { opacity: .15; } }
+@media (prefers-reduced-motion: no-preference) {
+  .conn-verde .conn-dot { animation: conn-respira 3s ease-in-out infinite; }
+  .conn-giallo .conn-dot::after { content: ""; position: absolute; inset: -7px; border-radius: 50%; border: 3px solid transparent; border-top-color: var(--ink); border-right-color: var(--ink); animation: conn-gira .9s linear infinite; }
+  .conn-rosso .conn-dot { animation: conn-lampeggia 1s ease-in-out infinite; }
+}
 /* telefono: col verde solo il pallino (un po' grande); giallo e rosso mostrano anche la scritta */
 #conn-btn.conn-verde { width: 38px; height: 38px; padding: 0; justify-content: center; }
 #conn-btn.conn-verde .cs { display: none; }
