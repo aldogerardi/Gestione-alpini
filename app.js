@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "10.36";
+const APP_VERSION = "10.37";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -996,6 +996,26 @@ function tastiSocial(g, conTesto) {
   return `<div class="social-riga">${tasti.join("")}</div>` + testo("📷", "Instagram", g.instagram) + testo("📘", "Facebook", g.facebook);
 }
 
+// Movimento dell'icona al tocco di un riquadro della Home (poi si apre la sezione)
+const HOME_ANIM = {
+  "bacheca": "dondola", "conv-consiglio": "dondola", "cena": "gira", "ore-alpine": "gira", "iniziative": "festa",
+  "presenza-adunata": "medaglia", "prenotazioni": "ribalta", "bollino": "ribalta", "beneficenza": "trema",
+  "conv-festa-alpina": "brindisi", "conv-casoncellata": "rimbalza", "conv-merenda-alpina": "rimbalza",
+  "bollino-amici": "rimbalza", "sponsor": "rimbalza", "anagrafica": "annuisce", "ringraziamenti": "annuisce",
+  "verbali": "sfoglia", "libretto": "sfoglia", "canzoni": "festa", "archivio-bui": "cassetto", "cassa": "moneta",
+  "report": "cresce", "report2": "cresce", "log": "scorre"
+};
+const HOME_ANIM_MS = 650;
+let homeAnimInCorso = false;
+function homeAnimaPoi(el, anim, fatto) {
+  if (homeAnimInCorso) return;
+  const ridotto = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (ridotto || !anim) { fatto(); return; }
+  homeAnimInCorso = true;
+  el.classList.add("anima");
+  setTimeout(() => { homeAnimInCorso = false; fatto(); }, HOME_ANIM_MS);
+}
+
 // ---------- Home a riquadri ----------
 // Un riquadro per ogni sezione che il profilo può usare (stesse regole e stessi gruppi del Menù); il pallino rosso/azzurro è lo stesso del Menù.
 function renderHomeRiquadri() {
@@ -1005,12 +1025,12 @@ function renderHomeRiquadri() {
     voci: g.voci.filter(([sez]) => sezionePermessa(sez))
   })).filter(g => g.voci.length);
   if (socio) gruppi.sort((x, y) => (x.titolo === "Comunicazione" ? 0 : 1) - (y.titolo === "Comunicazione" ? 0 : 1));   // ai soci prima le comunicazioni
-  const tile = ([sez, ico, lab]) => `<button type="button" class="home-tile" data-home-sez="${sez}"><span class="ht-e">${ico}</span><span class="ht-t">${lab}</span>${pallinoVoce(sez)}</button>`;
+  const tile = ([sez, ico, lab]) => `<button type="button" class="home-tile" data-home-sez="${sez}" data-anim="${HOME_ANIM[sez] || "rimbalza"}"><span class="ht-e">${ico}</span><span class="ht-t">${lab}</span>${pallinoVoce(sez)}</button>`;
   let scheda = "";
   const s = currentUser && currentUser.startsWith("socio:") ? socioCorrente() : null;
   if (s) {
     const agg = s.aggiornatoDaSocio ? `${s.aggiornatoDaSocio.slice(8, 10)}/${s.aggiornatoDaSocio.slice(5, 7)}/${s.aggiornatoDaSocio.slice(0, 4)}` : "";
-    scheda = `<button type="button" class="home-scheda${agg ? " ok" : ""}" data-home-scheda="1">
+    scheda = `<button type="button" class="home-scheda${agg ? " ok" : ""}" data-home-scheda="1" data-anim="annuisce">
       <span class="ht-e">👤</span>
       <span class="hs-testo"><span class="hs-titolo">La mia scheda</span><span class="hs-sub">Controlla i tuoi dati e aggiornali se serve</span><span class="hs-chip">${agg ? "Aggiornata il " + agg : "Non ancora aggiornata"}</span></span>
       <span class="hs-freccia" aria-hidden="true">›</span>
@@ -1018,7 +1038,7 @@ function renderHomeRiquadri() {
   }
   return `${scheda}
     ${gruppi.map(g => `<div class="home-gt">${g.titolo}</div><div class="home-grid">${g.voci.map(tile).join("")}</div>`).join("")}
-    <div class="home-grid" style="margin-top:6px"><button type="button" class="home-tile home-largo" data-home-gruppo="1"><span class="ht-e">🏔️</span><span class="ht-t">Il Gruppo: dati e social</span></button></div>`;
+    <div class="home-grid" style="margin-top:6px"><button type="button" class="home-tile home-largo" data-home-gruppo="1" data-anim="rimbalza"><span class="ht-e">🏔️</span><span class="ht-t">Il Gruppo: dati e social</span></button></div>`;
 }
 
 function renderHome() {
@@ -1076,9 +1096,10 @@ function renderHome() {
 }
 
 function attachHomeEvents() {
-  document.querySelectorAll("[data-home-sez]").forEach(b => b.addEventListener("click", () => vaiASezione(b.dataset.homeSez)));
-  document.querySelectorAll("[data-home-scheda]").forEach(b => b.addEventListener("click", () => apriMiaScheda()));
+  document.querySelectorAll("[data-home-sez]").forEach(b => b.addEventListener("click", () => homeAnimaPoi(b, b.dataset.anim, () => vaiASezione(b.dataset.homeSez))));
+  document.querySelectorAll("[data-home-scheda]").forEach(b => b.addEventListener("click", () => homeAnimaPoi(b, b.dataset.anim, () => apriMiaScheda())));
   document.querySelectorAll("[data-home-gruppo]").forEach(b => b.addEventListener("click", () => {
+    b.classList.add("anima"); setTimeout(() => b.classList.remove("anima"), HOME_ANIM_MS);   // qui nessuna attesa: la scheda si apre subito
     const c = document.getElementById("home-gruppo-card");
     if (!c) return;
     const apri = c.style.display === "none";

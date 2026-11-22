@@ -72,6 +72,40 @@ body.in-home #app-content { padding-bottom: 30px; }
   body.in-home #update-banner { right: 0 !important; }
 }
 
+/* Animazioni delle icone della Home (al tocco). Solo se il telefono non chiede di ridurre i movimenti. */
+@media (prefers-reduced-motion: no-preference) {
+  .home-tile.anima .ht-e, .home-scheda.anima .ht-e { animation-duration: .65s; animation-timing-function: ease-in-out; animation-fill-mode: both; }
+  [data-anim="dondola"].anima .ht-e { transform-origin: 50% 0; animation-name: a-dondola; }
+  [data-anim="gira"].anima .ht-e { animation-name: a-gira; }
+  [data-anim="festa"].anima .ht-e { animation-name: a-festa; }
+  [data-anim="medaglia"].anima .ht-e { transform-origin: 50% 0; animation-name: a-medaglia; }
+  [data-anim="ribalta"].anima .ht-e { animation-name: a-ribalta; }
+  [data-anim="trema"].anima .ht-e { animation-name: a-trema; }
+  [data-anim="brindisi"].anima .ht-e { transform-origin: 50% 90%; animation-name: a-brindisi; }
+  [data-anim="rimbalza"].anima .ht-e { transform-origin: 50% 100%; animation-name: a-rimbalza; }
+  [data-anim="annuisce"].anima .ht-e { animation-name: a-annuisce; }
+  [data-anim="sfoglia"].anima .ht-e { animation-name: a-sfoglia; }
+  [data-anim="cassetto"].anima .ht-e { animation-name: a-cassetto; }
+  [data-anim="moneta"].anima .ht-e { animation-name: a-moneta; }
+  [data-anim="cresce"].anima .ht-e { transform-origin: 50% 100%; animation-name: a-cresce; }
+  [data-anim="scorre"].anima .ht-e { animation-name: a-scorre; }
+}
+.home-tile .ht-e, .home-scheda .ht-e { display: inline-block; }
+@keyframes a-dondola { 0%, 100% { transform: rotate(0); } 20% { transform: rotate(-28deg); } 45% { transform: rotate(24deg); } 70% { transform: rotate(-14deg); } 85% { transform: rotate(7deg); } }
+@keyframes a-gira { 0% { transform: rotate(0) scale(1); } 50% { transform: rotate(180deg) scale(1.25); } 100% { transform: rotate(360deg) scale(1); } }
+@keyframes a-festa { 0%, 100% { transform: translateY(0) rotate(0) scale(1); } 30% { transform: translateY(-16px) rotate(-20deg) scale(1.25); } 60% { transform: translateY(-6px) rotate(20deg) scale(1.15); } }
+@keyframes a-medaglia { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-22deg); } 55% { transform: rotate(20deg); } 80% { transform: rotate(-8deg); } }
+@keyframes a-ribalta { 0% { transform: perspective(300px) rotateY(0); } 100% { transform: perspective(300px) rotateY(360deg); } }
+@keyframes a-trema { 0%, 100% { transform: translateX(0) rotate(0); } 12% { transform: translateX(-5px) rotate(-9deg); } 25% { transform: translateX(5px) rotate(9deg); } 37% { transform: translateX(-5px) rotate(-9deg); } 50% { transform: translateX(5px) rotate(9deg); } 65% { transform: translateX(-3px) rotate(-5deg); } 80% { transform: translateX(3px) rotate(5deg); } }
+@keyframes a-brindisi { 0%, 100% { transform: rotate(0); } 35% { transform: rotate(-32deg) translateY(-4px); } 65% { transform: rotate(22deg); } }
+@keyframes a-rimbalza { 0%, 100% { transform: translateY(0) scale(1, 1); } 20% { transform: translateY(0) scale(1.2, .8); } 45% { transform: translateY(-18px) scale(.9, 1.15); } 70% { transform: translateY(0) scale(1.15, .85); } 85% { transform: translateY(-6px) scale(1, 1); } }
+@keyframes a-annuisce { 0%, 100% { transform: translateY(0) rotate(0); } 25% { transform: translateY(6px) rotate(8deg); } 50% { transform: translateY(0) rotate(0); } 75% { transform: translateY(6px) rotate(-8deg); } }
+@keyframes a-sfoglia { 0%, 100% { transform: scaleX(1); } 35% { transform: scaleX(.2); } 70% { transform: scaleX(1.15); } }
+@keyframes a-cassetto { 0%, 100% { transform: translateX(0); } 40% { transform: translateX(12px); } 70% { transform: translateX(-4px); } }
+@keyframes a-moneta { 0% { transform: perspective(300px) rotateY(0) translateY(0); } 50% { transform: perspective(300px) rotateY(540deg) translateY(-14px); } 100% { transform: perspective(300px) rotateY(720deg) translateY(0); } }
+@keyframes a-cresce { 0%, 100% { transform: scale(1, 1); } 40% { transform: scale(1, 1.4); } 70% { transform: scale(1.15, .9); } }
+@keyframes a-scorre { 0%, 100% { transform: translateY(0); } 35% { transform: translateY(-14px); } 70% { transform: translateY(5px); } }
+
 /* Pallino di stato della connessione, nella striscia verde */
 #conn-btn { display: flex; align-items: center; gap: 6px; height: 36px; padding: 0 11px 0 8px; border-radius: 999px; border: 2px solid var(--ink); background: var(--cream); color: var(--ink); font-weight: 800; font-size: 0.78rem; box-shadow: 2px 2px 0 var(--ink); cursor: pointer; flex: none; }
 #conn-btn:active { transform: translate(2px, 2px); box-shadow: none; }
