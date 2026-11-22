@@ -57,6 +57,21 @@ body {
 .hs-freccia { font-size: 1.6rem; font-weight: 900; }
 @media screen and (min-width: 700px) { .home-scheda { max-width: 560px; } }
 
+/* Nella Home (riquadri) si nascondono la barra in basso e il menu fisso a destra; il tasto ☰ in alto resta per aprire il Menù */
+#menu-top-btn { display: none; flex: none; }
+body.in-home #navbar { display: none; }
+body.in-home #menu-top-btn { display: flex; }
+body.in-home #app-content { padding-bottom: 30px; }
+@media screen and (min-width: 1100px) {
+  #menu-top-btn, body.in-home #menu-top-btn { display: none; }
+  body.in-home { padding-right: 0; }
+  body.in-home #topbar { margin: 0 auto; padding-right: 14px; }
+  body.in-home #menu-overlay { display: none; }
+  body.in-home #modal-overlay { padding-right: 0; }
+  body.in-home .fab { right: 24px; }
+  body.in-home #update-banner { right: 0 !important; }
+}
+
 /* Pallino di stato della connessione, nella striscia verde */
 #conn-btn { display: flex; align-items: center; gap: 6px; height: 36px; padding: 0 11px 0 8px; border-radius: 999px; border: 2px solid var(--ink); background: var(--cream); color: var(--ink); font-weight: 800; font-size: 0.78rem; box-shadow: 2px 2px 0 var(--ink); cursor: pointer; flex: none; }
 #conn-btn:active { transform: translate(2px, 2px); box-shadow: none; }

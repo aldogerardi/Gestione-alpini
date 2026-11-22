@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "10.34";
+const APP_VERSION = "10.35";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -814,6 +814,7 @@ function updateTopbar() {
 }
 
 function setActiveNav() {
+  document.body.classList.toggle("in-home", currentSection === "home");   // nella Home bastano i riquadri: barra in basso e menu a destra si nascondono
   let sulBar = false;
   document.querySelectorAll(".nav-btn").forEach(b => {
     const on = b.dataset.section === currentSection;
@@ -8905,6 +8906,7 @@ function setupMenuLaterale() {
   if (window.ResizeObserver && document.getElementById("topbar")) new ResizeObserver(misuraTopbar).observe(document.getElementById("topbar"));
   if (window.matchMedia) window.matchMedia("(min-width: 1100px)").addEventListener("change", () => { chiudiMenu(); if (currentUser) { renderMenuDrawer(); if (currentSection === "iniziative" || currentSection === "prenotazioni") renderSection(); } });   // cambiando la larghezza della finestra
   document.getElementById("menu-btn").addEventListener("click", apriMenu);
+  document.getElementById("menu-top-btn").addEventListener("click", apriMenu);
   document.getElementById("menu-scrim").addEventListener("click", chiudiMenu);
   document.getElementById("menu-drawer").addEventListener("click", e => {
     if (e.target.closest("#menu-close-btn")) { chiudiMenu(); return; }
