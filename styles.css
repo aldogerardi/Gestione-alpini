@@ -106,6 +106,24 @@ body.in-home #app-content { padding-bottom: 30px; }
 @keyframes a-cresce { 0%, 100% { transform: scale(1, 1); } 40% { transform: scale(1, 1.4); } 70% { transform: scale(1.15, .9); } }
 @keyframes a-scorre { 0%, 100% { transform: translateY(0); } 35% { transform: translateY(-14px); } 70% { transform: translateY(5px); } }
 
+/* Rubrica */
+.rub-filtri { display: flex; gap: 8px; flex-wrap: wrap; margin: 6px 0 10px; }
+.rub-f { padding: 8px 14px; border: 2px solid var(--ink); border-radius: 999px; background: #fff; font: inherit; font-weight: 800; font-size: 0.85rem; color: var(--green-dark); box-shadow: 2px 2px 0 var(--ink); cursor: pointer; }
+.rub-f.attivo { background: var(--green); color: #fff; }
+.rub-lettera { font-weight: 900; color: var(--green-dark); margin: 14px 4px 6px; font-size: 1.05rem; break-after: avoid; }
+.rub-riga { background: #fff; border: 2px solid var(--ink); border-radius: 14px; padding: 10px 12px; margin-bottom: 8px; box-shadow: 2px 2px 0 var(--ink); break-inside: avoid; }
+.rub-nome { font-weight: 800; }
+.rub-simp { display: inline-block; font-size: 0.66rem; font-weight: 800; color: #5a3a6e; border: 1.5px solid #5a3a6e; border-radius: 999px; padding: 0 7px; margin-left: 4px; vertical-align: middle; }
+.rub-num { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+.rub-n { flex: 1; font-size: 1rem; }
+.rub-et { font-size: 0.7rem; color: #666; margin-right: 8px; }
+.rub-az { display: flex; gap: 8px; }
+.rub-btn { width: 42px; height: 42px; border-radius: 50%; border: 2px solid var(--ink); display: flex; align-items: center; justify-content: center; box-shadow: 2px 2px 0 var(--ink); text-decoration: none; }
+.rub-tel { background: var(--cream); color: var(--ink); }
+.rub-wa { background: #25D366; }
+.rub-btn svg { width: 22px; height: 22px; }
+@media screen and (min-width: 700px) { .rub-colonne { columns: 2 320px; column-gap: 18px; } }
+
 /* Pallino di stato della connessione, nella striscia verde */
 #conn-btn { display: flex; align-items: center; gap: 6px; height: 36px; padding: 0 11px 0 8px; border-radius: 999px; border: 2px solid var(--ink); background: var(--cream); color: var(--ink); font-weight: 800; font-size: 0.78rem; box-shadow: 2px 2px 0 var(--ink); cursor: pointer; flex: none; }
 #conn-btn:active { transform: translate(2px, 2px); box-shadow: none; }

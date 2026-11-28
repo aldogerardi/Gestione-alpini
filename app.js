@@ -1,5 +1,5 @@
 // ===================== Gestione Gruppo =====================
-const APP_VERSION = "10.37";
+const APP_VERSION = "10.57";
 const APP_CREDIT = "Created from Claude AI x Alpini Bottonaga";
 
 // ---------- Firebase: utenti dispositivo e sincronizzazione ----------
@@ -608,7 +608,7 @@ const LOG_CAMPI_NOMI = {
   codiceFiscale: "codice fiscale", utenti: "utenti/password", moduloSedeUrl: "modulo sede", moduloSedeNome: "modulo sede",
   testoPreghiera: "testo preghiera", testoCanto: "testo canto", testoAuguriCompleanno: "testo auguri",
   quotaBollino: "quota bollino", quotaNazionale: "quota nazionale", appName: "nome app", incaricoFeste: "incarico feste",
-  tagliaVestiario: "taglia vestiario", brigataAlpina: "brigata alpina", aggiornatoDaSocio: "scheda aggiornata dal socio", aperta: "richiesta aperta", sabato: "data del sabato", aggiornato: "aggiornato", daSocio: "ordine del socio", audioUrl: "file audio", audioNome: "file audio", audioBytes: "file audio", categoria: "categoria", testo: "testo", visibilita: "chi lo vede", accessoApp: "accesso app", accessoLivello: "livello accesso", chiaviSede: "chiavi sede", dataIscrizione: "data iscrizione", haccpDataCorso: "data corso HACCP", haccpDataScadenza: "scadenza HACCP"
+  tagliaVestiario: "taglia vestiario", brigataAlpina: "brigata alpina", aggiornatoDaSocio: "scheda aggiornata dal socio", rubricaNumeri: "consenso Rubrica", rubricaData: "consenso Rubrica", rubricaDa: "consenso Rubrica", aperta: "richiesta aperta", sabato: "data del sabato", aggiornato: "aggiornato", daSocio: "ordine del socio", audioUrl: "file audio", audioNome: "file audio", audioBytes: "file audio", categoria: "categoria", testo: "testo", visibilita: "chi lo vede", accessoApp: "accesso app", accessoLivello: "livello accesso", chiaviSede: "chiavi sede", dataIscrizione: "data iscrizione", haccpDataCorso: "data corso HACCP", haccpDataScadenza: "scadenza HACCP"
 };
 
 function nomeSocioPerLog(id) {
@@ -894,6 +894,9 @@ function renderSection() {
   } else if (currentSection === "archivio-bui") {
     content.innerHTML = puoVedereArchivioBui() ? renderArchivioBui() : `<div class="card-sub">Sezione riservata.</div>`;
     if (puoVedereArchivioBui()) attachArchivioBuiEvents();
+  } else if (currentSection === "rubrica") {
+    content.innerHTML = renderRubrica();
+    attachRubricaEvents();
   } else if (currentSection === "verbali") {
     content.innerHTML = renderVerbali();
     attachVerbaliEvents();
@@ -1002,7 +1005,7 @@ const HOME_ANIM = {
   "presenza-adunata": "medaglia", "prenotazioni": "ribalta", "bollino": "ribalta", "beneficenza": "trema",
   "conv-festa-alpina": "brindisi", "conv-casoncellata": "rimbalza", "conv-merenda-alpina": "rimbalza",
   "bollino-amici": "rimbalza", "sponsor": "rimbalza", "anagrafica": "annuisce", "ringraziamenti": "annuisce",
-  "verbali": "sfoglia", "libretto": "sfoglia", "canzoni": "festa", "archivio-bui": "cassetto", "cassa": "moneta",
+  "verbali": "sfoglia", "libretto": "sfoglia", "rubrica": "sfoglia", "canzoni": "festa", "archivio-bui": "cassetto", "cassa": "moneta",
   "report": "cresce", "report2": "cresce", "log": "scorre"
 };
 const HOME_ANIM_MS = 650;
@@ -1314,6 +1317,10 @@ function openSocioForm(id) {
         <label><input type="checkbox" id="f-sms" ${s.sms?"checked":""}> SMS</label>
         <label><input type="checkbox" id="f-whatsapp" ${s.whatsapp?"checked":""}> WhatsApp</label>
       </div>
+      <div class="checkbox-row" style="margin-bottom:4px;">
+        <label><input type="checkbox" id="f-rubrica" ${s.rubricaNumeri ? "checked" : ""}> 📒 Numeri visibili nella Rubrica</label>
+      </div>
+      <div style="font-size:0.72rem; color:#666; margin-bottom:12px;">${s.rubricaNumeri && s.rubricaData ? "Consenso del " + esc(fmtDate(String(s.rubricaData).slice(0, 10))) + (s.rubricaDa ? " (" + esc(s.rubricaDa) + "). " : ". ") : ""}Da spuntare solo se il socio lo chiede o lo conferma.</div>
       <div class="checkbox-row" style="margin-bottom:14px; gap:26px;">
         <label><input type="checkbox" id="f-chiavi-sede" ${s.chiaviSede?"checked":""}> 🔑 Chiavi sede</label>
         <label class="hide-if-simp"><input type="checkbox" id="f-alfiere" ${s.alfiere?"checked":""}> 🎖️ Alfiere</label>
@@ -1549,6 +1556,14 @@ async function saveSocioInterno() {
 
   const socioId = editingId || uid();
   const existing = editingId ? state.socios.find(x => x.id === editingId) : null;
+  const rubEl = document.getElementById("f-rubrica");
+  if (rubEl) {
+    data.rubricaNumeri = rubEl.checked;
+    if (rubEl.checked !== !!(existing && existing.rubricaNumeri)) {   // cambiato adesso: si segna quando e da chi
+      data.rubricaData = new Date().toISOString();
+      data.rubricaDa = "Direttivo: " + userLabel(currentUser).replace(/^👤 /, "");
+    }
+  }
 
   try {
     if (pendingPrivacyFotoFile === "REMOVE") {
@@ -4312,6 +4327,77 @@ function cardVerbale(v, soloLettura) {
       </div>
       ${v.allegatoThumbUrl ? `<img src="${esc(v.allegatoThumbUrl)}" style="max-width:100%; border-radius:8px; margin-top:8px; border:1px solid #ccc;">` : ""}
     </div>`;
+}
+
+// ---------- Rubrica (soci e simpatizzanti) ----------
+// Elenco visibile a tutti. Non compaiono i soci andati avanti e i Collaboratori. I numeri si vedono solo se la persona ha dato il consenso (spunta nella sua scheda).
+let rubricaFiltro = "tutti";
+let rubricaCerca = "";
+const rubSenzaAccenti = t => (t || "").toString().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+const rubSimp = s => s.carica === "Simpatizzante";
+function rubricaPersone() {
+  return (state.socios || []).filter(s => !s.andatoAvanti && !isCollaboratore(s) && ((s.cognome || "").trim() || (s.nome || "").trim()))
+    .sort((a, b) => (a.cognome || "").localeCompare(b.cognome || "", "it") || (a.nome || "").localeCompare(b.nome || "", "it"));
+}
+// Numero per WhatsApp: solo cellulari italiani (3…) o numeri internazionali; i fissi (0…) non hanno WhatsApp.
+function rubricaWa(n) {
+  let c = String(n || "").replace(/[^\d+]/g, "");
+  if (c.startsWith("+")) c = c.slice(1);
+  else if (c.startsWith("00")) c = c.slice(2);
+  else if (c.length >= 9 && c.startsWith("3")) c = "39" + c;
+  else return "";
+  if (c.startsWith("39")) return /^393\d{8,9}$/.test(c) ? c : "";
+  return c.length >= 9 ? c : "";
+}
+const RUB_SVG_TEL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>';
+const RUB_SVG_WA = '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.5a9.5 9.5 0 0 0-8.2 14.3L2.5 21.5l4.8-1.2A9.5 9.5 0 1 0 12 2.5z"/><g transform="translate(6.4 6.3) scale(.5)"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" fill="#fff" stroke="none"/></g></svg>';
+function rubricaNumeriHtml(s) {
+  if (!s.rubricaNumeri) return "";
+  return [["Tel.", s.telefono], ["Cell.", s.cellulare]].filter(([, n]) => n && String(n).trim()).map(([et, n]) => {
+    const num = String(n).trim();
+    const wa = rubricaWa(num);
+    return `<div class="rub-num"><span class="rub-n"><span class="rub-et">${et}</span>${esc(num)}</span><span class="rub-az">
+      <a class="rub-btn rub-tel" href="tel:${esc(num.replace(/[^\d+]/g, ""))}" aria-label="Chiama ${esc(num)}" title="Chiama">${RUB_SVG_TEL}</a>
+      ${wa ? `<a class="rub-btn rub-wa" href="https://wa.me/${wa}" target="_blank" rel="noopener" aria-label="Scrivi su WhatsApp a ${esc(num)}" title="WhatsApp">${RUB_SVG_WA}</a>` : ""}
+    </span></div>`;
+  }).join("");
+}
+function rubricaListaHtml() {
+  let lista = rubricaPersone();
+  if (rubricaFiltro === "soci") lista = lista.filter(s => !rubSimp(s));
+  else if (rubricaFiltro === "simpatizzanti") lista = lista.filter(rubSimp);
+  const parole = rubSenzaAccenti(rubricaCerca).split(/\s+/).filter(Boolean);
+  if (parole.length) lista = lista.filter(s => { const t = rubSenzaAccenti(`${s.cognome} ${s.nome}`); return parole.every(p => t.includes(p)); });
+  if (!lista.length) return `<div class="card-sub" style="padding:10px 4px;">Nessuna persona trovata.</div>`;
+  let html = `<div class="card-sub" style="margin:2px 4px 4px;">${lista.length} ${lista.length === 1 ? "persona" : "persone"}</div><div class="rub-colonne">`;
+  let lettera = "";
+  lista.forEach(s => {
+    const l = rubSenzaAccenti((s.cognome || s.nome || "?").trim().charAt(0)).toUpperCase() || "?";
+    if (l !== lettera) { lettera = l; html += `<div class="rub-lettera">${esc(l)}</div>`; }
+    html += `<div class="rub-riga"><div class="rub-nome">${esc((s.cognome || "").trim())} ${esc((s.nome || "").trim())}${rubSimp(s) ? ' <span class="rub-simp">Simpatizzante</span>' : ""}</div>${rubricaNumeriHtml(s)}</div>`;
+  });
+  return html + "</div>";
+}
+function renderRubrica() {
+  const tutte = rubricaPersone();
+  const nSimp = tutte.filter(rubSimp).length, nSoci = tutte.length - nSimp;
+  const f = (id, et) => `<button type="button" class="rub-f${rubricaFiltro === id ? " attivo" : ""}" data-rub-filtro="${id}">${et}</button>`;
+  return `
+    <div class="section-title">📒 Rubrica</div>
+    <div class="card-sub" style="margin-bottom:10px;">Soci e simpatizzanti. I numeri di telefono compaiono solo per chi ha dato il consenso dalla propria scheda.</div>
+    <div class="rub-filtri">${f("tutti", `Tutti (${tutte.length})`)}${f("soci", `Soci (${nSoci})`)}${f("simpatizzanti", `Simpatizzanti (${nSimp})`)}</div>
+    <input type="search" id="rub-cerca" placeholder="Cerca cognome o nome…" value="${esc(rubricaCerca)}" autocomplete="off" style="width:100%; box-sizing:border-box; margin-bottom:6px;">
+    <div id="rub-lista">${rubricaListaHtml()}</div>`;
+}
+function attachRubricaEvents() {
+  const aggiorna = () => { const el = document.getElementById("rub-lista"); if (el) el.innerHTML = rubricaListaHtml(); };
+  document.querySelectorAll("[data-rub-filtro]").forEach(b => b.addEventListener("click", () => {
+    rubricaFiltro = b.dataset.rubFiltro;
+    document.querySelectorAll("[data-rub-filtro]").forEach(x => x.classList.toggle("attivo", x === b));
+    aggiorna();
+  }));
+  const cerca = document.getElementById("rub-cerca");
+  if (cerca) cerca.addEventListener("input", () => { rubricaCerca = cerca.value; aggiorna(); });
 }
 
 function renderVerbali() {
@@ -8477,7 +8563,7 @@ function setupScrollHide() {
 }
 
 // ---------- Init ----------
-const SECTION_ORDER = ["home","anagrafica","conv-consiglio","bollino","bollino-amici","ringraziamenti","sponsor","cena","iniziative","ore-alpine","report","report2","conv-casoncellata","conv-festa-alpina","conv-merenda-alpina","presenza-adunata","prenotazioni","beneficenza","canzoni","manuali","cassa","bacheca","verbali","libretto","archivio-bui","log"];
+const SECTION_ORDER = ["home","anagrafica","conv-consiglio","bollino","bollino-amici","ringraziamenti","sponsor","cena","iniziative","ore-alpine","report","report2","conv-casoncellata","conv-festa-alpina","conv-merenda-alpina","presenza-adunata","prenotazioni","beneficenza","canzoni","manuali","cassa","bacheca","verbali","libretto","rubrica","archivio-bui","log"];
 
 function vaiASezione(section) {
   if (!sezionePermessa(section)) return;
@@ -8558,6 +8644,7 @@ function apriMiaScheda() {
     <div class="two-col">${campo("paese", "Paese")}${campo("provincia", "Provincia", { attr: 'maxlength="2" style="text-transform:uppercase"' })}${campo("cap", "CAP", { attr: 'maxlength="5" inputmode="numeric"' })}</div>
     <div class="two-col">${campo("telefono", "Telefono", { tipo: "tel" })}${campo("cellulare", "Cellulare", { tipo: "tel" })}</div>
     ${campo("email", "Email", { tipo: "email" })}
+    <label style="display:flex; gap:10px; align-items:flex-start; margin:6px 0 12px; font-size:0.86rem; line-height:1.35;"><input type="checkbox" id="ms-rubrica" ${s.rubricaNumeri ? "checked" : ""} style="margin-top:3px; flex:none;"><span>📒 <b>Acconsento a mostrare i miei numeri di telefono nella Rubrica del Gruppo</b> (li vedranno tutti i soci e i simpatizzanti). Puoi cambiare idea quando vuoi.</span></label>
     ${simp ? "" : `<div class="two-col">${campo("anniNaja", "Anni di naja")}${campo("grado", "Grado")}</div>${campo("brigataAlpina", "Brigata Alpina")}${campo("reparto", "Reparto")}`}
     <div class="two-col">
       <div class="form-group"><label>Incarico feste</label><input type="text" value="${esc(s.incaricoFeste || "Nessuno")}" disabled title="Lo assegna il Direttivo"></div>
@@ -8579,6 +8666,11 @@ function apriMiaScheda() {
     MIA_SCHEDA_CAMPI.forEach(k => { const el = document.getElementById("ms-" + k); if (el) input[k] = el.value; });
     const v = validaMiaScheda(input);
     if (v.errore) { err.textContent = v.errore; return; }
+    const rb = document.getElementById("ms-rubrica");
+    if (rb) {
+      v.campi.rubricaNumeri = rb.checked;
+      if (rb.checked !== !!s.rubricaNumeri) { v.campi.rubricaData = new Date().toISOString(); v.campi.rubricaDa = "socio"; }
+    }
     if (!window.db) { err.textContent = "Firebase non configurato: impossibile salvare."; return; }
     const btn = document.getElementById("ms-salva");
     btn.disabled = true; err.textContent = "";
@@ -8703,7 +8795,7 @@ const MENU_GRUPPI = [
   { titolo: "", voci: [["home", "🏠", "Home"]] },
   { titolo: "Soci e tesseramento", voci: [["anagrafica", "👤", "Anagrafica"], ["conv-consiglio", "📋", "Consiglio"], ["bollino", "🎫", "Bollino"], ["bollino-amici", "🤝", "Bollino Amici"]] },
   { titolo: "Eventi", voci: [["cena", "🍽️", "Cena"], ["iniziative", "🎉", "Attività"], ["presenza-adunata", "🎖️", "Adunata"], ["prenotazioni", "🗓️", "Prenotaz. Sede"], ["beneficenza", "🎁", "Panettoni &amp; C"], ["conv-casoncellata", "🥟", "Casoncellata"], ["conv-festa-alpina", "🍺", "Festa Alpina"], ["conv-merenda-alpina", "🥪", "Merenda Alpina"]] },
-  { titolo: "Comunicazione", voci: [["bacheca", "📌", "Bacheca"], ["verbali", "📑", "Verbali Consiglio"], ["libretto", "📖", "Preghiera e Canto"], ["canzoni", "🎵", "Canzoni"]] },
+  { titolo: "Comunicazione", voci: [["bacheca", "📌", "Bacheca"], ["verbali", "📑", "Verbali Consiglio"], ["libretto", "📖", "Preghiera e Canto"], ["rubrica", "📒", "Rubrica"], ["canzoni", "🎵", "Canzoni"]] },
   { titolo: "Gestione e report", voci: [["archivio-bui", "🗄️", "Archivio BUI"], ["cassa", "💰", "Cassa"], ["ore-alpine", "⏱️", "Ore Alpine"], ["ringraziamenti", "🙏", "Ringraziamenti"], ["sponsor", "💼", "Sponsor"], ["report", "📊", "Report 1"], ["report2", "📊", "Report 2"], ["log", "📜", "Log"]] }
 ];
 
@@ -8995,7 +9087,7 @@ function init() {
   }
 }
 
-const SOCIO_SEZIONI = ["home", "bacheca", "libretto", "cena", "presenza-adunata", "iniziative", "prenotazioni", "verbali", "beneficenza", "conv-casoncellata", "conv-festa-alpina", "conv-merenda-alpina", "manuali"];
+const SOCIO_SEZIONI = ["home", "rubrica", "bacheca", "libretto", "cena", "presenza-adunata", "iniziative", "prenotazioni", "verbali", "beneficenza", "conv-casoncellata", "conv-festa-alpina", "conv-merenda-alpina", "manuali"];
 const SEZIONI_SOLO_ADMIN = ["cassa", "log"];
 
 function sezioniAttive() {
